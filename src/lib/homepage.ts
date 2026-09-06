@@ -1,0 +1,196 @@
+import "server-only";
+import { unstable_cache } from "next/cache";
+import { all } from "./db";
+
+/**
+ * Homepage content resolver.
+ *
+ * Every section is driven by the `cms_blocks` table (admin panel → CMS Blocks).
+ * List-type sections store their rows as JSON in `cms_blocks.data`.
+ *
+ * Nothing here is hardcoded content: if the admin has not filled a block in,
+ * the section simply does not render. Tiles that show real catalog data are
+ * derived from the `games` / `products` tables, so removing a game from the
+ * admin panel removes it from the homepage too.
+ */
+
+export type CmsRow = {
+  key: string;
+  title: string | null;
+  subtitle: string | null;
+  body: string | null;
+  image: string | null;
+  cta_label: string | null;
+  cta_href: string | null;
+  data: string | null;
+  active: number;
+};
+
+export type Block = {
+  key: string;
+  title: string;
+  subtitle: string;
+  body: string;
+  image: string;
+  ctaLabel: string;
+  ctaHref: string;
+  items: Record<string, string>[];
+  active: boolean;
+};
+
+const parseItems = (raw: string | null): Record<string, string>[] => {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x) => x && typeof x === "object") : [];
+  } catch {
+    return [];
+  }
+};
+
+const toBlock = (r: CmsRow): Block => ({
+  key: r.key,
+  title: r.title ?? "",
+  subtitle: r.subtitle ?? "",
+  body: r.body ?? "",
+  image: r.image ?? "",
+  ctaLabel: r.cta_label ?? "",
+  ctaHref: r.cta_href ?? "",
+  items: parseItems(r.data),
+  active: r.active === 1,
+});
+
+/** All active CMS blocks keyed by block key. Cached; busted on any CMS write. */
+export const getBlocks = unstable_cache(
+  async (): Promise<Record<string, Block>> => {
+    const rows = await all<CmsRow>(`SELECT * FROM cms_blocks WHERE active=1`);
+    const out: Record<string, Block> = {};
+    rows.forEach((r) => {
+      out[r.key] = toBlock(r);
+    });
+    return out;
+  },
+  ["cms-blocks"],
+  { tags: ["catalog", "cms"], revalidate: 300 }
+);
+
+/* ==================================================================== */
+/* Catalog-derived tiles                                                 */
+/* ==================================================================== */
+
+export type Tile = { label: string; logo: string; href: string; badge?: string };
+
+/**
+ * Popular tiles for a category, straight from the DB.
+ * Uses games flagged into that category via `game_categories`.
+ */
+export const popularTiles = unstable_cache(
+  async (categorySlug: string, limit = 5): Promise<Tile[]> => {
+    const rows = await all<{ slug: string; name: string; logo: string }>(
+      `SELECT g.slug, g.name, g.logo
+         FROM games g
+         JOIN game_categories gc ON gc.game_slug = g.slug
+        WHERE gc.category_slug = ? AND g.status = 'active'
+        ORDER BY g.sort_order, g.name
+        LIMIT ?`,
+      [categorySlug, limit]
+    );
+    return rows.map((g) => ({
+      label: g.name,
+      logo: g.logo,
+      href: `/g/${g.slug}/${categorySlug}`,
+    }));
+  },
+  ["popular-tiles"],
+  { tags: ["catalog"], revalidate: 300 }
+);
+
+/** Distinct brands inside a category, derived from products. */
+export const categoryBrands = unstable_cache(
+  async (categorySlug: string, limit = 7): Promise<Tile[]> => {
+    const rows = await all<{ slug: string; name: string; logo: string }>(
+      `SELECT g.slug, g.name, g.logo
+         FROM games g
+         JOIN products p ON p.game_slug = g.slug
+        WHERE p.category_slug = ? AND g.status='active' AND p.status='active'
+        GROUP BY g.slug
+        ORDER BY COUNT(p.id) DESC, g.name
+        LIMIT ?`,
+      [categorySlug, limit]
+    );
+    return rows.map((g) => ({
+      label: g.name,
+      logo: g.logo,
+      href: `/g/${g.slug}/${categorySlug}`,
+    }));
+  },
+  ["category-brands"],
+  { tags: ["catalog"], revalidate: 300 }
+);
+
+/** Category rail definitions come from the `categories` table, admin-managed. */
+export const homeCategories = unstable_cache(
+  async () =>
+    all<{ slug: string; name: string; icon: string; blurb: string }>(
+      `SELECT slug, name, icon, blurb FROM categories
+        WHERE status='active' ORDER BY sort_order, name`
+    ),
+  ["home-categories"],
+  { tags: ["catalog"], revalidate: 300 }
+);
+
+/** Live marketplace counters — real numbers, not invented ones. */
+export const liveStats = unstable_cache(
+  async () => {
+    const [r] = await all<{
+      offers: number; sellers: number; orders: number; games: number; buyers: number;
+    }>(
+      `SELECT
+         (SELECT COUNT(*) FROM offers WHERE status='active')                AS offers,
+         (SELECT COUNT(*) FROM seller_profiles WHERE status='active')       AS sellers,
+         (SELECT COUNT(*) FROM orders)                                      AS orders,
+         (SELECT COUNT(*) FROM games WHERE status='active')                 AS games,
+         (SELECT COUNT(*) FROM users)                                       AS buyers`
+    );
+    return r ?? { offers: 0, sellers: 0, orders: 0, games: 0, buyers: 0 };
+  },
+  ["live-stats"],
+  { tags: ["catalog"], revalidate: 120 }
+);
+
+/** Real buyer reviews for the testimonial rail. */
+export const homeReviews = unstable_cache(
+  async (limit = 6) =>
+    all<{ id: string; stars: number; body: string; name: string; created_at: string }>(
+      `SELECT r.id, r.stars, r.body, u.name, r.created_at
+         FROM reviews r JOIN users u ON u.id = r.buyer_id
+        WHERE r.stars >= 4 AND r.body IS NOT NULL AND TRIM(r.body) <> ''
+        ORDER BY r.created_at DESC LIMIT ?`,
+      [limit]
+    ),
+  ["home-reviews"],
+  { tags: ["catalog", "reviews"], revalidate: 300 }
+);
+
+/** Footer link columns, admin-managed via the `nav_links` table. */
+export const footerNav = unstable_cache(
+  async (): Promise<{ heading: string; links: { label: string; href: string }[] }[]> => {
+    const rows = await all<{ section: string; label: string; href: string }>(
+      `SELECT section, label, href FROM nav_links
+        WHERE placement='footer' AND active=1
+        ORDER BY sort_order, label`
+    );
+    const order: string[] = [];
+    const map: Record<string, { label: string; href: string }[]> = {};
+    rows.forEach((r) => {
+      if (!map[r.section]) {
+        map[r.section] = [];
+        order.push(r.section);
+      }
+      map[r.section].push({ label: r.label, href: r.href });
+    });
+    return order.map((heading) => ({ heading, links: map[heading] }));
+  },
+  ["footer-nav"],
+  { tags: ["catalog", "nav"], revalidate: 300 }
+);

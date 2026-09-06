@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --muted: #64748b;
+  --line: #e6e8ef;
+  --text: #0b0d17;
+  --soft: #f6f7fb;
+}
+.dark {
+  --bg: #05060c;
+  --panel: #0d1020;
+  --muted: #8e93ad;
+  --line: #1c2035;
+  --text: #f3f4fb;
+  --soft: #0a0c18;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+* {
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: #8b3dff66;
+  border-radius: 99px;
+}
+
+@layer components {
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+  }
+  .muted {
+    color: var(--muted);
+  }
+  .soft {
+    background: var(--soft);
+  }
+  .tile {
+    @apply relative overflow-hidden rounded-xl transition-all duration-300;
+  }
+  .tile:hover {
+    @apply -translate-y-1.5;
+    box-shadow: 0 12px 34px -12px rgba(139, 61, 255, 0.65);
+  }
+  .card-hover {
+    @apply transition-all duration-300;
+  }
+  .card-hover:hover {
+    @apply -translate-y-1.5 border-brand-500/60;
+    box-shadow: 0 18px 40px -20px rgba(139, 61, 255, 0.75);
+  }
+}
+
+.grad-text {
+  background: linear-gradient(92deg, #9d70ff, #8b3dff 45%, #c084fc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
