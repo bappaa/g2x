@@ -118,8 +118,63 @@ export default function ProductView({
 
   const cheapest = offers.length ? Math.min(...offers.map((o) => o.price)) : product.base_price;
 
+  /**
+   * "Best price" and "Buyer protection" live in the right sidebar on desktop,
+   * but on mobile the client wants them inline, directly under the product
+   * details and ABOVE the offers list. Defining them once here and placing the
+   * same variable in both spots keeps the two layouts in sync.
+   */
+  const bestPriceCard = offers.length > 0 && (
+    <div className="rounded-2xl panel p-4 sm:p-5">
+      <div className="text-[11.5px] muted">{tr("prod.bestPrice")}</div>
+      <div className="mt-1 text-[18px] font-black text-brand-500 sm:text-[28px]">{money(cheapest)}</div>
+      <Btn
+        className="mt-3 w-full"
+        onClick={() => buy([...offers].sort((a, b) => a.price - b.price)[0], true)}
+      >
+        {tr("prod.buyCheapest")}
+      </Btn>
+      <Btn
+        variant="ghost"
+        className="mt-2 w-full"
+        onClick={() => buy([...offers].sort((a, b) => a.price - b.price)[0], false)}
+      >
+        {tr("common.addToCart")}
+      </Btn>
+      <Link
+        href="/support"
+        className="mt-3 block text-center text-[11.5px] muted transition-colors hover:text-brand-500"
+      >
+        {tr("prod.needHelp")}
+      </Link>
+    </div>
+  );
+
+  const protectionCard = (
+    <div className="rounded-2xl panel p-4 sm:p-5">
+      <div className="mb-3 flex items-center gap-2 text-[13px] font-bold">
+        <ShieldCheck size={15} className="text-emerald-400" /> {tr("prod.buyerProtection")}
+      </div>
+      {["100% Secure Transactions", "Money-back Guarantee", "24/7 Live Support", "Escrow protected payment"].map((t) => (
+        <div key={t} className="flex items-center gap-2 py-1 text-[12px]">
+          <Check size={13} className="text-emerald-400" /> {t}
+        </div>
+      ))}
+    </div>
+  );
+
+  const detailsCard = (
+    <div className="rounded-2xl panel p-4 sm:p-5">
+      <div className="mb-2 text-[13px] font-bold">{tr("prod.productDetails")}</div>
+      <p className="text-[11.5px] leading-relaxed muted">
+        You will receive {product.name} directly in your {game.name} account. Safe, secure and
+        handled by verified G2X sellers. Open a dispute within 24 hours if anything is wrong.
+      </p>
+    </div>
+  );
+
   return (
-    <main className="mx-auto max-w-[1220px] px-3 py-4 sm:px-4 sm:py-6">
+    <main className="mx-auto w-full max-w-[1220px] overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
       <Breadcrumb
         items={[
           { label: "Home", href: "/" },
@@ -129,10 +184,10 @@ export default function ProductView({
         ]}
       />
 
-      <div className="mt-4 grid gap-5 lg:grid-cols-[1fr_300px]">
-        <div className="space-y-5">
+      <div className="mt-4 grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="min-w-0 space-y-5">
           <div className="rounded-2xl panel p-4 sm:p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:gap-5">
+            <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:gap-5">
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -246,6 +301,13 @@ export default function ProductView({
             </div>
           </div>
 
+          {/* Mobile order: details -> best price -> protection -> offers.
+              On lg+ these same cards render in the sticky sidebar instead. */}
+          <div className="space-y-5 lg:hidden">
+            {bestPriceCard}
+            {protectionCard}
+          </div>
+
           <div className="rounded-2xl panel p-4 sm:p-5">
             <div className="mb-3.5 sm:mb-4">
               <div className="flex items-center gap-3">
@@ -273,7 +335,7 @@ export default function ProductView({
               </div>
             ) : (
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[640px] text-[12.5px]">
+                <table className="w-full text-[12.5px] md:min-w-[640px]">
                   <thead>
                     <tr className="border-b border-[var(--line)] text-left text-[11px] muted">
                       <th className="pb-2.5 font-medium">{tr("prod.seller")}</th>
@@ -368,7 +430,7 @@ export default function ProductView({
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.03 }}
-                      className="rounded-xl border border-[var(--line)] soft p-3"
+                      className="min-w-0 overflow-hidden rounded-xl border border-[var(--line)] soft p-3"
                     >
                       <div className="flex items-center gap-2.5">
                         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-700 text-[10px] font-bold text-white">
@@ -386,14 +448,14 @@ export default function ProductView({
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className="text-[15px] font-black">{money(o.price)}</div>
+                          <div className="whitespace-nowrap text-[15px] font-black">{money(o.price)}</div>
                           {o.old_price && (
                             <div className="text-[10px] line-through muted">{money(o.old_price)}</div>
                           )}
                         </div>
                       </div>
 
-                      <div className="mt-2.5 flex items-center gap-3 text-[10.5px] muted">
+                      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] muted">
                         <span className="flex items-center gap-1"><Clock size={10} /> {o.delivery_time}</span>
                         <span>{o.stock} in stock</span>
                       </div>
@@ -439,7 +501,7 @@ export default function ProductView({
           {related.length > 0 && (
             <div className="rounded-2xl panel p-4 sm:p-5">
               <h3 className="mb-4 text-[14px] font-bold">{tr("prod.related")} {tr(`cat.${category.slug}`, category.name)}</h3>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
+              <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
                 {related.map((p, i) => (
                   <ProductCard key={p.id} p={p} i={i} />
                 ))}
@@ -448,52 +510,17 @@ export default function ProductView({
           )}
         </div>
 
-        <div className="space-y-4 lg:sticky lg:top-[130px] lg:self-start">
-          <div className="rounded-2xl panel p-4 sm:p-5">
-            <div className="mb-3 flex items-center gap-2 text-[13px] font-bold">
-              <ShieldCheck size={15} className="text-emerald-400" /> {tr("prod.buyerProtection")}
-            </div>
-            {["100% Secure Transactions", "Money-back Guarantee", "24/7 Live Support", "Escrow protected payment"].map((t) => (
-              <div key={t} className="flex items-center gap-2 py-1 text-[12px]">
-                <Check size={13} className="text-emerald-400" /> {t}
-              </div>
-            ))}
-          </div>
-
-          {offers.length > 0 && (
-            <div className="rounded-2xl panel p-4 sm:p-5">
-              <div className="text-[11.5px] muted">{tr("prod.bestPrice")}</div>
-              <div className="mt-1 text-[18px] font-black sm:text-[28px] text-brand-500">{money(cheapest)}</div>
-              <Btn
-                className="mt-3 w-full"
-                onClick={() => buy([...offers].sort((a, b) => a.price - b.price)[0], true)}
-              >
-                {tr("prod.buyCheapest")}
-              </Btn>
-              <Btn
-                variant="ghost"
-                className="mt-2 w-full"
-                onClick={() => buy([...offers].sort((a, b) => a.price - b.price)[0], false)}
-              >
-                {tr("common.addToCart")}
-              </Btn>
-              <Link
-                href="/support"
-                className="mt-3 block text-center text-[11.5px] muted transition-colors hover:text-brand-500"
-              >
-                {tr("prod.needHelp")}
-              </Link>
-            </div>
-          )}
-
-          <div className="rounded-2xl panel p-4 sm:p-5">
-            <div className="mb-2 text-[13px] font-bold">{tr("prod.productDetails")}</div>
-            <p className="text-[11.5px] leading-relaxed muted">
-              You will receive {product.name} directly in your {game.name} account. Safe, secure and
-              handled by verified G2X sellers. Open a dispute within 24 hours if anything is wrong.
-            </p>
-          </div>
+        {/* Desktop sidebar. Hidden below lg because the same cards are
+            rendered inline in the left column on mobile (see above). */}
+        <div className="hidden min-w-0 space-y-4 lg:sticky lg:top-[130px] lg:block lg:self-start">
+          {protectionCard}
+          {bestPriceCard}
+          {detailsCard}
         </div>
+
+        {/* Product details always sits last on mobile. */}
+        <div className="lg:hidden">{detailsCard}</div>
+
       </div>
     </main>
   );

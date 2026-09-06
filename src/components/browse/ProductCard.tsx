@@ -50,7 +50,7 @@ export default function ProductCard({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: (i % 6) * 0.05 }}
-      className="relative"
+      className="relative min-w-0"
     >
       {p.popular === 1 && (
         <span className="absolute -top-2 left-1/2 z-20 -translate-x-1/2 rounded-md bg-brand-600 px-2 py-0.5 text-[9.5px] font-bold text-white shadow-lg">
@@ -84,7 +84,7 @@ export default function ProductCard({
       </button>
       <Link
         href={href}
-        className="card-hover group flex h-full flex-col items-center rounded-2xl panel px-4 py-6 text-center"
+        className="card-hover group flex h-full min-w-0 flex-col items-center rounded-2xl panel px-3 py-5 text-center sm:px-4 sm:py-6"
       >
         <div className="relative h-[74px] w-[74px] overflow-hidden rounded-xl">
           <Image
@@ -95,8 +95,10 @@ export default function ProductCard({
             className="object-contain transition-transform duration-500 group-hover:scale-110"
           />
         </div>
-        <div className="mt-3 text-[13px] font-semibold leading-tight">{p.name}</div>
-        <div className="mt-1 text-[11.5px] muted">
+        <div className="mt-3 line-clamp-2 w-full break-words text-[12.5px] font-semibold leading-tight sm:text-[13px]">
+          {p.name}
+        </div>
+        <div className="mt-1 w-full truncate text-[11.5px] muted">
           from <span className="font-bold text-brand-500">{money(price)}</span>
         </div>
       </Link>
