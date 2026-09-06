@@ -287,3 +287,10 @@ ALTER TABLE cart_items ADD COLUMN opt_region TEXT;
 ALTER TABLE cart_items ADD COLUMN opt_delivery TEXT;
 ALTER TABLE order_items ADD COLUMN opt_region TEXT;
 ALTER TABLE order_items ADD COLUMN opt_delivery TEXT;
+
+-- Idempotency guard for wallet top-ups (double-credit bug).
+-- A UNIQUE column lets the DATABASE reject a duplicate credit atomically, which
+-- is the only reliable defence against double-submits, retries and races
+-- between concurrent requests. Nullable so existing rows stay valid.
+ALTER TABLE transactions ADD COLUMN idem_key TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_txn_idem ON transactions(idem_key);

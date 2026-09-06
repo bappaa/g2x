@@ -21,7 +21,7 @@ export const LANGUAGES: { code: LangCode; label: string; short: string; flag: st
 ];
 
 export type CurrencyCode =
-  | "USD" | "CAD" | "AUD" | "EUR" | "GBP" | "JPY" | "BRL" | "SGD" | "CHF" | "SEK";
+  | "USD" | "INR" | "CAD" | "AUD" | "EUR" | "GBP" | "JPY" | "BRL" | "SGD" | "CHF" | "SEK";
 
 export type CurrencyDef = {
   code: CurrencyCode;
@@ -36,6 +36,7 @@ export type CurrencyDef = {
 
 export const CURRENCIES: CurrencyDef[] = [
   { code: "USD", symbol: "$",   label: "US Dollar",         rate: 1,      decimals: 2 },
+  { code: "INR", symbol: "₹",   label: "Indian Rupee",      rate: 88.5,   decimals: 2 },
   { code: "CAD", symbol: "$",   label: "Canadian Dollar",   rate: 1.36,   decimals: 2 },
   { code: "AUD", symbol: "$",   label: "Australian Dollar", rate: 1.52,   decimals: 2 },
   { code: "EUR", symbol: "€",   label: "Euro",              rate: 0.92,   decimals: 2 },

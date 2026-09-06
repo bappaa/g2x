@@ -39,10 +39,10 @@ export default function GameRail({
   return (
     <>
       {/* ---------------------------- mobile ---------------------------- */}
-      <div className="space-y-2.5 lg:hidden">
+      <div className="min-w-0 space-y-2.5 lg:hidden">
         <button
           onClick={() => setOpen(true)}
-          className="flex w-full items-center gap-2.5 rounded-xl panel px-3 py-2.5 text-left active:scale-[.99]"
+          className="flex w-full min-w-0 items-center gap-2.5 rounded-xl panel px-3 py-2.5 text-left active:scale-[.99]"
         >
           <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-lg soft">
             {current ? <AnyLogo logo={current.logo} size={20} /> : <LayoutGrid size={14} />}
@@ -53,7 +53,7 @@ export default function GameRail({
               {current?.name ?? "All games"}
             </span>
           </span>
-          <span className="flex items-center gap-1 rounded-lg bg-brand-600/15 px-2 py-1 text-[10.5px] font-semibold text-brand-400">
+          <span className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg bg-brand-600/15 px-2 py-1 text-[10.5px] font-semibold text-brand-400">
             Change <ChevronDown size={11} />
           </span>
         </button>

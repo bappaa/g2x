@@ -1,7 +1,7 @@
 "use client";
 import { useMoney, useT } from "@/components/LocaleProvider";
 import Image from "next/image";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -71,16 +71,27 @@ export default function CheckoutView({
 
   const blocked = lowBal || !!limitMsg;
 
+  // Synchronous re-entry guard: a second tap in the same tick (before React
+  // re-renders with `pending`) would otherwise fire a second order.
+  const busy = useRef(false);
+
   const submit = () => {
+    if (busy.current) return;
+    busy.current = true;
     setErr("");
     setKycBlocked(false);
     start(async () => {
-      const r = await placeOrderAction({ paymentMethod: method, uid, note });
-      if (!r.ok) {
-        setKycBlocked(!!r.needsKyc);
-        return setErr(r.error || "Payment failed. Please try again.");
+      try {
+        const r = await placeOrderAction({ paymentMethod: method, uid, note });
+        if (!r.ok) {
+          setKycBlocked(!!r.needsKyc);
+          setErr(r.error || "Payment failed. Please try again.");
+          return;
+        }
+        router.push(`/dashboard/orders/${r.code}?new=1`);
+      } finally {
+        busy.current = false;
       }
-      router.push(`/dashboard/orders/${r.code}?new=1`);
     });
   };
 

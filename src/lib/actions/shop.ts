@@ -449,7 +449,16 @@ export async function submitReviewAction(input: {
 
 /* ============================ wallet ============================= */
 
-export async function topUpWalletAction(amount: number, method: string): Promise<R> {
+export async function topUpWalletAction(
+  amount: number,
+  method: string,
+  /**
+   * Client-generated idempotency key, one per top-up attempt. Two clicks (or a
+   * retry, or React double-invoking the transition) send the SAME key, so only
+   * the first can insert the transaction row — see the UNIQUE index below.
+   */
+  idemKey?: string
+): Promise<R> {
   const u = await requireUser();
   const amt = Math.round(amount * 100) / 100;
   if (!(amt > 0) || amt > 5000) return { ok: false, error: "Enter an amount between $1 and $5,000." };
@@ -469,20 +478,49 @@ export async function topUpWalletAction(amount: number, method: string): Promise
   const fee = feeFor(amt, gw);
   const charged = Math.round((amt + fee) * 100) / 100;
 
-  await tx([
-    { sql: `UPDATE users SET balance = balance + ? WHERE id=?`, args: [amt, u.id] },
-    {
-      sql: `INSERT INTO transactions (id,user_id,type,amount,reference) VALUES (?,?, 'deposit', ?, ?)`,
-      args: [
-        nid("txn_"),
-        u.id,
-        amt,
-        fee > 0
-          ? `Wallet top-up via ${gw.name} (charged $${charged.toFixed(2)}, fee $${fee.toFixed(2)})`
-          : `Wallet top-up via ${gw.name}`,
-      ],
-    },
-  ] as never);
+  /**
+   * DOUBLE-CREDIT FIX.
+   *
+   * Previously the balance UPDATE and the transaction INSERT ran with no
+   * uniqueness guard, so anything that delivered the action twice — an
+   * impatient double-tap landing before `pending` re-rendered, a flaky
+   * connection retrying the POST, or two tabs — credited the wallet twice.
+   *
+   * The INSERT now carries a UNIQUE `idem_key` and runs FIRST in the batch.
+   * A duplicate violates the index, the whole batch rolls back, and the
+   * balance is never touched a second time. This is enforced by the database,
+   * so it holds even for genuinely concurrent requests.
+   */
+  const key = (idemKey || "").trim().slice(0, 80) || nid("auto_");
+  const scopedKey = `topup:${u.id}:${key}`;
+
+  try {
+    await tx([
+      {
+        sql: `INSERT INTO transactions (id,user_id,type,amount,reference,idem_key)
+              VALUES (?,?, 'deposit', ?, ?, ?)`,
+        args: [
+          nid("txn_"),
+          u.id,
+          amt,
+          fee > 0
+            ? `Wallet top-up via ${gw.name} (charged $${charged.toFixed(2)}, fee $${fee.toFixed(2)})`
+            : `Wallet top-up via ${gw.name}`,
+          scopedKey,
+        ],
+      },
+      { sql: `UPDATE users SET balance = balance + ? WHERE id=?`, args: [amt, u.id] },
+    ] as never);
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? "");
+    if (/UNIQUE|constraint/i.test(msg)) {
+      // Same attempt replayed — the first one already credited the wallet.
+      revalidatePath("/dashboard/wallet");
+      revalidatePath("/dashboard");
+      return { ok: true };
+    }
+    throw e;
+  }
 
   if (u.email) {
     await mail.walletTopUp(u.email, {

@@ -5,6 +5,7 @@ import { all, one, run, tx, nid } from "../db";
 import { requireAdmin } from "../admin";
 import { saveMedia, deleteMedia, resolveImageField } from "../media";
 import { mail } from "../mail";
+import { pinManual, unpinManual, refreshRates } from "../fx";
 
 export type R = { ok: boolean; error?: string; id?: string };
 
@@ -904,16 +905,53 @@ export async function saveCmsBlockAction(form: FormData): Promise<R> {
 export async function saveSettingsAction(form: FormData): Promise<R> {
   const a = await requireAdmin("settings");
   const entries = Array.from(form.keys()).filter((k) => k.startsWith("s_"));
-  for (const k of entries)
+  for (const k of entries) {
+    const key = k.slice(2);
+    const value = String(form.get(k) ?? "").trim();
+
+    /**
+     * Exchange rates are special. Blanking an `fx_<CODE>` field means "let the
+     * live feed manage this one", so we delete the row and unpin it. Typing a
+     * number means the admin wants that rate held, so we pin it and the
+     * background refresher will skip it from then on.
+     */
+    if (/^fx_[A-Z]{3}$/.test(key)) {
+      const code = key.slice(3);
+      if (!value) {
+        await run(`DELETE FROM settings WHERE key=?`, [key]);
+        await unpinManual(code);
+        continue;
+      }
+      await pinManual(code);
+    }
+
     await run(
       `INSERT INTO settings (key,value) VALUES (?,?)
        ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
-      [k.slice(2), String(form.get(k) ?? "")]
+      [key, value]
     );
+  }
   await audit(a.id, "settings.save", `${entries.length} keys`);
   bustCatalog();
   revalidatePath("/admin/settings");
   return { ok: true };
+}
+
+/** Admin "Sync now" button — pulls fresh market rates immediately. */
+export async function refreshRatesAction(): Promise<R> {
+  const a = await requireAdmin("settings");
+  const r = await refreshRates(true);
+  if (!r.ok) return { ok: false, error: r.reason || "Could not reach the rate provider." };
+  await audit(a.id, "settings.fx_refresh", `${r.updated} rates from ${r.source}`);
+  bustCatalog();
+  revalidatePath("/admin/settings");
+  revalidatePath("/", "layout");
+  return {
+    ok: true,
+    error: `Updated ${r.updated} rates from ${r.source}.${
+      r.skipped.length ? ` Skipped manual: ${r.skipped.join(", ")}.` : ""
+    }`,
+  };
 }
 
 export async function saveRoleAction(form: FormData): Promise<R> {

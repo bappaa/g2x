@@ -1,6 +1,6 @@
 "use client";
 import { useMoney } from "@/components/LocaleProvider";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Wallet, Plus, Loader2, Check } from "lucide-react";
@@ -51,20 +51,47 @@ export default function WalletView({
     setCustom("");
   };
 
-  const topUp = () =>
+  /**
+   * Guards against the double-credit bug from two directions:
+   *  1. `busy` is a ref, so it flips synchronously — a second click landing in
+   *     the same tick (before React re-renders with `pending`) is dropped.
+   *     The `disabled` prop alone could not catch that.
+   *  2. `idemKey` is generated once per attempt and reused on retries, so if a
+   *     request does reach the server twice the UNIQUE index rejects the
+   *     duplicate instead of crediting the wallet again.
+   */
+  const busy = useRef(false);
+  const idemKey = useRef<string>("");
+
+  const topUp = () => {
+    if (busy.current) return;
+    busy.current = true;
+    if (!idemKey.current) {
+      idemKey.current =
+        globalThis.crypto?.randomUUID?.() ??
+        `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+
     start(async () => {
       setErr("");
       setKycBlocked(false);
-      const r = await topUpWalletAction(amt, method);
-      if (!r.ok) {
-        setKycBlocked(!!r.needsKyc);
-        return setErr(r.error || "Top-up failed.");
+      try {
+        const r = await topUpWalletAction(amt, method, idemKey.current);
+        if (!r.ok) {
+          setKycBlocked(!!r.needsKyc);
+          setErr(r.error || "Top-up failed.");
+          return;
+        }
+        idemKey.current = "";   // success -> next top-up gets a fresh key
+        setOk(true);
+        setCustom("");
+        setTimeout(() => setOk(false), 2200);
+        router.refresh();
+      } finally {
+        busy.current = false;
       }
-      setOk(true);
-      setCustom("");
-      setTimeout(() => setOk(false), 2200);
-      router.refresh();
     });
+  };
 
   const inflow = txns.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const outflow = txns.filter((t) => t.amount < 0).reduce((s, t) => s - t.amount, 0);

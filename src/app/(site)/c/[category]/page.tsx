@@ -27,7 +27,7 @@ export default async function Page({ params }: { params: { category: string } })
   ]);
 
   return (
-    <main className="mx-auto max-w-[1220px] px-3 py-4 sm:px-4 sm:py-6">
+    <main className="mx-auto w-full max-w-[1220px] overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
       <Breadcrumb items={[{ label: "Home", href: "/" }, { label: cat.name }]} />
 
       <FadeIn className="mt-4">
@@ -45,7 +45,7 @@ export default async function Page({ params }: { params: { category: string } })
 
       <section className="mt-5 rounded-2xl panel p-4 sm:p-5">
         <h2 className="mb-4 text-[14px] font-bold">Choose a game</h2>
-        <div className="grid grid-cols-3 gap-4 sm:grid-cols-5 lg:grid-cols-7">
+        <div className="grid min-w-0 grid-cols-3 gap-3 sm:grid-cols-5 sm:gap-4 lg:grid-cols-7">
           {games.slice(0, 35).map((g) => (
             <Link key={g.slug} href={`/g/${g.slug}/${cat.slug}`} className="group block">
               <div className="tile aspect-square w-full border border-[var(--line)] soft">
@@ -76,7 +76,7 @@ export default async function Page({ params }: { params: { category: string } })
       {featured.length > 0 && (
         <section className="mt-5 rounded-2xl panel p-4 sm:p-5">
           <h2 className="mb-4 text-[14px] font-bold">Popular {cat.name} packages</h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
             {featured.map((p, i) => (
               <ProductCard key={p.id} p={p} i={i} />
             ))}

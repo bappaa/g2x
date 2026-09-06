@@ -22,7 +22,7 @@ export default async function Page({ params }: { params: { game: string } }) {
   );
 
   return (
-    <main className="mx-auto max-w-[1220px] px-3 py-4 sm:px-4 sm:py-6">
+    <main className="mx-auto w-full max-w-[1220px] overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6">
       <Breadcrumb items={[{ label: "Home", href: "/" }, { label: game.name }]} />
 
       <FadeIn className="mt-4">
@@ -39,7 +39,7 @@ export default async function Page({ params }: { params: { game: string } }) {
         </div>
       </FadeIn>
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-5 grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cats.map((c, i) => (
           <FadeIn key={c.slug} delay={i * 0.05}>
             <Link
@@ -70,7 +70,7 @@ export default async function Page({ params }: { params: { game: string } }) {
                 See All →
               </Link>
             </div>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
               {products.slice(0, 6).map((p, i) => (
                 <ProductCard key={p.id} p={p} i={i} />
               ))}

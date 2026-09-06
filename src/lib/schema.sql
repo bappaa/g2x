@@ -224,9 +224,13 @@ CREATE TABLE IF NOT EXISTS transactions (
   balance_after REAL,
   reference  TEXT,
   order_id   TEXT,
+  -- Idempotency key: UNIQUE, so a duplicate credit is rejected by the database
+  -- itself rather than relying on client-side button disabling.
+  idem_key   TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_txn_user ON transactions(user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_txn_idem ON transactions(idem_key);
 
 CREATE TABLE IF NOT EXISTS withdrawals (
   id          TEXT PRIMARY KEY,

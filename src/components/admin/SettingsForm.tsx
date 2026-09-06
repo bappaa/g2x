@@ -3,7 +3,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Save, Check, Send, AlertCircle } from "lucide-react";
 import { Btn, Field, inputCls } from "@/components/ui";
-import { saveSettingsAction, sendTestMailAction } from "@/lib/actions/admin";
+import { saveSettingsAction, sendTestMailAction, refreshRatesAction } from "@/lib/actions/admin";
+import { CURRENCIES } from "@/lib/i18n";
 
 type F = { key: string; label: string; hint?: string; type?: string; options?: string[]; def: string };
 
@@ -13,7 +14,11 @@ const GROUPS: { title: string; fields: F[] }[] = [
     fields: [
       { key: "site_name", label: "Site name", def: "G2X.GG" },
       { key: "support_email", label: "Support email", type: "email", def: "support@g2x.gg" },
-      { key: "currency", label: "Display currency", def: "USD" },
+      {
+        key: "currency", label: "Default display currency", type: "select",
+        options: CURRENCIES.map((c) => c.code), def: "USD",
+        hint: "Used for visitors who have not picked one themselves",
+      },
       { key: "maintenance", label: "Maintenance mode", type: "select", options: ["off", "on"], def: "off" },
       { key: "seo_title", label: "Browser tab / SEO title", def: "G2X.GG — Your Ultimate Gaming Marketplace" },
       { key: "seo_description", label: "SEO description", hint: "Shown in Google results", def: "Buy & sell gaming accounts, coins, items, top-ups, boosting, subscriptions & more at the best prices." },
@@ -47,6 +52,16 @@ const GROUPS: { title: string; fields: F[] }[] = [
     ],
   },
   {
+    title: "Exchange rates",
+    fields: CURRENCIES.filter((c) => c.code !== "USD").map((c) => ({
+      key: `fx_${c.code}`,
+      label: `1 USD = ? ${c.code} (${c.label})`,
+      type: "number",
+      def: "",
+      hint: `Symbol ${c.symbol}. Leave blank to track the live market rate automatically. Enter a number only if you want to lock ${c.code} to a fixed rate.`,
+    })),
+  },
+  {
     title: "Transactional email (Resend)",
     fields: [
       { key: "mail_enabled", label: "Send transactional email", type: "select", options: ["on", "off"], def: "on", hint: "Requires RESEND_API_KEY in the server environment (resend.com)" },
@@ -65,7 +80,20 @@ const GROUPS: { title: string; fields: F[] }[] = [
   },
 ];
 
-export default function SettingsForm({ values }: { values: Record<string, string> }) {
+export type FxInfo = {
+  live: Record<string, number>;
+  manual: string[];
+  ageLabel: string;
+  source: string | null;
+};
+
+export default function SettingsForm({
+  values,
+  fx,
+}: {
+  values: Record<string, string>;
+  fx: FxInfo;
+}) {
   const router = useRouter();
   const [saved, setSaved] = useState(false);
   const [testTo, setTestTo] = useState("");
@@ -73,6 +101,19 @@ export default function SettingsForm({ values }: { values: Record<string, string
   const [testMsg, setTestMsg] = useState<{ ok: boolean; text?: string } | null>(null);
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
+  const [syncing, startSync] = useTransition();
+  const [syncMsg, setSyncMsg] = useState("");
+
+  const isFx = (key: string) => /^fx_[A-Z]{3}$/.test(key);
+  const pinned = (key: string) => fx.manual.includes(key.slice(3));
+
+  const syncNow = () =>
+    startSync(async () => {
+      setSyncMsg("");
+      const r = await refreshRatesAction();
+      setSyncMsg(r.ok ? r.error || "Rates updated." : r.error || "Could not reach the rate provider.");
+      router.refresh();
+    });
 
   const submit = (fd: FormData) =>
     start(async () => {
@@ -100,14 +141,66 @@ export default function SettingsForm({ values }: { values: Record<string, string
                   <input
                     name={`s_${f.key}`}
                     type={f.type ?? "text"}
-                    step={f.type === "number" ? "0.01" : undefined}
-                    defaultValue={values[f.key] ?? f.def}
+                    step={f.type === "number" ? "0.000001" : undefined}
+                    /* For an FX field we only prefill when the admin has pinned
+                       that currency. Otherwise the box stays empty and shows
+                       the live rate as a placeholder, so simply saving the form
+                       never accidentally freezes a tracked rate. */
+                    defaultValue={
+                      isFx(f.key)
+                        ? pinned(f.key)
+                          ? values[f.key] ?? ""
+                          : ""
+                        : values[f.key] ?? f.def
+                    }
+                    placeholder={
+                      isFx(f.key) && fx.live[f.key.slice(3)]
+                        ? `live: ${fx.live[f.key.slice(3)]}`
+                        : undefined
+                    }
                     className={inputCls}
                   />
                 )}
               </Field>
             ))}
           </div>
+
+          {/* Live-rate status + manual sync, next to the FX fields. */}
+          {g.title === "Exchange rates" && (
+            <div className="mt-4 rounded-xl border border-[var(--line)] soft p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-[12px] font-semibold">
+                    Live rates{" "}
+                    <span className="ml-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-500">
+                      AUTO
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] muted">
+                    Updated {fx.ageLabel}
+                    {fx.source ? ` from ${fx.source}` : ""} — refreshed automatically every hour.
+                    Prices are stored in USD and converted at checkout.
+                    {fx.manual.length > 0 && (
+                      <>
+                        {" "}
+                        Locked to a manual rate: <b>{fx.manual.join(", ")}</b> (clear the field to
+                        track the market again).
+                      </>
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={syncNow}
+                  disabled={syncing}
+                  className="shrink-0 rounded-lg border border-[var(--line)] px-3 py-1.5 text-[12px] font-semibold hover:bg-[var(--soft)] disabled:opacity-60"
+                >
+                  {syncing ? "Syncing…" : "Sync now"}
+                </button>
+              </div>
+              {syncMsg && <div className="mt-2 text-[11.5px] muted">{syncMsg}</div>}
+            </div>
+          )}
 
           {/* Live deliverability check, right where the mail switches are. */}
           {g.title.startsWith("Transactional email") && (

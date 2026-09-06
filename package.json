@@ -17,7 +17,8 @@
     "db:setup": "npm run db:seed && npm run db:migrate && npm run db:catalog && npm run db:options && npm run db:cms && npm run db:nav && npm run db:gateways",
     "db:content": "npm run db:migrate && npm run db:options && npm run db:cms && npm run db:nav && npm run db:gateways",
     "db:gateways": "tsx scripts/seed-gateways.mts",
-    "check:env": "tsx scripts/check-env.mts"
+    "check:env": "tsx scripts/check-env.mts",
+    "fx:refresh": "tsx scripts/fx-refresh.mts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

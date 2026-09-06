@@ -19,14 +19,42 @@ export function getLocale(): { lang: LangCode; currency: CurrencyCode } {
 }
 
 /**
- * Admin-editable FX overrides, stored as settings rows `fx_<CODE>`.
- * Falls back to the seeded rates in i18n.ts.
+ * Fire-and-forget staleness check. Deliberately NOT awaited by callers: if the
+ * rates are older than the refresh window we start a background sync and let
+ * the current request finish with the values we already have. A single
+ * in-flight promise is kept so a burst of concurrent renders triggers one
+ * fetch, not one per request.
+ */
+let inflight: Promise<unknown> | null = null;
+
+function maybeRefresh(rows: { key: string; value: string }[]) {
+  const stamp = Number(rows.find((r) => r.key === "fx_updated_at")?.value ?? 0);
+  const stale = !stamp || Date.now() - stamp > 60 * 60 * 1000;
+  if (!stale || inflight) return;
+
+  inflight = import("./fx")
+    .then((m) => m.refreshRates())
+    .catch(() => null)
+    .finally(() => {
+      inflight = null;
+    });
+}
+
+/**
+ * Live + admin-editable FX rates, stored as settings rows `fx_<CODE>`.
+ *
+ * Reads are always DB-only so a page render never waits on the network. When
+ * the stored rates go stale a refresh is kicked off in the background (see
+ * lib/fx.ts); this request still serves the previous values and the next one
+ * picks up the fresh numbers. Anything missing falls back to the static table
+ * in i18n.ts, so the site always has a usable rate.
  */
 export async function getRates(): Promise<Record<string, number>> {
   try {
     const rows = await all<{ key: string; value: string }>(
       `SELECT key, value FROM settings WHERE key LIKE 'fx_%'`
     );
+    void maybeRefresh(rows);
     const out: Record<string, number> = {};
     rows.forEach((r) => {
       const n = Number(r.value);

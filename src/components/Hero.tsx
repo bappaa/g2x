@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { CategoryIcon } from "./CategoryIcon";
+import { useMoney } from "./LocaleProvider";
 
 export type Perk = { icon: string; label: string };
 
@@ -21,6 +22,19 @@ export default function Hero({
   cta2Label?: string; cta2Href?: string;
   badge?: string; dealLabel?: string; dealPrice?: string; dealWas?: string;
 }) {
+  const money = useMoney();
+
+  /**
+   * The deal price is authored in the CMS as plain text (e.g. "$15.99").
+   * Convert it so it honours the visitor's chosen currency like every other
+   * price on the site; if it isn't a parseable number, show it verbatim.
+   */
+  const asMoney = (v?: string) => {
+    if (!v) return v;
+    const n = Number(String(v).replace(/[^0-9.]/g, ""));
+    return Number.isFinite(n) && n > 0 ? money(n) : v;
+  };
+
   if (!title && !highlight && !body) return null;
 
   return (
@@ -137,9 +151,9 @@ export default function Hero({
                   <span className="truncate text-[11.5px] font-bold text-white">{dealLabel}</span>
                   {dealPrice && (
                     <span className="ml-auto flex items-baseline gap-1.5 pl-1">
-                      <span className="text-[13px] font-black text-brand-300">{dealPrice}</span>
+                      <span className="text-[13px] font-black text-brand-300">{asMoney(dealPrice)}</span>
                       {dealWas && (
-                        <span className="text-[10px] line-through opacity-60">{dealWas}</span>
+                        <span className="text-[10px] line-through opacity-60">{asMoney(dealWas)}</span>
                       )}
                     </span>
                   )}

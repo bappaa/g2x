@@ -232,3 +232,21 @@ deploy with cache cleared.
 
 **"Document uploads are not available on this deployment"**
 Expected on Netlify — the filesystem is read-only. Use the VPS for KYC.
+
+## Exchange rates
+
+Prices are stored in USD and converted at render time using **live market
+rates**, refreshed hourly from a free, key-less feed (exchangerate-api, with
+frankfurter.dev as a fallback). No API key or env var is needed.
+
+- The site self-heals: when the stored rates are more than an hour old, the
+  next page render kicks off a background refresh and serves the previous
+  values in the meantime — a page never waits on the network.
+- Seed the rates right after a deploy with `npm run fx:refresh`. On a host
+  that freezes between requests, run the same command from a scheduled job.
+- **Admin → Settings → Exchange rates** shows how fresh the rates are, the
+  provider, and a **Sync now** button. Leave a currency's field blank to track
+  the market; type a number to lock that one currency to a fixed rate (the
+  refresher will then skip it). Clear the field to hand it back to the feed.
+- If every provider is unreachable, the last stored rates stay in use, and
+  those in turn fall back to the static table in `src/lib/i18n.ts`.
