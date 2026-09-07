@@ -1,17 +1,23 @@
 import "server-only";
-import { one } from "./db";
+import { one, run } from "./db";
 
 
 /**
- * Buyer identity gate.
+ * Buyer identity check — POST-PAYMENT.
  *
- * Once a buyer tries to move money at or above the configured threshold
- * (default $30) in a single transaction — a wallet top-up or a checkout — they
- * must pass a light KYC check first: ID number, a photo of the ID and a face
- * photo. The admin approves or rejects it in Admin → Buyer KYC.
+ * Previously a buyer moving the threshold amount or more (default $30) was
+ * blocked until an admin approved their ID, which stopped the sale dead at the
+ * moment of highest intent.
  *
- * The threshold is admin-configurable via the `kyc_threshold` setting, and the
- * whole gate can be switched off with `buyer_kyc = off`.
+ * The flow is now inverted: the payment always goes through, and the
+ * transaction itself *flags the account* as owing verification
+ * (`users.kyc_due_at`). The buyer is routed to the verification tab
+ * immediately afterwards to submit their details, and an admin reviews it as
+ * usual. Nothing about the review, the notifications or the admin screens
+ * changes — only when the buyer is asked.
+ *
+ * The threshold is admin-configurable via `kyc_threshold`, and the whole thing
+ * can be switched off with `buyer_kyc = off`.
  */
 
 export type KycStatus = "none" | "pending" | "approved" | "rejected" | "resubmit";
@@ -44,8 +50,70 @@ export type GateResult =
   | { ok: false; needsKyc: true; status: KycStatus; threshold: number; error: string };
 
 /**
- * Call this in every server action that moves `amount` for `userId`.
- * Returns `{ok:true}` when the buyer may proceed.
+ * Does this transaction oblige the buyer to verify afterwards?
+ * Pure check — no writes, safe to call before the money moves.
+ */
+export async function kycDueFor(userId: string, amount: number): Promise<boolean> {
+  if (!(await kycEnabled())) return false;
+  if (amount < (await kycThreshold())) return false;
+
+  const status = await buyerKycStatus(userId);
+  // Approved buyers are done; a pending review is already in the admin queue.
+  return status !== "approved" && status !== "pending";
+}
+
+/**
+ * Called AFTER a qualifying payment succeeds. Stamps the account as owing a
+ * verification so the dashboard, the nav badge and the middleware can all
+ * prompt for it. Idempotent: an existing unmet obligation is left with its
+ * original timestamp so the deadline cannot be reset by transacting again.
+ *
+ * Never throws — a bookkeeping failure must not undo a completed payment.
+ */
+export async function markKycDue(userId: string, reason: string): Promise<void> {
+  try {
+    await run(
+      `UPDATE users SET kyc_due_at = COALESCE(kyc_due_at, datetime('now')), kyc_due_reason = ?
+        WHERE id = ? AND kyc_due_at IS NULL`,
+      [reason, userId]
+    );
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/** Clears the obligation once the buyer submits (or an admin approves). */
+export async function clearKycDue(userId: string): Promise<void> {
+  try {
+    await run(`UPDATE users SET kyc_due_at = NULL, kyc_due_reason = NULL WHERE id = ?`, [userId]);
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/** Is this buyer currently being asked to verify? Drives the dashboard prompt. */
+export async function pendingKycPrompt(
+  userId: string
+): Promise<{ due: boolean; since: string | null; reason: string | null; status: KycStatus }> {
+  const r = await one<{ kyc_due_at: string | null; kyc_due_reason: string | null }>(
+    `SELECT kyc_due_at, kyc_due_reason FROM users WHERE id=?`,
+    [userId]
+  );
+  const status = await buyerKycStatus(userId);
+  // A submitted or approved check satisfies the obligation regardless of flag.
+  const settled = status === "pending" || status === "approved";
+  return {
+    due: !!r?.kyc_due_at && !settled,
+    since: r?.kyc_due_at ?? null,
+    reason: r?.kyc_due_reason ?? null,
+    status,
+  };
+}
+
+/**
+ * Legacy pre-payment gate. Retained so any caller that still wants a hard
+ * block keeps working, but it is no longer used on the buyer money paths —
+ * see `kycDueFor` + `markKycDue` for the post-payment flow.
  */
 export async function requireKycFor(userId: string, amount: number): Promise<GateResult> {
   if (!(await kycEnabled())) return { ok: true };

@@ -148,7 +148,7 @@ export default function Header({
       <header className="relative">
         <div className="mx-auto flex h-[62px] max-w-[1220px] items-center gap-3 px-3 sm:px-4 xl:gap-4">
           <Link href="/">
-            <Logo />
+            <Logo tagline={false} />
           </Link>
 
           <nav className="ml-1 hidden shrink-0 items-center gap-3.5 xl:flex 2xl:gap-4">

@@ -294,3 +294,10 @@ ALTER TABLE order_items ADD COLUMN opt_delivery TEXT;
 -- between concurrent requests. Nullable so existing rows stay valid.
 ALTER TABLE transactions ADD COLUMN idem_key TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_txn_idem ON transactions(idem_key);
+
+-- Post-payment buyer verification (replaces the pre-payment block).
+-- A qualifying transaction now completes normally and stamps `kyc_due_at`;
+-- the buyer is then sent to the verification tab to submit their details.
+ALTER TABLE users ADD COLUMN kyc_due_at TEXT;
+ALTER TABLE users ADD COLUMN kyc_due_reason TEXT;
+CREATE INDEX IF NOT EXISTS idx_users_kyc_due ON users(kyc_due_at);

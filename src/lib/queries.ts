@@ -33,7 +33,7 @@ export const getGames = () =>
   all<DbGame>(`SELECT * FROM games WHERE status='active' ORDER BY sort_order`);
 
 export const getCategories = () =>
-  all<DbCategory>(`SELECT * FROM categories ORDER BY sort_order`);
+  all<DbCategory>(`SELECT * FROM categories ORDER BY sort_order, name`);
 
 export const getGame = (slug: string) =>
   one<DbGame>(`SELECT * FROM games WHERE slug=? AND status='active'`, [slug]);
@@ -45,7 +45,7 @@ export const getGameCategories = (game: string) =>
   all<DbCategory>(
     `SELECT c.* FROM categories c
        JOIN game_categories gc ON gc.category_slug=c.slug
-      WHERE gc.game_slug=? ORDER BY c.sort_order`,
+      WHERE gc.game_slug=? ORDER BY c.sort_order, c.name`,
     [game]
   );
 

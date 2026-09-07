@@ -44,7 +44,8 @@ const { games, categories, products } = await import("../src/lib/catalog");
 for (const c of categories) {
   await db.execute({
     sql: `INSERT INTO categories (slug,name,blurb,icon,sort_order) VALUES (?,?,?,?,?)
-          ON CONFLICT(slug) DO UPDATE SET name=excluded.name, blurb=excluded.blurb`,
+          ON CONFLICT(slug) DO UPDATE SET name=excluded.name, blurb=excluded.blurb,
+                                          sort_order=excluded.sort_order`,
     args: [c.slug, c.name, c.blurb, c.icon, c.order ?? 0],
   });
 }

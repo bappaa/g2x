@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS users (
   balance        REAL NOT NULL DEFAULT 0,
   two_factor     INTEGER NOT NULL DEFAULT 0,
   created_at     TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+  kyc_due_at      TEXT,
+  kyc_due_reason  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 

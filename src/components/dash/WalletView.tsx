@@ -85,6 +85,14 @@ export default function WalletView({
         idemKey.current = "";   // success -> next top-up gets a fresh key
         setOk(true);
         setCustom("");
+
+        // Funds are in. If the deposit crossed the identity threshold, collect
+        // the verification now rather than having blocked the payment earlier.
+        if (r.verifyAfter) {
+          router.push("/dashboard/verification?after=topup");
+          return;
+        }
+
         setTimeout(() => setOk(false), 2200);
         router.refresh();
       } finally {

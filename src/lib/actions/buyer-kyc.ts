@@ -6,6 +6,7 @@ import { requireUser } from "../session";
 import { saveKycFile } from "../storage";
 import { idLabel, countryName } from "../kyc";
 import { mail } from "../mail";
+import { clearKycDue } from "../buyer-kyc";
 import { rateLimit } from "../ratelimit";
 
 export type R = { ok: boolean; error?: string; id?: string };
@@ -73,6 +74,8 @@ export async function submitBuyerKycAction(form: FormData): Promise<R> {
     [id, u.id, fullName, country, idType, idNumber, idNumber.slice(-4), dob || null, a.key, b.key]
   );
   await run(`UPDATE users SET kyc_status='pending' WHERE id=?`, [u.id]);
+  // The buyer has met the post-payment obligation — stop prompting them.
+  await clearKycDue(u.id);
 
   await notify(
     u.id,

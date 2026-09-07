@@ -267,26 +267,6 @@ export default function AuthForm({
             </Link>
           </p>
 
-          {/* {isLogin && (
-            <div className="mt-6 rounded-xl border border-[var(--line)] soft p-3.5">
-              <div className="text-[11px] font-bold muted">DEMO ACCOUNTS — password: Password123!</div>
-              <div className="mt-2 space-y-1 text-[11.5px]">
-                <div className="flex justify-between">
-                  <span className="muted">Buyer</span>
-                  <code className="text-brand-400">buyer@g2x.gg</code>
-                </div>
-                <div className="flex justify-between">
-                  <span className="muted">Seller</span>
-                  <code className="text-brand-400">seller@g2x.gg</code>
-                </div>
-                <div className="flex justify-between">
-                  <span className="muted">Admin</span>
-                  <code className="text-brand-400">admin@g2x.gg</code>
-                </div>
-              </div>
-            </div>
-          )} */}
-
           <div className="mt-6 flex items-center justify-center gap-4 text-[10.5px] muted">
             {["Secure checkout", "Escrow protected", "No hidden fees"].map((t) => (
               <span key={t} className="flex items-center gap-1">

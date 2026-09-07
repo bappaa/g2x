@@ -88,6 +88,16 @@ export default function CheckoutView({
           setErr(r.error || "Payment failed. Please try again.");
           return;
         }
+        /**
+         * Payment succeeded. If this order crossed the identity threshold the
+         * server flags the account and returns `verifyAfter`; we send the buyer
+         * to the verification tab, carrying the order code so the page can
+         * confirm the purchase went through before asking for documents.
+         */
+        if (r.verifyAfter) {
+          router.push(`/dashboard/verification?after=${r.code}`);
+          return;
+        }
         router.push(`/dashboard/orders/${r.code}?new=1`);
       } finally {
         busy.current = false;

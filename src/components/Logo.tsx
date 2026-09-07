@@ -1,4 +1,11 @@
-export default function Logo({ size = 38 }: { size?: number }) {
+export default function Logo({
+  size = 38,
+  /** The "Pro Gaming Services" strapline. Hidden in the navbar, kept in the footer. */
+  tagline = true,
+}: {
+  size?: number;
+  tagline?: boolean;
+}) {
   return (
     <div className="flex items-center gap-2.5">
       <div
@@ -15,7 +22,7 @@ export default function Logo({ size = 38 }: { size?: number }) {
       </div>
       <div className="leading-none">
         <div className="text-[17px] font-extrabold tracking-tight">G2X.GG</div>
-        <div className="mt-1 text-[10px] muted">Pro Gaming Services</div>
+        {tagline && <div className="mt-1 text-[10px] muted">Pro Gaming Services</div>}
       </div>
     </div>
   );

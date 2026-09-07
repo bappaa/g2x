@@ -6,13 +6,22 @@ import { requireUser, getSessionUser } from "../session";
 import { getCart } from "../queries";
 import { moderateMessage } from "../moderation";
 
-export type R = { ok: boolean; error?: string; id?: string; code?: string; warning?: string; needsKyc?: boolean };
+export type R = {
+  ok: boolean;
+  error?: string;
+  id?: string;
+  code?: string;
+  warning?: string;
+  needsKyc?: boolean;
+  /** Set on a SUCCESSFUL payment that now obliges the buyer to verify. */
+  verifyAfter?: { threshold: number; reason: string };
+};
 
 const SERVICE_FEE = 0.02;
 
 import { mail } from "../mail";
 import { gatewayByCode, feeFor, limitError } from "../gateways";
-import { requireKycFor } from "../buyer-kyc";
+import { kycDueFor, markKycDue, kycThreshold } from "../buyer-kyc";
 import { rateLimit } from "../ratelimit";
 
 async function notify(userId: string, title: string, body: string, href: string, kind = "order") {
@@ -127,9 +136,12 @@ export async function placeOrderAction(form: {
   const gwFee = feeFor(subtotal + fee, gw);
   const total = +(subtotal + fee + gwFee).toFixed(2);
 
-  // Identity gate — enforced server-side, never trusted from the client.
-  const gate = await requireKycFor(u.id, total);
-  if (!gate.ok) return { ok: false, error: gate.error, needsKyc: true };
+  /**
+   * Identity check is POST-payment. We only work out here whether this order
+   * will oblige the buyer to verify; the order itself is never blocked. The
+   * flag is written after the money has actually moved.
+   */
+  const willOweKyc = await kycDueFor(u.id, total);
 
   const rlOrder = await rateLimit(`checkout:${u.id}`, 12, 60 * 60);
   if (!rlOrder.ok) return { ok: false, error: "Too many orders in a short time. Please wait a few minutes." };
@@ -266,9 +278,29 @@ export async function placeOrderAction(form: {
     }
   }
 
+  /**
+   * Payment is done — now collect the identity check. We flag the account and
+   * hand the client a `verifyAfter` payload so it can route the buyer to the
+   * verification tab straight after the confirmation screen.
+   */
+  let verifyAfter: R["verifyAfter"];
+  if (willOweKyc) {
+    const reason = `Order ${code} ($${total.toFixed(2)})`;
+    await markKycDue(u.id, reason);
+    await notify(
+      u.id,
+      "Verify your identity",
+      `Thanks for your order. Because it was $${total.toFixed(2)}, please confirm your identity to keep your account fully active.`,
+      "/dashboard/verification",
+      "system"
+    );
+    verifyAfter = { threshold: await kycThreshold(), reason };
+    revalidatePath("/dashboard/verification");
+  }
+
   revalidatePath("/dashboard/orders");
   revalidatePath("/seller/orders");
-  return { ok: true, code };
+  return { ok: true, code, verifyAfter };
 }
 
 /* ======================= buyer order actions ======================= */
@@ -469,8 +501,8 @@ export async function topUpWalletAction(
   const limit = limitError(amt, gw);
   if (limit) return { ok: false, error: limit };
 
-  const gateT = await requireKycFor(u.id, amt);
-  if (!gateT.ok) return { ok: false, error: gateT.error, needsKyc: true };
+  // Post-payment identity check: decide now, flag after the credit lands.
+  const willOweKyc = await kycDueFor(u.id, amt);
 
   const rlTop = await rateLimit(`topup:${u.id}`, 10, 60 * 60);
   if (!rlTop.ok) return { ok: false, error: "Too many top-up attempts. Please wait a few minutes." };
@@ -531,9 +563,25 @@ export async function topUpWalletAction(
     });
   }
 
+  // Money is in — now ask for identity if this deposit crossed the threshold.
+  let verifyAfter: R["verifyAfter"];
+  if (willOweKyc) {
+    const reason = `Wallet top-up ($${amt.toFixed(2)})`;
+    await markKycDue(u.id, reason);
+    await notify(
+      u.id,
+      "Verify your identity",
+      `Your $${amt.toFixed(2)} top-up went through. Please confirm your identity to keep your account fully active.`,
+      "/dashboard/verification",
+      "system"
+    );
+    verifyAfter = { threshold: await kycThreshold(), reason };
+    revalidatePath("/dashboard/verification");
+  }
+
   revalidatePath("/dashboard/wallet");
   revalidatePath("/dashboard");
-  return { ok: true };
+  return { ok: true, verifyAfter };
 }
 
 /* =========================== wishlist ============================ */

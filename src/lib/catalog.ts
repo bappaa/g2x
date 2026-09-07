@@ -21,18 +21,29 @@ export type CategorySlug =
   | "boosting"
   | "subscriptions";
 
+/**
+ * Category order is deliberate and must match the main navigation:
+ * Currency, Top Up, Items, Accounts, Subscription, Boosting.
+ *
+ * `order` is written to `categories.sort_order` by the seed and every listing
+ * query sorts on it, so this single list drives the homepage tiles, the game
+ * pages and the category rails. Without it SQLite returns rows in an
+ * effectively alphabetical order (Accounts, Boosting, Currency...), which is
+ * what the homepage tiles were showing.
+ */
 export const categories: {
   slug: CategorySlug;
   name: string;
   blurb: string;
   icon: string;
+  order: number;
 }[] = [
-  { slug: "top-up", name: "Top Up", blurb: "Instant in-game top up", icon: "zap" },
-  { slug: "currency", name: "Currency", blurb: "Coins, cash & gems", icon: "coins" },
-  { slug: "accounts", name: "Accounts", blurb: "Verified game accounts", icon: "user" },
-  { slug: "items", name: "Items", blurb: "Skins, passes & crates", icon: "package" },
-  { slug: "boosting", name: "Boosting", blurb: "Rank up faster", icon: "rocket" },
-  { slug: "subscriptions", name: "Subscriptions", blurb: "Premium memberships", icon: "crown" },
+  { slug: "currency", name: "Currency", blurb: "Coins, cash & gems", icon: "coins", order: 1 },
+  { slug: "top-up", name: "Top Up", blurb: "Instant in-game top up", icon: "zap", order: 2 },
+  { slug: "items", name: "Items", blurb: "Skins, passes & crates", icon: "package", order: 3 },
+  { slug: "accounts", name: "Accounts", blurb: "Verified game accounts", icon: "user", order: 4 },
+  { slug: "subscriptions", name: "Subscriptions", blurb: "Premium memberships", icon: "crown", order: 5 },
+  { slug: "boosting", name: "Boosting", blurb: "Rank up faster", icon: "rocket", order: 6 },
 ];
 
 export const games: Game[] = [

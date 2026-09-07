@@ -22,10 +22,15 @@ export default function BuyerKyc({
   current,
   threshold,
   spendable,
+  due = false,
+  dueReason = null,
 }: {
   current: Row;
   threshold: number;
   spendable: boolean;
+  /** True when a completed payment has left an outstanding identity check. */
+  due?: boolean;
+  dueReason?: string | null;
 }) {
   const router = useRouter();
   const [country, setCountry] = useState("IN");
@@ -74,6 +79,7 @@ export default function BuyerKyc({
                status === "pending" ? "Under review" :
                status === "rejected" ? "Verification rejected" :
                status === "resubmit" ? "Resubmission needed" :
+               due ? "Confirm your identity" :
                "Verify your identity"}
             </h2>
             <p className="mt-1 text-[12px] leading-relaxed muted">
@@ -81,7 +87,9 @@ export default function BuyerKyc({
                 ? "Deposits and purchases of any amount are unlocked on your account."
                 : status === "pending"
                 ? "Our team is checking your documents. This usually takes a few hours — we'll email you the moment it's done."
-                : `A quick identity check is required before you can deposit or spend $${threshold} or more in a single transaction. Smaller purchases are unaffected.`}
+                : due
+                ? `Your recent transaction${dueReason ? ` (${dueReason})` : ""} completed successfully. Because it was $${threshold} or more, please confirm your identity below to keep your account fully active.`
+                : `If you deposit or spend $${threshold} or more in a single transaction, we'll ask you to confirm your identity afterwards. You can also complete it now to get it out of the way.`}
             </p>
             {current?.review_note && status !== "approved" && (
               <div className="mt-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11.5px] text-amber-300">
@@ -95,7 +103,8 @@ export default function BuyerKyc({
           <div className="mt-3 flex items-start gap-2 rounded-lg bg-brand-600/10 px-3 py-2 text-[11.5px]">
             <Lock size={13} className="mt-px shrink-0 text-brand-400" />
             <span>
-              Transactions under ${threshold} work normally right now — you only need this to go above that.
+              Payments are never blocked while this is outstanding — you can keep buying and
+              topping up as normal.
             </span>
           </div>
         )}

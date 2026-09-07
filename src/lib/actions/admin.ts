@@ -6,6 +6,7 @@ import { requireAdmin } from "../admin";
 import { saveMedia, deleteMedia, resolveImageField } from "../media";
 import { mail } from "../mail";
 import { pinManual, unpinManual, refreshRates } from "../fx";
+import { clearKycDue, markKycDue } from "../buyer-kyc";
 
 export type R = { ok: boolean; error?: string; id?: string };
 
@@ -1387,11 +1388,19 @@ export async function reviewBuyerKycAction(
   );
   await run(`UPDATE users SET kyc_status=? WHERE id=?`, [decision, v.user_id]);
 
+  /**
+   * Approval settles any outstanding post-payment obligation. A rejection or a
+   * resubmit request deliberately re-arms it, so the buyer keeps being prompted
+   * until a valid ID is on file.
+   */
+  if (decision === "approved") await clearKycDue(v.user_id);
+  else await markKycDue(v.user_id, "Identity check needs resubmission");
+
   await notify(
     v.user_id,
     decision === "approved" ? "Identity verified ✓" : "Identity check needs attention",
     decision === "approved"
-      ? "Deposits and purchases of any amount are now unlocked on your account."
+      ? "Thanks — your identity is confirmed and your account is fully active."
       : note,
     "/dashboard/verification"
   );
