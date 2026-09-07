@@ -12,6 +12,7 @@ import { AnyLogo } from "@/components/BrandIcon";
 import { placeOrderAction } from "@/lib/actions/shop";
 import type { CartRow } from "./CartView";
 import { feeFor, limitError, type GatewayView } from "@/lib/gateway-fees";
+import { img } from "@/lib/img";
 
 export default function CheckoutView({
   items,
@@ -205,7 +206,7 @@ export default function CheckoutView({
             {items.map((r) => (
               <div key={r.key} className="flex items-center gap-3">
                 <div className="relative h-11 w-11 overflow-hidden rounded-lg soft">
-                  <Image src={r.image} alt={r.title} fill sizes="48px" className="object-cover" />
+                  <Image src={img(r.image)} alt={r.title} fill sizes="48px" className="object-cover" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="line-clamp-1 text-[12.5px] font-semibold">{r.title}</div>

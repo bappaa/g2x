@@ -5,8 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Pencil, Trash2, X, Loader2, Megaphone } from "lucide-react";
 import { Btn, Tag, Field, inputCls, Empty } from "@/components/ui";
 import { Toolbar, IconAction } from "@/components/admin/ui";
-import { when } from "@/lib/fmt";
+
 import { saveAnnouncementAction, deleteAnnouncementAction } from "@/lib/actions/admin";
+import LocalTime from "@/components/LocalTime";
 
 type A = {
   id: string; title: string; body: string; tone: string; active: number; created_at: string;
@@ -50,7 +51,7 @@ export default function AnnouncementsManager({ rows }: { rows: A[] }) {
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-bold">{a.title}</div>
                   <p className="mt-0.5 text-[11.5px] muted">{a.body}</p>
-                  <div className="mt-1 text-[10px] muted">{when(a.created_at)}</div>
+                  <div className="mt-1 text-[10px] muted"><LocalTime at={a.created_at} /></div>
                 </div>
                 <Tag tone={a.active === 1 ? "green" : "slate"}>{a.active === 1 ? "Live" : "Off"}</Tag>
               </div>

@@ -29,6 +29,7 @@ import LocaleSwitcher from "./LocaleSwitcher";
 import { useT } from "./LocaleProvider";
 import { logoutAction } from "@/lib/actions/auth";
 import { markNotificationsReadAction } from "@/lib/actions/shop";
+import { img } from "@/lib/img";
 
 export type HeaderUser = {
   id: string;
@@ -322,7 +323,7 @@ export default function Header({
                 >
                   {user.avatar ? (
                     <Image
-                      src={user.avatar}
+                      src={img(user.avatar)}
                       alt=""
                       width={24}
                       height={24}

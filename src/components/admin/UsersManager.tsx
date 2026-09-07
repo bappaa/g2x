@@ -5,8 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, Ban, CheckCircle2, Wallet, X, Loader2 } from "lucide-react";
 import { Btn, Tag, Field, inputCls, Empty } from "@/components/ui";
 import { Table, Tr, Td, Toolbar, IconAction } from "@/components/admin/ui";
-import { money, day, statusTone, label } from "@/lib/fmt";
+import { money, statusTone, label } from "@/lib/fmt";
 import { userStatusAction, adjustBalanceAction } from "@/lib/actions/admin";
+import LocalTime from "@/components/LocalTime";
 
 type U = {
   id: string; name: string; email: string; role: string; status: string;
@@ -67,7 +68,7 @@ export default function UsersManager({ rows, q }: { rows: U[]; q: string }) {
               <Td className="muted">{u.orders}</Td>
               <Td className="muted">{money(u.spent)}</Td>
               <Td className="font-semibold">{money(u.balance)}</Td>
-              <Td className="whitespace-nowrap muted">{day(u.created_at)}</Td>
+              <Td className="whitespace-nowrap muted"><LocalTime at={u.created_at} mode="date" /></Td>
               <Td><Tag tone={statusTone(u.status)}>{label(u.status)}</Tag></Td>
               <Td>
                 <div className="flex justify-end gap-1.5">

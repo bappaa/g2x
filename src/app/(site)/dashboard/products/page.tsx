@@ -3,7 +3,7 @@ import Image from "next/image";
 import { requireUser } from "@/lib/session";
 import { getPurchased } from "@/lib/queries";
 import { Empty, Btn, Tag } from "@/components/ui";
-import { when, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 import Credentials from "@/components/dash/Credentials";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +16,8 @@ type P = {
 };
 
 import { serverLocale } from "@/lib/locale";
+import LocalTime from "@/components/LocalTime";
+import { img } from "@/lib/img";
 
 export default async function Page() {
   const { money } = await serverLocale();
@@ -37,7 +39,7 @@ export default async function Page() {
             <div key={it.id} className="rounded-2xl panel p-4">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg soft">
-                  <Image src={it.image} alt="" fill sizes="48px" className="object-cover" />
+                  <Image src={img(it.image)} alt="" fill sizes="48px" className="object-cover" />
                 </div>
                 <div className="min-w-[160px] flex-1">
                   <Link href={it.href || "#"} className="line-clamp-1 text-[13px] font-bold hover:text-brand-500">
@@ -47,7 +49,7 @@ export default async function Page() {
                     {it.subtitle} · {it.store_name} · ×{it.qty}
                   </div>
                   <Link href={`/dashboard/orders/${it.code}`} className="text-[10.5px] text-brand-400 hover:underline">
-                    {it.code} · {when(it.created_at)}
+                    {it.code} · <LocalTime at={it.created_at} />
                   </Link>
                 </div>
                 <Tag tone={statusTone(it.status)}>{label(it.status)}</Tag>

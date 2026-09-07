@@ -3,7 +3,7 @@ import Image from "next/image";
 import { requireUser } from "@/lib/session";
 import { getOrders } from "@/lib/queries";
 import { Empty, Btn, Tag } from "@/components/ui";
-import { when, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My Orders — G2X.GG" };
@@ -16,6 +16,8 @@ type OrderRow = {
 };
 
 import { serverLocale } from "@/lib/locale";
+import LocalTime from "@/components/LocalTime";
+import { img } from "@/lib/img";
 
 export default async function Page({ searchParams }: { searchParams: { status?: string } }) {
   const { money } = await serverLocale();
@@ -56,7 +58,7 @@ export default async function Page({ searchParams }: { searchParams: { status?: 
               className="flex flex-wrap items-center gap-3 rounded-2xl panel p-4 transition-all hover:-translate-y-0.5 hover:border-brand-500/40"
             >
               <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg soft">
-                <Image src={o.first_image} alt="" fill sizes="48px" className="object-cover" />
+                <Image src={img(o.first_image)} alt="" fill sizes="48px" className="object-cover" />
               </div>
               <div className="min-w-[180px] flex-1">
                 <div className="line-clamp-1 text-[13px] font-bold">
@@ -64,7 +66,7 @@ export default async function Page({ searchParams }: { searchParams: { status?: 
                   {o.item_count > 1 && <span className="muted"> +{o.item_count - 1} more</span>}
                 </div>
                 <div className="mt-0.5 text-[11px] muted">
-                  {o.code} · {when(o.created_at)} · {o.item_count} item{o.item_count > 1 ? "s" : ""}
+                  {o.code} · <LocalTime at={o.created_at} /> · {o.item_count} item{o.item_count > 1 ? "s" : ""}
                 </div>
               </div>
               <Tag tone={o.payment_status === "paid" ? "green" : "amber"}>

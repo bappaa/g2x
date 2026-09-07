@@ -6,9 +6,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Trash2, Loader2, Copy, Check, Gamepad2, X, ImagePlus } from "lucide-react";
 import { Tag, Empty, inputCls } from "@/components/ui";
 import { Toolbar, IconAction } from "@/components/admin/ui";
-import { when } from "@/lib/fmt";
+
 import { copyText } from "@/lib/creds";
 import { uploadMediaAction, deleteMediaAction, setGameIconAction } from "@/lib/actions/admin";
+import LocalTime from "@/components/LocalTime";
 
 type M = {
   id: string; kind: string; name: string; mime: string;
@@ -118,7 +119,7 @@ export default function MediaLibrary({ rows, games, kind }: { rows: M[]; games: 
               <div className="p-2">
                 <div className="truncate text-[11px] font-semibold">{m.name}</div>
                 <div className="text-[9.5px] muted">
-                  {(m.size / 1024).toFixed(0)} KB · {when(m.created_at)}
+                  {(m.size / 1024).toFixed(0)} KB · <LocalTime at={m.created_at} />
                 </div>
                 <div className="mt-1.5 flex gap-1">
                   <IconAction title="Copy URL" onClick={() => copy(m.id)}>

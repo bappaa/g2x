@@ -6,8 +6,9 @@ import {
   Search, ShieldAlert, Check, Ban, AlertTriangle, Loader2, Store, User as UserIcon, Flag,
 } from "lucide-react";
 import { Tag, Empty, inputCls } from "@/components/ui";
-import { when } from "@/lib/fmt";
+
 import { reviewMessageAction } from "@/lib/actions/admin";
+import LocalTime from "@/components/LocalTime";
 
 type T = {
   id: string; order_id: string | null; updated_at: string;
@@ -115,7 +116,7 @@ export default function ChatMonitor({
               </div>
               <div className="line-clamp-1 text-[10.5px] muted">↔ {t.store_name || t.seller_name}</div>
               <div className="line-clamp-1 pt-0.5 text-[10.5px] muted">{t.last_body}</div>
-              <div className="pt-0.5 text-[9.5px] muted">{t.msg_count} msgs · {when(t.updated_at)}</div>
+              <div className="pt-0.5 text-[9.5px] muted">{t.msg_count} msgs · <LocalTime at={t.updated_at} /></div>
             </button>
           ))}
         </div>
@@ -152,7 +153,7 @@ export default function ChatMonitor({
                     >
                       <div className="max-w-[78%]">
                         <div className="mb-0.5 flex items-center gap-1.5 text-[9.5px] muted">
-                          {seller ? "Seller" : "Buyer"} · {m.sender_name} · {when(m.created_at)}
+                          {seller ? "Seller" : "Buyer"} · {m.sender_name} · <LocalTime at={m.created_at} />
                         </div>
                         <div
                           className={`rounded-xl px-3 py-2 text-[12px] ${
@@ -204,7 +205,7 @@ export default function ChatMonitor({
             >
               <button onClick={() => go({ thread: f.thread_id })} className="w-full text-left">
                 <div className="text-[11px] font-bold">{f.sender_name}</div>
-                <div className="text-[9.5px] muted">{f.sender_email} · {when(f.created_at)}</div>
+                <div className="text-[9.5px] muted">{f.sender_email} · <LocalTime at={f.created_at} /></div>
                 <div className="mt-1 line-clamp-2 text-[11px]">{f.body}</div>
                 <div className="mt-1 flex flex-wrap gap-1">
                   {safe(f.flag_reasons).map((r) => (

@@ -9,6 +9,7 @@ import { Btn, Tag, Empty, inputCls } from "@/components/ui";
 import { when, statusTone, label } from "@/lib/fmt";
 import { idLabel, countryName } from "@/lib/kyc";
 import { reviewVerificationAction } from "@/lib/actions/admin";
+import LocalTime from "@/components/LocalTime";
 
 type V = {
   id: string; user_id: string; user_name: string; email: string; store_name: string;
@@ -38,7 +39,7 @@ export default function VerificationReview({ rows }: { rows: V[] }) {
                 {v.store_name ? `${v.store_name} · ` : ""}{v.email}
               </div>
               <div className="mt-0.5 text-[10.5px] muted">
-                {countryName(v.country)} · {idLabel(v.id_type)} ••••{v.id_number_last4} · {when(v.submitted_at)}
+                {countryName(v.country)} · {idLabel(v.id_type)} ••••{v.id_number_last4} · <LocalTime at={v.submitted_at} />
               </div>
             </div>
             <Tag tone={statusTone(v.status)}>{label(v.status)}</Tag>

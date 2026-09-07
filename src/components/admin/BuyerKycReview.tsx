@@ -6,9 +6,10 @@ import {
   X, Check, Loader2, Eye, ShieldAlert, ExternalLink, RotateCcw, Wallet,
 } from "lucide-react";
 import { Btn, Tag, Empty, inputCls } from "@/components/ui";
-import { when, statusTone, label, money } from "@/lib/fmt";
+import { statusTone, label, money } from "@/lib/fmt";
 import { idLabel, countryName } from "@/lib/kyc";
 import { reviewBuyerKycAction } from "@/lib/actions/admin";
+import LocalTime from "@/components/LocalTime";
 
 type V = {
   id: string; user_id: string; user_name: string; email: string; balance: number;
@@ -36,7 +37,7 @@ export default function BuyerKycReview({ rows }: { rows: V[] }) {
               <div className="text-[13px] font-bold">{v.full_name}</div>
               <div className="text-[11px] muted">{v.email}</div>
               <div className="mt-0.5 text-[10.5px] muted">
-                {countryName(v.country)} · {idLabel(v.id_type)} ••••{v.id_number_last4} · {when(v.submitted_at)}
+                {countryName(v.country)} · {idLabel(v.id_type)} ••••{v.id_number_last4} · <LocalTime at={v.submitted_at} />
               </div>
             </div>
             <span className="flex items-center gap-1 text-[11px] muted">
@@ -99,7 +100,7 @@ function Modal({ v, onClose }: { v: V; onClose: () => void }) {
           <Row k="ID number" v={v.id_number} mono />
           <Row k="Date of birth" v={v.dob || "—"} />
           <Row k="Wallet balance" v={money(Number(v.balance ?? 0))} />
-          <Row k="Submitted" v={when(v.submitted_at)} />
+          <Row k="Submitted" v={<LocalTime at={v.submitted_at} />} />
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -116,7 +117,7 @@ function Modal({ v, onClose }: { v: V; onClose: () => void }) {
         {done ? (
           <div className="mt-4 rounded-lg soft p-3 text-[12px]">
             Already <strong>{label(v.status)}</strong>
-            {v.reviewed_at ? ` on ${when(v.reviewed_at)}` : ""}.
+            {v.reviewed_at ? ` on $<LocalTime at={v.reviewed_at} />` : ""}.
             {v.review_note && <div className="mt-1 muted">Note: {v.review_note}</div>}
           </div>
         ) : (
@@ -154,7 +155,7 @@ function Modal({ v, onClose }: { v: V; onClose: () => void }) {
   );
 }
 
-function Row({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
+function Row({ k, v, mono }: { k: string; v: React.ReactNode; mono?: boolean }) {
   return (
     <div className="rounded-lg soft px-3 py-2">
       <div className="text-[10px] uppercase tracking-wide muted">{k}</div>

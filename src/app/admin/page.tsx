@@ -1,10 +1,11 @@
 import Link from "next/link";
+import LocalTime from "@/components/LocalTime";
 import { requireAdmin } from "@/lib/admin";
 import { getAdminStats, getAdminSalesSeries, adminOrders, adminVerifications } from "@/lib/queries-admin";
 import { AdminPage, Stat } from "@/components/admin/ui";
 import { Tag } from "@/components/ui";
 import SalesChart from "@/components/seller/SalesChart";
-import { money, when, statusTone, label, compact } from "@/lib/fmt";
+import { money, statusTone, label, compact } from "@/lib/fmt";
 import {
   DollarSign, ShoppingCart, Users, Store, BadgeCheck, Gavel, Banknote, ShieldAlert, ArrowRight,
 } from "lucide-react";
@@ -66,7 +67,7 @@ export default async function Page() {
               <Link key={o.code} href={`/admin/orders?q=${o.code}`} className="flex items-center gap-2.5 rounded-lg soft p-2">
                 <div className="min-w-0 flex-1">
                   <div className="line-clamp-1 text-[12px] font-semibold">{o.first_title}</div>
-                  <div className="text-[10px] muted">{o.code} · {o.buyer_name} · {when(o.created_at)}</div>
+                  <div className="text-[10px] muted">{o.code} · {o.buyer_name} · <LocalTime at={o.created_at} /></div>
                 </div>
                 <Tag tone={statusTone(o.status)}>{label(o.status)}</Tag>
                 <div className="w-[64px] text-right text-[12px] font-bold">{money(o.total)}</div>
@@ -93,7 +94,7 @@ export default async function Page() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="line-clamp-1 text-[12px] font-semibold">{v.store_name || v.user_name}</div>
-                    <div className="text-[10px] muted">{v.country} · {when(v.submitted_at)}</div>
+                    <div className="text-[10px] muted">{v.country} · <LocalTime at={v.submitted_at} /></div>
                   </div>
                   <Tag tone="amber">Pending</Tag>
                 </Link>

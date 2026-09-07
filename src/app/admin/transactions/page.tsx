@@ -2,7 +2,8 @@ import { requireAdmin } from "@/lib/admin";
 import { adminTransactions } from "@/lib/queries-admin";
 import { AdminPage, Table, Tr, Td } from "@/components/admin/ui";
 import { Tag } from "@/components/ui";
-import { money, when, label } from "@/lib/fmt";
+import { money, label } from "@/lib/fmt";
+import LocalTime from "@/components/LocalTime";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function Page() {
       <Table head={["When", "User", "Type", "Reference", "Amount"]}>
         {rows.map((t) => (
           <Tr key={t.id}>
-            <Td className="whitespace-nowrap muted">{when(t.created_at)}</Td>
+            <Td className="whitespace-nowrap muted"><LocalTime at={t.created_at} /></Td>
             <Td>
               <div className="font-semibold">{t.name}</div>
               <div className="text-[10px] muted">{t.email}</div>

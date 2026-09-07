@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { Heart } from "lucide-react";
 
 import { toggleWishAction } from "@/lib/actions/shop";
+import { img } from "@/lib/img";
 
 export type CardProduct = {
   id: string;
@@ -88,7 +89,7 @@ export default function ProductCard({
       >
         <div className="relative h-[74px] w-[74px] overflow-hidden rounded-xl">
           <Image
-            src={p.image}
+            src={img(p.image)}
             alt={p.name}
             fill
             sizes="90px"

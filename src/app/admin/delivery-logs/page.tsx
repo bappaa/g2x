@@ -2,7 +2,8 @@ import { requireAdmin } from "@/lib/admin";
 import { adminDeliveryLogs } from "@/lib/queries-admin";
 import { AdminPage, Table, Tr, Td } from "@/components/admin/ui";
 import { Tag } from "@/components/ui";
-import { when, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
+import LocalTime from "@/components/LocalTime";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function Page() {
       <Table head={["Delivered", "Order", "Item", "Seller", "Buyer", "Status"]}>
         {rows.map((r) => (
           <Tr key={r.id}>
-            <Td className="whitespace-nowrap muted">{when(r.delivered_at)}</Td>
+            <Td className="whitespace-nowrap muted"><LocalTime at={r.delivered_at} /></Td>
             <Td className="font-mono text-[11px] font-bold">{r.code}</Td>
             <Td className="max-w-[220px] truncate">{r.title}</Td>
             <Td className="muted">{r.store_name ?? "—"}</Td>

@@ -9,6 +9,7 @@ import { Breadcrumb, Btn, Tag } from "@/components/ui";
 
 import { addToCartAction } from "@/lib/actions/shop";
 import type { DbGame, DbCategory, DbListing } from "@/lib/queries";
+import { img } from "@/lib/img";
 
 export default function ListingDetail({
   game,
@@ -62,7 +63,7 @@ export default function ListingDetail({
               animate={{ opacity: 1, scale: 1 }}
               className="relative h-[280px] w-full overflow-hidden rounded-xl"
             >
-              <Image src={listing.image} alt={listing.title} fill sizes="800px" className="object-cover" />
+              <Image src={img(listing.image)} alt={listing.title} fill sizes="800px" className="object-cover" />
               {listing.tier && (
                 <span className="absolute right-3 top-3 rounded-lg bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
                   {listing.tier}

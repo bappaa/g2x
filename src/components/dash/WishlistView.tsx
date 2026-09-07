@@ -9,6 +9,7 @@ import { Heart, Trash2 } from "lucide-react";
 import { Empty, Btn } from "@/components/ui";
 
 import { toggleWishAction } from "@/lib/actions/shop";
+import { img } from "@/lib/img";
 
 type W = { item_id: string; title: string; subtitle: string; image: string; price: number; href: string };
 
@@ -48,7 +49,7 @@ export default function WishlistView({ items }: { items: W[] }) {
                 className="flex gap-3 rounded-2xl panel p-3"
               >
                 <Link href={w.href} className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl soft">
-                  <Image src={w.image} alt={w.title} fill sizes="64px" className="object-cover" />
+                  <Image src={img(w.image)} alt={w.title} fill sizes="64px" className="object-cover" />
                 </Link>
                 <div className="min-w-0 flex-1">
                   <Link href={w.href} className="line-clamp-1 text-[12.5px] font-bold hover:text-brand-500">

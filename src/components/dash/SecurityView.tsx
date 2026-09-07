@@ -3,8 +3,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Shield, Monitor, Loader2, Check } from "lucide-react";
 import { Btn, Field, inputCls, Section } from "@/components/ui";
-import { when } from "@/lib/fmt";
+
 import { changePasswordAction, toggle2faAction, revokeSessionAction } from "@/lib/actions/auth";
+import LocalTime from "@/components/LocalTime";
 
 type S = { id: string; ip: string; user_agent: string; created_at: string };
 
@@ -92,7 +93,7 @@ export default function SecurityView({ twoFactor, sessions }: { twoFactor: boole
                   {s.user_agent?.slice(0, 60) || "Unknown device"}
                 </div>
                 <div className="text-[10.5px] muted">
-                  {s.ip || "—"} · {when(s.created_at)} {i === 0 && "· current"}
+                  {s.ip || "—"} · <LocalTime at={s.created_at} /> {i === 0 && "· current"}
                 </div>
               </div>
               {i !== 0 && (

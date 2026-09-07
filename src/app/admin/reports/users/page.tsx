@@ -1,8 +1,9 @@
 import { requireAdmin } from "@/lib/admin";
 import { adminUsers, getAdminStats } from "@/lib/queries-admin";
 import { AdminPage, Stat, Table, Tr, Td } from "@/components/admin/ui";
-import { money, day, compact } from "@/lib/fmt";
+import { money, compact } from "@/lib/fmt";
 import { Users, UserPlus, Wallet } from "lucide-react";
+import LocalTime from "@/components/LocalTime";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function Page() {
             <Td className="muted">{u.orders}</Td>
             <Td className="font-bold">{money(u.spent)}</Td>
             <Td className="muted">{money(u.balance)}</Td>
-            <Td className="whitespace-nowrap muted">{day(u.created_at)}</Td>
+            <Td className="whitespace-nowrap muted"><LocalTime at={u.created_at} mode="date" /></Td>
           </Tr>
         ))}
       </Table>

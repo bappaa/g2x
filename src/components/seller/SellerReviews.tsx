@@ -3,8 +3,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Star, Reply, Loader2 } from "lucide-react";
 import { Btn, Empty, inputCls } from "@/components/ui";
-import { when } from "@/lib/fmt";
+
 import { replyReviewAction } from "@/lib/actions/seller";
+import LocalTime from "@/components/LocalTime";
 
 type R = { id: string; buyer_name: string; stars: number; body: string; reply: string | null; created_at: string };
 
@@ -79,7 +80,7 @@ function ReviewCard({ r }: { r: R }) {
                 <Star key={s} size={10} className={s <= r.stars ? "fill-amber-400 text-amber-400" : "muted"} />
               ))}
             </div>
-            <span className="text-[10.5px] muted">{when(r.created_at)}</span>
+            <span className="text-[10.5px] muted"><LocalTime at={r.created_at} /></span>
           </div>
         </div>
       </div>

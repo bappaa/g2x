@@ -7,6 +7,7 @@ import { Plus, Pause, Play, Trash2, Pencil, X, Loader2 } from "lucide-react";
 import { Btn, Empty, Field, Tag, inputCls } from "@/components/ui";
 import { money, statusTone, label } from "@/lib/fmt";
 import { saveListingAction, listingStatusAction, deleteListingAction } from "@/lib/actions/seller";
+import { img } from "@/lib/img";
 
 type L = {
   id: string; game_slug: string; category_slug: string; game_name: string; category_name: string;
@@ -60,7 +61,7 @@ export default function ListingsView({
           {listings.map((l) => (
             <motion.div key={l.id} layout className="flex flex-wrap items-center gap-3 rounded-2xl panel p-4">
               <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg soft">
-                <Image src={l.image} alt="" fill sizes="48px" className="object-cover" />
+                <Image src={img(l.image)} alt="" fill sizes="48px" className="object-cover" />
               </div>
               <div className="min-w-[170px] flex-1">
                 <div className="line-clamp-1 text-[13px] font-bold">{l.title}</div>
@@ -217,7 +218,7 @@ function Modal({
                     image === a ? "border-brand-500" : "border-transparent opacity-70 hover:opacity-100"
                   }`}
                 >
-                  <Image src={a} alt="" fill sizes="64px" className="object-cover" />
+                  <Image src={img(a)} alt="" fill sizes="64px" className="object-cover" />
                 </button>
               ))}
             </div>

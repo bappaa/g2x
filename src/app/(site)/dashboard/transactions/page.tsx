@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/session";
 import { getWallet } from "@/lib/queries";
 import { Empty, Tag } from "@/components/ui";
-import { when, label } from "@/lib/fmt";
+import { label } from "@/lib/fmt";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Transactions — G2X.GG" };
@@ -9,6 +9,7 @@ export const metadata = { title: "Transactions — G2X.GG" };
 type T = { id: string; type: string; amount: number; reference: string; created_at: string };
 
 import { serverLocale } from "@/lib/locale";
+import LocalTime from "@/components/LocalTime";
 
 export default async function Page() {
   const { money } = await serverLocale();
@@ -38,7 +39,7 @@ export default async function Page() {
                   <td className="px-4 py-3">
                     <Tag tone={t.amount >= 0 ? "green" : "slate"}>{label(t.type)}</Tag>
                   </td>
-                  <td className="px-4 py-3 muted">{when(t.created_at)}</td>
+                  <td className="px-4 py-3 muted"><LocalTime at={t.created_at} /></td>
                   <td className={`px-4 py-3 text-right font-bold ${t.amount >= 0 ? "text-emerald-400" : ""}`}>
                     {t.amount >= 0 ? "+" : "−"}
                     {money(Math.abs(t.amount))}

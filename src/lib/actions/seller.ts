@@ -7,6 +7,7 @@ import { requireSeller } from "../session";
 export type R = { ok: boolean; error?: string; id?: string };
 
 import { mail } from "../mail";
+import { escrowHoldHours } from "../escrow";
 
 async function notify(userId: string, title: string, body: string, href: string, kind = "order") {
   await run(
@@ -252,11 +253,22 @@ export async function deliverOrderAction(
       args: [JSON.stringify(clean), itemId, s.id],
     },
     {
-      sql: `UPDATE orders SET status='delivered', updated_at=datetime('now')
+      /**
+       * Delivery starts the escrow clock. `release_at` is stamped here — 7
+       * days by default, or whatever `escrow_hold_hours` says — and a
+       * background sweep releases the funds when it passes. The buyer no
+       * longer has to press anything: an inactive buyer used to leave the
+       * seller's money pending forever.
+       */
+      sql: `UPDATE orders
+               SET status='delivered',
+                   updated_at=datetime('now'),
+                   delivered_at=COALESCE(delivered_at, datetime('now')),
+                   release_at=COALESCE(release_at, datetime('now', ?))
              WHERE id=? AND NOT EXISTS (
                SELECT 1 FROM order_items WHERE order_id=? AND status='processing' AND id<>?
              )`,
-      args: [item.order_id, item.order_id, itemId],
+      args: [`+${await escrowHoldHours()} hours`, item.order_id, item.order_id, itemId],
     },
     {
       sql: `INSERT INTO order_events (id,order_id,label,actor) VALUES (?,?, 'Delivered', 'seller')`,
@@ -268,7 +280,7 @@ export async function deliverOrderAction(
     await notify(
       order.buyer_id,
       "Your order has been delivered",
-      `${item.title} — open the order to view your details and confirm receipt.`,
+      `${item.title} — open the order to view your delivery details.`,
       `/dashboard/orders/${order.code}`
     );
     const bu = await one<{ email: string }>(`SELECT email FROM users WHERE id=?`, [order.buyer_id]);

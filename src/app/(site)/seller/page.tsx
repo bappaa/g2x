@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { sweepEscrowInBackground } from "@/lib/escrow";
 import { requireUser } from "@/lib/session";
 import { getSellerStats, getSellerOrders, getSellerSalesSeries, getTopSellerProducts } from "@/lib/queries";
 import { Section, Tag, Empty, FadeIn } from "@/components/ui";
-import { money, when, statusTone, label } from "@/lib/fmt";
+import { money, statusTone, label } from "@/lib/fmt";
 import { DollarSign, Package, Percent, Star, ArrowRight } from "lucide-react";
 import SalesChart from "@/components/seller/SalesChart";
+import LocalTime from "@/components/LocalTime";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Seller Overview — G2X.GG" };
@@ -12,6 +14,9 @@ export const metadata = { title: "Seller Overview — G2X.GG" };
 type OI = { id: string; code: string; title: string; line_total: number; status: string; created_at: string; buyer_name: string };
 
 export default async function Page() {
+  // Release any escrow whose 7-day hold has expired (throttled, non-blocking).
+  sweepEscrowInBackground();
+
   const u = await requireUser();
   const [stats, orders, series, top] = await Promise.all([
     getSellerStats(u.id),
@@ -76,7 +81,7 @@ export default async function Page() {
                   <div className="min-w-0 flex-1">
                     <div className="line-clamp-1 text-[12px] font-semibold">{o.title}</div>
                     <div className="text-[10.5px] muted">
-                      {o.code} · {o.buyer_name} · {when(o.created_at)}
+                      {o.code} · {o.buyer_name} · <LocalTime at={o.created_at} />
                     </div>
                   </div>
                   <Tag tone={statusTone(o.status)}>{label(o.status)}</Tag>

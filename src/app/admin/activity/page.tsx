@@ -1,7 +1,8 @@
 import { requireAdmin } from "@/lib/admin";
 import { adminActivity } from "@/lib/queries-admin";
 import { AdminPage, Table, Tr, Td } from "@/components/admin/ui";
-import { when, label } from "@/lib/fmt";
+import { label } from "@/lib/fmt";
+import LocalTime from "@/components/LocalTime";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function Page() {
       <Table head={["When", "Admin", "Action", "Target", "Details"]}>
         {rows.map((r) => (
           <Tr key={r.id}>
-            <Td className="whitespace-nowrap muted">{when(r.created_at)}</Td>
+            <Td className="whitespace-nowrap muted"><LocalTime at={r.created_at} /></Td>
             <Td className="font-semibold">{r.name ?? "—"}</Td>
             <Td>
               <span className="rounded bg-brand-600/12 px-1.5 py-0.5 text-[10.5px] text-brand-400">

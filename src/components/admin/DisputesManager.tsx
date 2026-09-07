@@ -1,10 +1,11 @@
 "use client";
 import { useState, useTransition } from "react";
+import LocalTime from "@/components/LocalTime";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Gavel, Loader2, Send, ShieldCheck, User as UserIcon, Store } from "lucide-react";
 import { Btn, Tag, Field, inputCls, Empty } from "@/components/ui";
-import { money, when, statusTone, label } from "@/lib/fmt";
+import { money, statusTone, label } from "@/lib/fmt";
 import MonitorNotice from "@/components/MonitorNotice";
 import {
   resolveDisputeAction, disputeStatusAction, adminDisputeReplyAction,
@@ -102,7 +103,7 @@ function Detail({ d, messages }: { d: D; messages: M[] }) {
 
       <div className="rounded-lg soft p-2.5 text-[12px]">
         <span className="muted">Reason: </span>{d.reason}
-        <div className="pt-0.5 text-[10px] muted">Opened {when(d.created_at)}</div>
+        <div className="pt-0.5 text-[10px] muted">Opened <LocalTime at={d.created_at} /></div>
       </div>
 
       <div className="flex gap-1.5">
@@ -125,7 +126,7 @@ function Detail({ d, messages }: { d: D; messages: M[] }) {
           <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
             {messages.map((m) => (
               <motion.div key={m.id} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}>
-                <div className="mb-0.5 text-[9.5px] capitalize muted">{m.sender} · {when(m.created_at)}</div>
+                <div className="mb-0.5 text-[9.5px] capitalize muted">{m.sender} · <LocalTime at={m.created_at} /></div>
                 <div
                   className={`rounded-xl px-3 py-2 text-[12px] ${
                     m.sender === "admin" ? "border border-brand-500/40 bg-brand-600/10" : "soft"

@@ -29,6 +29,8 @@ const GROUPS: { title: string; fields: F[] }[] = [
     fields: [
       { key: "default_commission", label: "Default seller commission %", type: "number", hint: "Applied to new sellers", def: "8" },
       { key: "checkout_fee", label: "Buyer checkout fee %", type: "number", def: "2" },
+      { key: "username_change_fee", label: "Username change fee ($)", type: "number", def: "5",
+        hint: "Charged from the buyer's wallet after their first 2 free username changes. Set 0 to keep renames always free." },
       { key: "min_offer_price", label: "Minimum offer price", type: "number", def: "0.5" },
     ],
   },

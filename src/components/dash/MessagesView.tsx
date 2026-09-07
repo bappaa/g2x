@@ -1,21 +1,50 @@
 "use client";
-import TimeAgo from "@/components/TimeAgo";
 import { useState, useTransition, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Send, Loader2, MessagesSquare, ChevronLeft } from "lucide-react";
+import {
+  Send, Loader2, MessagesSquare, ChevronLeft, ImagePlus, AlertCircle, Gavel, X, CheckCircle2,
+} from "lucide-react";
 import { Empty, inputCls } from "@/components/ui";
 import MonitorNotice from "@/components/MonitorNotice";
-import { when } from "@/lib/fmt";
-import { sendMessageAction, markThreadReadAction } from "@/lib/actions/shop";
+import {
+  sendMessageAction, markThreadReadAction, sendAttachmentAction,
+  openDisputeInChatAction, resolveDisputeInChatAction,
+} from "@/lib/actions/shop";
+import LocalTime from "@/components/LocalTime";
 
-type T = { id: string; other_name: string; last_body: string | null; unread: number; updated_at: string; order_code?: string };
-type M = { id: string; thread_id: string; sender_id: string; body: string; created_at: string };
+type T = {
+  id: string; other_name: string; last_body: string | null; unread: number;
+  updated_at: string; order_code?: string;
+  /** Set while a dispute is open on this conversation. */
+  dispute_id?: string | null;
+};
+type M = {
+  id: string; thread_id: string; sender_id: string; body: string; created_at: string;
+  /** `text` | `image` | `dispute` | `dispute_resolved` */
+  kind?: string | null;
+  attachment_name?: string | null;
+  attachment_type?: string | null;
+  attachment_size?: number | null;
+  attachment_data?: string | null;
+  dispute_id?: string | null;
+};
+
+/** Human-readable file size for the attachment bubble. */
+function fileSize(bytes?: number | null): string {
+  const n = Number(bytes ?? 0);
+  if (!n) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export default function MessagesView({
-  me, threads, activeId, messages,
+  me, threads, activeId, messages, isSeller = false,
 }: {
   me: string; threads: T[]; activeId: string | null; messages: M[];
+  /** Sellers can read a dispute but only the buyer can open or close one. */
+  isSeller?: boolean;
 }) {
   const router = useRouter();
   const [text, setText] = useState("");
@@ -71,6 +100,70 @@ export default function MessagesView({
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
+
+  /* ---------------- attachments & disputes ---------------- */
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [showDispute, setShowDispute] = useState(false);
+  const [disputeText, setDisputeText] = useState("");
+  const [busyDispute, startDispute] = useTransition();
+  const [preview, setPreview] = useState<M | null>(null);
+
+  /** Is there an unresolved dispute in this conversation right now? */
+  const openDispute = (() => {
+    let live: M | null = null;
+    for (const m of messages) {
+      if (m.kind === "dispute") live = m;
+      if (m.kind === "dispute_resolved") live = null;
+    }
+    return live;
+  })();
+
+  const pickImage = () => fileRef.current?.click();
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file || !activeId) return;
+
+    if (file.size > 2 * 1024 * 1024) return setWarn("Images must be 2 MB or smaller.");
+    if (!/^image\/(png|jpe?g|webp|gif)$/i.test(file.type))
+      return setWarn("Only PNG, JPEG, WEBP or GIF images are allowed.");
+
+    setWarn("");
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await sendAttachmentAction(activeId, fd);
+      if (!r.ok) setWarn(r.error || "Could not send that image.");
+      else router.refresh();
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const raiseDispute = () => {
+    if (!activeId) return;
+    startDispute(async () => {
+      const r = await openDisputeInChatAction(activeId, disputeText);
+      if (!r.ok) return setWarn(r.error || "Could not open the dispute.");
+      setShowDispute(false);
+      setDisputeText("");
+      setWarn("");
+      router.refresh();
+    });
+  };
+
+  const closeDispute = () => {
+    if (!activeId) return;
+    startDispute(async () => {
+      const r = await resolveDisputeInChatAction(activeId);
+      if (!r.ok) return setWarn(r.error || "Could not close the dispute.");
+      setWarn("");
+      router.refresh();
+    });
+  };
 
   if (!threads.length)
     return (
@@ -189,6 +282,96 @@ export default function MessagesView({
                 )}
                 {messages.map((m) => {
                   const mine = m.sender_id === me;
+
+                  /* Dispute opened — full-width red alert, not a chat bubble. */
+                  if (m.kind === "dispute")
+                    return (
+                      <motion.div
+                        key={m.id}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="rounded-xl border-2 border-rose-500/70 bg-rose-500/10 px-3 py-2.5"
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <AlertCircle size={17} className="mt-px shrink-0 text-rose-400" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start gap-2">
+                              <span className="text-[12.5px] font-bold text-rose-300">
+                                Order disputed by buyer
+                              </span>
+                              <span className="ml-auto shrink-0 text-[10px] muted">
+                                <LocalTime at={m.created_at} />
+                              </span>
+                            </div>
+                            <div className="mt-0.5 break-words text-[11.5px] text-rose-200/90">
+                              Reason: {m.body}
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+
+                  /* Dispute withdrawn by the buyer. */
+                  if (m.kind === "dispute_resolved")
+                    return (
+                      <motion.div
+                        key={m.id}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-3 py-2.5"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
+                          <span className="text-[12px] font-semibold text-emerald-300">
+                            Dispute closed by the buyer
+                          </span>
+                          <span className="ml-auto shrink-0 text-[10px] muted">
+                            <LocalTime at={m.created_at} />
+                          </span>
+                        </div>
+                      </motion.div>
+                    );
+
+                  /* Image attachment. */
+                  if (m.kind === "image" && m.attachment_data)
+                    return (
+                      <motion.div
+                        key={m.id}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`w-fit max-w-[85%] overflow-hidden rounded-xl sm:max-w-[60%] ${
+                          mine ? "ml-auto bg-brand-600" : "soft"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setPreview(m)}
+                          className="block w-full"
+                          title="Open full size"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={m.attachment_data}
+                            alt={m.attachment_name ?? "attachment"}
+                            className="max-h-[260px] w-full object-cover"
+                          />
+                        </button>
+                        <div
+                          className={`px-2.5 py-1.5 text-[10px] ${
+                            mine ? "text-white/85" : "muted"
+                          }`}
+                        >
+                          <div className="truncate">{m.attachment_name}</div>
+                          <div className="mt-0.5 flex items-center gap-1.5">
+                            <span>{fileSize(m.attachment_size)}</span>
+                            <span aria-hidden>·</span>
+                            <LocalTime at={m.created_at} />
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+
+                  /* Ordinary text message. */
                   return (
                     <motion.div
                       key={m.id}
@@ -199,8 +382,8 @@ export default function MessagesView({
                       }`}
                     >
                       {m.body}
-                      <div className="mt-0.5 text-[9.5px] opacity-70" title={when(m.created_at)}>
-                        <TimeAgo at={m.created_at} />
+                      <div className="mt-0.5 text-[9.5px] opacity-70">
+                        <LocalTime at={m.created_at} />
                       </div>
                     </motion.div>
                   );
@@ -214,7 +397,83 @@ export default function MessagesView({
                 </div>
               )}
 
-              <div className="flex shrink-0 gap-2 border-t border-[var(--line)] p-3">
+              {/* Dispute controls: raising one, or closing an open one. */}
+              <div className="shrink-0 px-3">
+                {openDispute ? (
+                  !isSeller && (
+                    <button
+                      onClick={closeDispute}
+                      disabled={busyDispute}
+                      className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[11.5px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:opacity-60"
+                    >
+                      {busyDispute ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+                      Issue resolved — close this dispute
+                    </button>
+                  )
+                ) : isSeller ? null : showDispute ? (
+                  <div className="mb-2 rounded-lg border border-rose-500/40 bg-rose-500/5 p-2.5">
+                    <div className="flex items-center gap-2">
+                      <Gavel size={13} className="text-rose-400" />
+                      <span className="text-[11.5px] font-bold text-rose-300">Open a dispute</span>
+                      <button
+                        onClick={() => setShowDispute(false)}
+                        className="ml-auto muted transition-colors hover:text-rose-400"
+                        aria-label="Cancel"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <textarea
+                      rows={2}
+                      className={`${inputCls} mt-2`}
+                      placeholder="What went wrong with this order?"
+                      value={disputeText}
+                      onChange={(e) => setDisputeText(e.target.value)}
+                    />
+                    <div className="mt-1 text-[10px] muted">
+                      {disputeText.trim().length < 10
+                        ? `At least ${10 - disputeText.trim().length} more character${
+                            10 - disputeText.trim().length === 1 ? "" : "s"
+                          }.`
+                        : "Ready to submit."}
+                    </div>
+                    <button
+                      onClick={raiseDispute}
+                      disabled={busyDispute}
+                      className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-rose-500 px-3 py-2 text-[11.5px] font-bold text-white transition hover:bg-rose-600 disabled:opacity-60"
+                    >
+                      {busyDispute && <Loader2 size={13} className="animate-spin" />}
+                      Submit dispute
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowDispute(true)}
+                    className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-rose-400 transition-colors hover:text-rose-300"
+                  >
+                    <Gavel size={12} /> Open a dispute
+                  </button>
+                )}
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2 border-t border-[var(--line)] p-3">
+                {/* Image attachment — stored in the database, 2 MB cap. */}
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={onFile}
+                />
+                <button
+                  onClick={pickImage}
+                  disabled={uploading}
+                  aria-label="Attach an image"
+                  title="Attach an image (PNG or JPEG, max 2 MB)"
+                  className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-lg border border-[var(--line)] transition-colors hover:bg-[var(--soft)] disabled:opacity-50"
+                >
+                  {uploading ? <Loader2 size={15} className="animate-spin" /> : <ImagePlus size={16} />}
+                </button>
                 <input
                   className={inputCls}
                   placeholder="Type a message…"
@@ -240,6 +499,31 @@ export default function MessagesView({
           )}
         </div>
       </div>
+
+      {/* Full-size image viewer. */}
+      {preview?.attachment_data && (
+        <div
+          className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-4"
+          onClick={() => setPreview(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            onClick={() => setPreview(null)}
+            aria-label="Close"
+            className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+          >
+            <X size={18} />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={preview.attachment_data}
+            alt={preview.attachment_name ?? "attachment"}
+            className="max-h-[85vh] max-w-full rounded-xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

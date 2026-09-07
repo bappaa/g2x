@@ -5,8 +5,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Star, Loader2 } from "lucide-react";
 import { Empty, Btn, inputCls } from "@/components/ui";
-import { when } from "@/lib/fmt";
+
 import { submitReviewAction } from "@/lib/actions/shop";
+import LocalTime from "@/components/LocalTime";
+import { img } from "@/lib/img";
 
 type It = {
   id: string; code: string; seller_id: string; store_name: string; title: string; image: string;
@@ -42,14 +44,14 @@ export default function ReviewsView({ items }: { items: It[] }) {
             {done.map((it) => (
               <div key={it.id} className="flex gap-3 rounded-2xl panel p-4">
                 <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg soft">
-                  <Image src={it.image} alt="" fill sizes="48px" className="object-cover" />
+                  <Image src={img(it.image)} alt="" fill sizes="48px" className="object-cover" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="line-clamp-1 text-[12.5px] font-bold">{it.title}</div>
                   <Stars value={it.review_stars ?? 5} />
                   <div className="mt-1 text-[12px] muted">{it.review_body}</div>
                   <Link href={`/dashboard/orders/${it.code}`} className="text-[10.5px] text-brand-400 hover:underline">
-                    {it.code} · {when(it.ordered_at)}
+                    {it.code} · <LocalTime at={it.ordered_at} />
                   </Link>
                 </div>
               </div>
@@ -81,7 +83,7 @@ function ReviewCard({ it, onDone }: { it: It; onDone: () => void }) {
     <div className="rounded-2xl panel p-4">
       <div className="flex gap-3">
         <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg soft">
-          <Image src={it.image} alt="" fill sizes="48px" className="object-cover" />
+          <Image src={img(it.image)} alt="" fill sizes="48px" className="object-cover" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="line-clamp-1 text-[12.5px] font-bold">{it.title}</div>

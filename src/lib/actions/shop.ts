@@ -706,6 +706,212 @@ export async function sendMessageAction(threadId: string, body: string): Promise
   return { ok: true, warning: mod.flagged ? mod.flags.map((f) => f.label).join(", ") : undefined };
 }
 
+/* ==================== chat attachments & disputes ==================== */
+
+/** 2 MB ceiling — images are stored in the DB, so they must stay small. */
+const MAX_ATTACHMENT = 2 * 1024 * 1024;
+const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"];
+
+/**
+ * Send an image in a chat thread.
+ *
+ * The file is stored in the database as a data URI rather than on disk,
+ * because the serverless host has a read-only filesystem — a disk write would
+ * work locally and fail in production. The trade-off is size, hence the 2 MB
+ * cap and the strict image-only allowlist (never trust the client's MIME
+ * string alone: the extension is re-checked too).
+ */
+export async function sendAttachmentAction(threadId: string, form: FormData): Promise<R> {
+  const u = await requireUser();
+
+  const t = await one<{ buyer_id: string; seller_id: string }>(
+    `SELECT buyer_id, seller_id FROM threads WHERE id=?`,
+    [threadId]
+  );
+  if (!t || (t.buyer_id !== u.id && t.seller_id !== u.id))
+    return { ok: false, error: "Not allowed." };
+
+  const file = form.get("file") as File | null;
+  if (!file || file.size === 0) return { ok: false, error: "Choose an image to send." };
+  if (file.size > MAX_ATTACHMENT)
+    return { ok: false, error: "Images must be 2 MB or smaller." };
+
+  const type = (file.type || "").toLowerCase();
+  const nameOk = /\.(png|jpe?g|webp|gif)$/i.test(file.name || "");
+  if (!ALLOWED_TYPES.includes(type) || !nameOk)
+    return { ok: false, error: "Only PNG, JPEG, WEBP or GIF images are allowed." };
+
+  const buf = Buffer.from(await file.arrayBuffer());
+  const dataUri = `data:${type};base64,${buf.toString("base64")}`;
+
+  await tx([
+    {
+      sql: `INSERT INTO messages
+              (id,thread_id,sender_id,body,kind,attachment_name,attachment_type,attachment_size,attachment_data)
+            VALUES (?,?,?,?, 'image', ?,?,?,?)`,
+      args: [
+        nid("msg_"), threadId, u.id, file.name.slice(0, 120),
+        file.name.slice(0, 120), type, file.size, dataUri,
+      ],
+    },
+    { sql: `UPDATE threads SET updated_at=datetime('now') WHERE id=?`, args: [threadId] },
+  ] as never);
+
+  revalidatePath("/dashboard/messages");
+  revalidatePath("/seller/messages");
+  revalidatePath("/admin/messages");
+  return { ok: true };
+}
+
+/**
+ * Raise a dispute from inside the chat.
+ *
+ * This is the same escrow-freezing action as the order page, but it also drops
+ * a `dispute` system message into the thread so both sides see the red banner
+ * in context, and links the thread to the dispute record.
+ */
+export async function openDisputeInChatAction(threadId: string, reason: string): Promise<R> {
+  const u = await requireUser();
+  const text = reason.trim();
+  if (text.length < 10)
+    return { ok: false, error: "Please describe the problem in at least 10 characters." };
+
+  const t = await one<{ buyer_id: string; seller_id: string; order_id: string | null }>(
+    `SELECT buyer_id, seller_id, order_id FROM threads WHERE id=?`,
+    [threadId]
+  );
+  if (!t) return { ok: false, error: "Conversation not found." };
+  // Only the buyer can open a dispute — the seller has no funds at risk.
+  if (t.buyer_id !== u.id) return { ok: false, error: "Only the buyer can open a dispute." };
+
+  const open = await one<{ id: string }>(
+    `SELECT id FROM disputes WHERE thread_id=? AND status IN ('open','under_review')`,
+    [threadId]
+  );
+  if (open) return { ok: false, error: "There is already an open dispute on this conversation." };
+
+  // Prefer the thread's order; otherwise fall back to the buyer's latest one.
+  const order = t.order_id
+    ? await one<{ id: string; code: string; total: number }>(
+        `SELECT id, code, total FROM orders WHERE (id=? OR code=?) AND buyer_id=?`,
+        [t.order_id, t.order_id, u.id]
+      )
+    : await one<{ id: string; code: string; total: number }>(
+        `SELECT o.id, o.code, o.total FROM orders o
+           JOIN order_items oi ON oi.order_id=o.id
+          WHERE o.buyer_id=? AND oi.seller_id=?
+          ORDER BY o.created_at DESC LIMIT 1`,
+        [u.id, t.seller_id]
+      );
+  if (!order) return { ok: false, error: "No order found to dispute for this seller." };
+
+  const id = nid("dsp_");
+  const dcode = "DSP" + Math.floor(10000 + Math.random() * 89999);
+
+  await tx([
+    {
+      sql: `INSERT INTO disputes (id,code,order_id,buyer_id,seller_id,amount,reason,status,thread_id)
+            VALUES (?,?,?,?,?,?,?, 'open', ?)`,
+      args: [id, dcode, order.id, u.id, t.seller_id, order.total, text, threadId],
+    },
+    {
+      sql: `INSERT INTO dispute_messages (id,dispute_id,sender,body) VALUES (?,?, 'buyer', ?)`,
+      args: [nid("dmg_"), id, text],
+    },
+    {
+      // The red banner the buyer and seller both see in the conversation.
+      sql: `INSERT INTO messages (id,thread_id,sender_id,body,kind,dispute_id)
+            VALUES (?,?,?,?, 'dispute', ?)`,
+      args: [nid("msg_"), threadId, u.id, text, id],
+    },
+    { sql: `UPDATE threads SET dispute_id=?, updated_at=datetime('now') WHERE id=?`, args: [id, threadId] },
+    { sql: `UPDATE orders SET status='disputed' WHERE id=?`, args: [order.id] },
+    { sql: `UPDATE order_items SET status='disputed' WHERE order_id=?`, args: [order.id] },
+  ] as never);
+
+  await notify(
+    t.seller_id,
+    "Dispute opened",
+    `Order ${order.code} — respond in the conversation.`,
+    "/seller/messages"
+  );
+
+  revalidatePath("/dashboard/messages");
+  revalidatePath("/seller/messages");
+  revalidatePath("/dashboard/disputes");
+  revalidatePath("/admin/disputes");
+  return { ok: true, id };
+}
+
+/**
+ * Buyer withdraws their own dispute once the seller has sorted it out.
+ *
+ * Deliberately buyer-only: letting a seller close a dispute against themselves
+ * would defeat the purpose. The order returns to its previous state and the
+ * escrow clock resumes.
+ */
+export async function resolveDisputeInChatAction(threadId: string): Promise<R> {
+  const u = await requireUser();
+
+  const t = await one<{ buyer_id: string; seller_id: string }>(
+    `SELECT buyer_id, seller_id FROM threads WHERE id=?`,
+    [threadId]
+  );
+  if (!t) return { ok: false, error: "Conversation not found." };
+  if (t.buyer_id !== u.id)
+    return { ok: false, error: "Only the buyer can close a dispute." };
+
+  const d = await one<{ id: string; order_id: string }>(
+    `SELECT id, order_id FROM disputes
+      WHERE thread_id=? AND status IN ('open','under_review')
+      ORDER BY created_at DESC LIMIT 1`,
+    [threadId]
+  );
+  if (!d) return { ok: false, error: "There is no open dispute to close." };
+
+  await tx([
+    {
+      sql: `UPDATE disputes SET status='resolved',
+              resolution=COALESCE(resolution,'Closed by the buyer — issue resolved with the seller.')
+            WHERE id=?`,
+      args: [d.id],
+    },
+    // Restore the order: delivered items stay delivered, everything else resumes.
+    {
+      sql: `UPDATE orders SET status =
+              CASE WHEN delivered_at IS NOT NULL THEN 'delivered' ELSE 'processing' END,
+              updated_at=datetime('now')
+            WHERE id=?`,
+      args: [d.order_id],
+    },
+    {
+      sql: `UPDATE order_items SET status =
+              CASE WHEN delivered_at IS NOT NULL THEN 'delivered' ELSE 'processing' END
+            WHERE order_id=?`,
+      args: [d.order_id],
+    },
+    {
+      sql: `INSERT INTO messages (id,thread_id,sender_id,body,kind,dispute_id)
+            VALUES (?,?,?,?, 'dispute_resolved', ?)`,
+      args: [nid("msg_"), threadId, u.id, "Dispute closed by the buyer.", d.id],
+    },
+    { sql: `UPDATE threads SET dispute_id=NULL, updated_at=datetime('now') WHERE id=?`, args: [threadId] },
+  ] as never);
+
+  await notify(
+    t.seller_id,
+    "Dispute closed",
+    "The buyer has withdrawn their dispute. Thanks for sorting it out.",
+    "/seller/messages"
+  );
+
+  revalidatePath("/dashboard/messages");
+  revalidatePath("/seller/messages");
+  revalidatePath("/dashboard/disputes");
+  revalidatePath("/admin/disputes");
+  return { ok: true };
+}
+
 export async function startThreadAction(sellerId: string, orderId?: string): Promise<R> {
   const u = await requireUser();
   const existing = await one<{ id: string }>(

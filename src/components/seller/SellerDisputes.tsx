@@ -4,9 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Gavel, Send, Loader2 } from "lucide-react";
 import { Btn, Empty, Tag, inputCls } from "@/components/ui";
-import { money, when, statusTone, label } from "@/lib/fmt";
+import { money, statusTone, label } from "@/lib/fmt";
 import { disputeReplyAction } from "@/lib/actions/shop";
 import MonitorNotice from "@/components/MonitorNotice";
+import LocalTime from "@/components/LocalTime";
 
 type D = { id: string; code: string; amount: number; reason: string; status: string; resolution: string | null; created_at: string; buyer_name: string };
 type M = { id: string; dispute_id: string; sender: string; body: string; created_at: string };
@@ -38,7 +39,7 @@ export default function SellerDisputes({ disputes, messages }: { disputes: D[]; 
               <div className="min-w-[170px] flex-1">
                 <div className="line-clamp-1 text-[12.5px] font-bold">{d.reason}</div>
                 <div className="text-[11px] muted">
-                  {d.code} · {d.buyer_name} · {when(d.created_at)}
+                  {d.code} · {d.buyer_name} · <LocalTime at={d.created_at} />
                 </div>
               </div>
               <Tag tone={statusTone(d.status)}>{label(d.status)}</Tag>

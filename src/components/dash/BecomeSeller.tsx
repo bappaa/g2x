@@ -11,7 +11,8 @@ import { Btn, Field, inputCls, Tag } from "@/components/ui";
 import { COUNTRIES, idTypesFor, idLabel, countryName } from "@/lib/kyc";
 import { submitVerificationAction } from "@/lib/actions/kyc";
 import { selfApproveSellerAction } from "@/lib/actions/shop";
-import { when } from "@/lib/fmt";
+
+import LocalTime from "@/components/LocalTime";
 
 type Cat = { slug: string; name: string };
 type Profile = { store_name: string; slug: string; description: string; primary_cat: string; status: string } | null;
@@ -87,7 +88,7 @@ export default function BecomeSeller({
               <p className="mt-1 text-[12.5px] muted">
                 We&apos;re checking the {idLabel(verification!.id_type)} ending in{" "}
                 <b>••••{verification!.id_number_last4}</b> ({countryName(verification!.country)}) that you
-                submitted on {when(verification!.submitted_at)}. Reviews usually finish within 24–48 hours,
+                submitted on <LocalTime at={verification!.submitted_at} />. Reviews usually finish within 24–48 hours,
                 and you&apos;ll get a notification the moment it&apos;s done.
               </p>
               <div className="mt-3 rounded-lg soft p-3 text-[11.5px]">

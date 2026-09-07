@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Btn, Empty, Field, Tag, inputCls } from "@/components/ui";
 import { money, statusTone, label } from "@/lib/fmt";
+import { img } from "@/lib/img";
 import {
   saveOfferAction, offerStatusAction, offerStockAction, deleteOfferAction, duplicateOfferAction,
 } from "@/lib/actions/seller";
@@ -99,7 +100,7 @@ export default function OffersView({
               <motion.div key={o.id} layout className="rounded-2xl panel p-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg soft">
-                    <Image src={o.image} alt="" fill sizes="48px" className="object-cover" />
+                    <Image src={img(o.image)} alt="" fill sizes="48px" className="object-cover" />
                   </div>
                   <div className="min-w-[170px] flex-1">
                     <div className="line-clamp-1 text-[13px] font-bold">{o.product_name}</div>
@@ -274,7 +275,7 @@ function OfferModal({
                     }`}
                   >
                     <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded">
-                      <Image src={c.image} alt="" fill sizes="32px" className="object-cover" />
+                      <Image src={img(c.image)} alt="" fill sizes="32px" className="object-cover" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="line-clamp-1 text-[12px] font-semibold">{c.name}</div>

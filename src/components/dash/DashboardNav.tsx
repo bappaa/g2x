@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  LayoutDashboard, Package, Box, Wallet, Receipt, Gavel, Star, Heart, Bell,
+  LayoutDashboard, Package, Box, Wallet, Receipt, Heart, Bell,
   MessageSquare, User, Shield, Store, LogOut,
   BadgeCheck,
 } from "lucide-react";
@@ -19,7 +19,6 @@ const groups = [
       { href: "/dashboard/orders", label: "My Orders", icon: Package },
       { href: "/dashboard/products", label: "Purchased Products", icon: Box },
       { href: "/dashboard/wishlist", label: "Wishlist", icon: Heart },
-      { href: "/dashboard/reviews", label: "My Reviews", icon: Star },
     ],
   },
   {
@@ -32,7 +31,6 @@ const groups = [
   {
     title: "Support",
     links: [
-      { href: "/dashboard/disputes", label: "Disputes", icon: Gavel },
       { href: "/dashboard/messages", label: "Messages", icon: MessageSquare },
       { href: "/dashboard/notifications", label: "Notifications", icon: Bell, badge: true },
     ],

@@ -8,6 +8,7 @@ import { Star, Clock, Rocket } from "lucide-react";
 import { Pill, inputCls } from "@/components/ui";
 
 import type { DbListing } from "@/lib/queries";
+import { img } from "@/lib/img";
 
 const tiers = ["All", "Low End", "Mid End", "High End"] as const;
 
@@ -53,7 +54,7 @@ export default function ListingGrid({
                 className="card-hover group flex items-center gap-4 rounded-2xl border border-[var(--line)] soft p-4"
               >
                 <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl">
-                  <Image src={b.image} alt="" fill sizes="50px" className="object-cover" />
+                  <Image src={img(b.image)} alt="" fill sizes="50px" className="object-cover" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-bold">{b.title}</div>
@@ -116,7 +117,7 @@ export default function ListingGrid({
               className="card-hover group block overflow-hidden rounded-2xl border border-[var(--line)] soft"
             >
               <div className="relative h-[132px] w-full overflow-hidden">
-                <Image src={a.image} alt={a.title} fill sizes="320px" className="object-cover transition-transform duration-500 group-hover:scale-110" />
+                <Image src={img(a.image)} alt={a.title} fill sizes="320px" className="object-cover transition-transform duration-500 group-hover:scale-110" />
                 {a.tier && (
                   <span className="absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[9.5px] font-semibold text-white backdrop-blur">
                     {a.tier}

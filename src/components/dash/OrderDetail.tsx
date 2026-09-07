@@ -8,13 +8,18 @@ import { motion } from "framer-motion";
 import { Check, Gavel, MessageSquare, Loader2, PartyPopper } from "lucide-react";
 import Credentials from "@/components/dash/Credentials";
 import { Btn, Tag, Section, inputCls } from "@/components/ui";
-import { when, statusTone, label } from "@/lib/fmt";
-import { confirmReceiptAction, openDisputeAction, startThreadAction } from "@/lib/actions/shop";
+import { statusTone, label } from "@/lib/fmt";
+import { openDisputeAction, startThreadAction } from "@/lib/actions/shop";
+import OrderReview from "./OrderReview";
+import LocalTime from "@/components/LocalTime";
+import { img } from "@/lib/img";
 
 type Order = {
   code: string; subtotal: number; fee: number; total: number; status: string;
   payment_status: string; payment_method: string; delivery_uid: string;
   buyer_note: string | null; created_at: string;
+  /** When escrow auto-releases to the seller (stamped at delivery). */
+  release_at?: string | null;
 };
 type Item = {
   id: string; title: string; subtitle: string; image: string; href: string; seller_id: string;
@@ -26,9 +31,10 @@ type Ev = { id: string; label: string; actor: string; created_at: string };
 const STEPS = ["Order Placed", "Payment Confirmed", "Seller Processing", "Delivered", "Completed"];
 
 export default function OrderDetail({
-  order, items, events,
+  order, items, events, review,
 }: {
   order: Order; items: Item[]; events: Ev[];
+  review?: { sellerId: string; storeName: string; reviewed: boolean };
 }) {
   const money = useMoney();
   const router = useRouter();
@@ -38,6 +44,7 @@ export default function OrderDetail({
   const [err, setErr] = useState("");
   const [reason, setReason] = useState("");
   const [showDispute, setShowDispute] = useState(false);
+  const releaseAt = order.release_at ?? null;
 
   const done = new Set(events.map((e) => e.label));
   const stepIdx = Math.max(
@@ -73,7 +80,7 @@ export default function OrderDetail({
         <Tag tone={order.payment_status === "paid" ? "green" : "amber"}>
           {label(order.payment_status)}
         </Tag>
-        <span className="text-[11.5px] muted">{when(order.created_at)}</span>
+        <span className="text-[11.5px] muted"><LocalTime at={order.created_at} /></span>
       </div>
 
       {/* progress */}
@@ -108,7 +115,7 @@ export default function OrderDetail({
                 <div key={it.id} className="rounded-xl soft p-3">
                   <div className="flex items-center gap-3">
                     <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg">
-                      <Image src={it.image} alt="" fill sizes="48px" className="object-cover" />
+                      <Image src={img(it.image)} alt="" fill sizes="48px" className="object-cover" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <Link href={it.href || "#"} className="line-clamp-1 text-[12.5px] font-bold hover:text-brand-500">
@@ -128,6 +135,15 @@ export default function OrderDetail({
             </div>
           </Section>
 
+          {review?.sellerId && ["delivered", "completed"].includes(order.status) && (
+            <OrderReview
+              orderCode={order.code}
+              sellerId={review.sellerId}
+              storeName={review.storeName}
+              reviewed={review.reviewed}
+            />
+          )}
+
           <Section title="Order Timeline">
             <div className="space-y-3">
               {events.map((e, i) => (
@@ -139,7 +155,7 @@ export default function OrderDetail({
                   <div className="pb-3">
                     <div className="text-[12.5px] font-semibold">{e.label}</div>
                     <div className="text-[10.5px] muted">
-                      {when(e.created_at)} · {e.actor}
+                      <LocalTime at={e.created_at} /> · {e.actor}
                     </div>
                   </div>
                 </div>
@@ -173,14 +189,21 @@ export default function OrderDetail({
             {msg && <div className="mb-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-[11.5px] text-emerald-400">{msg}</div>}
             {err && <div className="mb-2 rounded-lg bg-rose-500/10 px-3 py-2 text-[11.5px] text-rose-400">{err}</div>}
 
-            {order.status === "delivered" && (
-              <Btn
-                className="mb-2 flex w-full items-center justify-center gap-2"
-                disabled={pending}
-                onClick={() => act(() => confirmReceiptAction(order.code), "Receipt confirmed — seller paid.")}
-              >
-                {pending && <Loader2 size={13} className="animate-spin" />} Confirm Receipt
-              </Btn>
+            {/*
+              "Confirm Receipt" was removed on purpose. Escrow now releases
+              automatically 7 days after delivery, so a buyer who never returns
+              can no longer leave the seller's money frozen indefinitely.
+              Opening a dispute pauses that timer.
+            */}
+            {order.status === "delivered" && releaseAt && (
+              <div className="mb-2 rounded-lg border border-[var(--line)] soft px-3 py-2 text-[11.5px]">
+                <div className="font-semibold">Buyer protection active</div>
+                <div className="mt-0.5 muted">
+                  Funds are released to the seller on{" "}
+                  <LocalTime at={releaseAt} mode="date" />. Open a dispute before then if
+                  anything is wrong.
+                </div>
+              </div>
             )}
 
             <Btn
@@ -214,15 +237,35 @@ export default function OrderDetail({
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                 />
+                {/*
+                  The Submit button used to stay disabled until 10 characters
+                  were typed, with nothing on screen explaining why — it just
+                  looked broken. Now it is always clickable and the character
+                  requirement is stated up front.
+                */}
+                <div className="mt-1 text-[10.5px] muted">
+                  {reason.trim().length < 10
+                    ? `Please add at least ${10 - reason.trim().length} more character${
+                        10 - reason.trim().length === 1 ? "" : "s"
+                      }.`
+                    : "Ready to submit."}
+                </div>
                 <div className="mt-2 flex gap-2">
                   <Btn
                     className="flex-1"
-                    disabled={pending || reason.trim().length < 10}
-                    onClick={() =>
-                      act(() => openDisputeAction(order.code, reason), "Dispute submitted. Support will review it.")
-                    }
+                    disabled={pending}
+                    onClick={() => {
+                      if (reason.trim().length < 10) {
+                        setErr("Please describe the problem in at least 10 characters.");
+                        return;
+                      }
+                      act(
+                        () => openDisputeAction(order.code, reason),
+                        "Dispute submitted — continue the conversation in Messages."
+                      );
+                    }}
                   >
-                    Submit
+                    {pending && <Loader2 size={13} className="animate-spin" />} Submit
                   </Btn>
                   <Btn variant="ghost" onClick={() => setShowDispute(false)}>
                     Cancel

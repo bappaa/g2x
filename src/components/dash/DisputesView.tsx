@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Gavel, Send, Loader2 } from "lucide-react";
 import { Empty, Tag, Btn, inputCls } from "@/components/ui";
-import { money, when, statusTone, label } from "@/lib/fmt";
+import { money, statusTone, label } from "@/lib/fmt";
 import { disputeReplyAction } from "@/lib/actions/shop";
 import MonitorNotice from "@/components/MonitorNotice";
+import LocalTime from "@/components/LocalTime";
 
 type D = {
   id: string; code: string; order_id: string; amount: number; reason: string;
@@ -52,7 +53,7 @@ export default function DisputesView({ disputes, messages }: { disputes: D[]; me
                 <div className="min-w-[160px] flex-1">
                   <div className="line-clamp-1 text-[12.5px] font-bold">{d.reason}</div>
                   <div className="text-[11px] muted">
-                    {d.code} · {d.store_name} · {when(d.created_at)}
+                    {d.code} · {d.store_name} · <LocalTime at={d.created_at} />
                   </div>
                 </div>
                 <Tag tone={statusTone(d.status)}>{label(d.status)}</Tag>

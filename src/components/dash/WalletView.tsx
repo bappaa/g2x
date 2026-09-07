@@ -6,10 +6,11 @@ import { motion } from "framer-motion";
 import { Wallet, Plus, Loader2, Check } from "lucide-react";
 import { Btn, Tag, Section, Empty } from "@/components/ui";
 import { AnyLogo } from "@/components/BrandIcon";
-import { when, label } from "@/lib/fmt";
+import { label } from "@/lib/fmt";
 import Link from "next/link";
 import { topUpWalletAction } from "@/lib/actions/shop";
 import { feeFor, limitError, type GatewayView } from "@/lib/gateway-fees";
+import LocalTime from "@/components/LocalTime";
 
 const AMOUNTS = [10, 25, 50, 100, 250, 500];
 const MAX_TOPUP = 5000;
@@ -141,7 +142,7 @@ export default function WalletView({
                   <div key={t.id} className="flex items-center gap-3 rounded-lg soft p-2.5">
                     <div className="min-w-0 flex-1">
                       <div className="line-clamp-1 text-[12.5px] font-semibold">{t.reference}</div>
-                      <div className="text-[10.5px] muted">{when(t.created_at)}</div>
+                      <div className="text-[10.5px] muted"><LocalTime at={t.created_at} /></div>
                     </div>
                     <Tag tone={t.amount >= 0 ? "green" : "slate"}>{label(t.type)}</Tag>
                     <div className={`w-[80px] text-right text-[13px] font-bold ${t.amount >= 0 ? "text-emerald-400" : ""}`}>

@@ -9,6 +9,7 @@ import { Minus, Plus, Trash2, ShieldCheck, Clock, Store } from "lucide-react";
 import { Btn, Empty } from "@/components/ui";
 
 import { setCartQtyAction, removeCartAction, clearCartAction } from "@/lib/actions/shop";
+import { img } from "@/lib/img";
 
 export type CartRow = {
   key: string; title: string; sub: string; image: string; store_name: string;
@@ -74,7 +75,7 @@ export default function CartView({ items }: { items: CartRow[] }) {
               className="flex gap-4 rounded-2xl panel p-4"
             >
               <Link href={r.href} className="relative h-[76px] w-[76px] shrink-0 overflow-hidden rounded-xl soft">
-                <Image src={r.image} alt={r.title} fill sizes="80px" className="object-cover" />
+                <Image src={img(r.image)} alt={r.title} fill sizes="80px" className="object-cover" />
               </Link>
               <div className="min-w-0 flex-1">
                 <Link href={r.href} className="line-clamp-1 text-[13.5px] font-bold hover:text-brand-500">

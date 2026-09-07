@@ -27,6 +27,27 @@ const PATCHES: string[] = [
   `ALTER TABLE users ADD COLUMN kyc_due_at TEXT`,
   `ALTER TABLE users ADD COLUMN kyc_due_reason TEXT`,
   `CREATE INDEX IF NOT EXISTS idx_users_kyc_due ON users(kyc_due_at)`,
+
+  // --- Phase 16: usernames -------------------------------------------------
+  `ALTER TABLE users ADD COLUMN username TEXT`,
+  `ALTER TABLE users ADD COLUMN username_changes INTEGER NOT NULL DEFAULT 0`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
+
+  // --- Phase 16: 7-day escrow auto-release ---------------------------------
+  `ALTER TABLE orders ADD COLUMN delivered_at TEXT`,
+  `ALTER TABLE orders ADD COLUMN release_at TEXT`,
+  `ALTER TABLE orders ADD COLUMN released INTEGER NOT NULL DEFAULT 0`,
+  `CREATE INDEX IF NOT EXISTS idx_orders_release ON orders(released, release_at)`,
+
+  // --- Phase 16: chat attachments + in-thread disputes ---------------------
+  `ALTER TABLE messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'`,
+  `ALTER TABLE messages ADD COLUMN attachment_name TEXT`,
+  `ALTER TABLE messages ADD COLUMN attachment_type TEXT`,
+  `ALTER TABLE messages ADD COLUMN attachment_size INTEGER`,
+  `ALTER TABLE messages ADD COLUMN attachment_data TEXT`,
+  `ALTER TABLE messages ADD COLUMN dispute_id TEXT`,
+  `ALTER TABLE threads ADD COLUMN dispute_id TEXT`,
+  `ALTER TABLE disputes ADD COLUMN thread_id TEXT`,
 ];
 
 /**

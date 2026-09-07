@@ -27,6 +27,7 @@ import { useWishlist } from "./WishlistSync";
 
 import { addToCartAction, toggleWishAction } from "@/lib/actions/shop";
 import type { DbGame, DbCategory, DbProduct, DbOffer } from "@/lib/queries";
+import { img } from "@/lib/img";
 
 const sorts = ["Recommended", "Cheapest First", "Fastest Delivery", "Highest Rated"] as const;
 const SORT_KEY: Record<string, string> = {
@@ -124,10 +125,44 @@ export default function ProductView({
    * details and ABOVE the offers list. Defining them once here and placing the
    * same variable in both spots keeps the two layouts in sync.
    */
-  const bestPriceCard = offers.length > 0 && (
+  /**
+   * The offer the two buttons below will actually buy. Showing the price
+   * without naming the seller meant a buyer could hit "Buy Cheapest Offer"
+   * with no idea who they were buying from, so the seller, their rating and
+   * their review count are surfaced right next to the action.
+   */
+  const cheapestOffer = offers.length > 0 ? [...offers].sort((a, b) => a.price - b.price)[0] : null;
+
+  const bestPriceCard = offers.length > 0 && cheapestOffer && (
     <div className="rounded-2xl panel p-4 sm:p-5">
       <div className="text-[11.5px] muted">{tr("prod.bestPrice")}</div>
       <div className="mt-1 text-[18px] font-black text-brand-500 sm:text-[28px]">{money(cheapest)}</div>
+
+      {/* Who you are buying from — kept above the buttons on every screen size. */}
+      <div className="mt-3 flex items-center gap-2.5 rounded-xl soft p-2.5">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-700 text-[11px] font-bold text-white">
+          {cheapestOffer.store_name.slice(0, 2).toUpperCase()}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1">
+            <span className="truncate text-[12.5px] font-bold">{cheapestOffer.store_name}</span>
+            {cheapestOffer.verified ? (
+              <BadgeCheck size={13} className="shrink-0 text-brand-400" />
+            ) : null}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10.5px] muted">
+            <span className="flex items-center gap-0.5 text-amber-400">
+              <Star size={10} className="fill-amber-400" />
+              {cheapestOffer.rating}%
+            </span>
+            <span aria-hidden>·</span>
+            <span>
+              {Number(cheapestOffer.total_orders ?? 0).toLocaleString("en-US")} reviews
+            </span>
+          </div>
+        </div>
+      </div>
+
       <Btn
         className="mt-3 w-full"
         onClick={() => buy([...offers].sort((a, b) => a.price - b.price)[0], true)}
@@ -193,7 +228,7 @@ export default function ProductView({
                 animate={{ opacity: 1, scale: 1 }}
                 className="relative h-[130px] w-full shrink-0 overflow-hidden rounded-xl soft sm:h-[170px] sm:w-[190px]"
               >
-                <Image src={product.image} alt={product.name} fill sizes="200px" className="object-contain p-4" />
+                <Image src={img(product.image)} alt={product.name} fill sizes="200px" className="object-contain p-4" />
               </motion.div>
 
               <div className="min-w-0 flex-1">

@@ -7,8 +7,9 @@ import {
   ChevronDown, LifeBuoy, MessageSquare, Mail, Check, Loader2, ShieldCheck, Gavel, FileText,
 } from "lucide-react";
 import { Breadcrumb, Section, Btn, Field, inputCls, Tag } from "@/components/ui";
-import { when, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 import { createTicketAction } from "@/lib/actions/shop";
+import LocalTime from "@/components/LocalTime";
 
 const faqs: [string, string][] = [
   ["How fast is delivery?", "Most top-ups and currency orders are delivered in 5–30 minutes. Accounts and codes are usually instant. Boosting depends on the service ETA shown on the product page."],
@@ -163,7 +164,7 @@ export default function SupportView({ signedIn, tickets }: { signedIn: boolean; 
                     <Tag tone={statusTone(t.status)}>{label(t.status)}</Tag>
                   </div>
                   <div className="text-[10.5px] muted">
-                    {t.code} · {t.category} · {when(t.created_at)}
+                    {t.code} · {t.category} · <LocalTime at={t.created_at} />
                   </div>
                 </div>
               ))}

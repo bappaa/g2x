@@ -6,6 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { AnyLogo } from "./BrandIcon";
 import { CategoryIcon } from "./CategoryIcon";
 import { useT } from "./LocaleProvider";
+import { img } from "@/lib/img";
 
 export type Tile = { label: string; logo: string; href: string; badge?: string };
 export type Rail = { slug: string; name: string; icon: string; tiles: Tile[]; wide?: boolean };
@@ -23,7 +24,7 @@ function TileView({ t, i }: { t: Tile; i: number }) {
         <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--soft,rgba(255,255,255,.03))] transition-all duration-300 group-hover:-translate-y-1 group-hover:border-brand-500/70 group-hover:shadow-[0_16px_36px_-20px_rgba(139,61,255,.95)]">
           {isImage ? (
             <Image
-              src={t.logo}
+              src={img(t.logo)}
               alt={t.label}
               fill
               sizes="(max-width: 640px) 33vw, 160px"

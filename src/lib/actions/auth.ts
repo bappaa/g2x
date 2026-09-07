@@ -3,8 +3,9 @@
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { one, run, nid } from "../db";
+import { one, run, nid, tx } from "../db";
 import { createSession, destroySession, getSessionUser } from "../session";
 
 const emailSchema = z.string().email().max(180);
@@ -35,6 +36,9 @@ async function welcome(userId: string, name: string) {
 }
 
 import { mail } from "../mail";
+import {
+  generateUsername, validateUsername, isUsernameFree, usernameChangeFee, FREE_CHANGES,
+} from "../username";
 import { rateLimit, resetLimit, clientIp } from "../ratelimit";
 
 /** Only ever redirect to a path on this site — blocks ?next=//evil.com */
@@ -45,19 +49,25 @@ function safeNext(v: string): string {
 }
 
 /** Rejects the passwords that actually get accounts taken over. */
-function weakPassword(pw: string, email: string, name: string): string | null {
-  if (pw.length < 8) return "Password must be at least 8 characters.";
+/**
+ * Password policy — intentionally minimal.
+ *
+ * The old rules (8+ chars, 3 of 4 character classes, no name/email substring,
+ * a common-password blocklist) rejected plenty of perfectly reasonable
+ * passwords and cost sign-ups. The only hard requirements now are a 6
+ * character minimum and no whitespace; anything else — letters, digits,
+ * symbols, any mix — is accepted.
+ *
+ * Spaces are excluded because they are the single most common source of
+ * "my password stopped working" reports (trailing space from copy-paste,
+ * mobile keyboards auto-inserting one after autocomplete).
+ */
+const PASSWORD_MIN = 6;
+
+function weakPassword(pw: string): string | null {
+  if (pw.length < PASSWORD_MIN) return `Password must be at least ${PASSWORD_MIN} characters.`;
   if (pw.length > 200) return "Password is too long.";
-  const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((r) => r.test(pw)).length;
-  if (classes < 3)
-    return "Use at least 3 of: lowercase, uppercase, a number and a symbol.";
-  const low = pw.toLowerCase();
-  const local = email.split("@")[0]?.toLowerCase() ?? "";
-  if (local.length > 2 && low.includes(local)) return "Password must not contain your email.";
-  if (name.length > 2 && low.includes(name.toLowerCase())) return "Password must not contain your name.";
-  const common = ["password", "12345678", "qwerty", "letmein", "iloveyou", "admin123",
-                  "welcome1", "abc12345", "111111", "g2x"];
-  if (common.some((c) => low.includes(c))) return "That password is too common. Pick something unique.";
+  if (/\s/.test(pw)) return "Password cannot contain spaces.";
   return null;
 }
 
@@ -79,7 +89,7 @@ export async function registerAction(
   if (name.length > 80) return { ok: false, error: "That name is too long." };
   if (!emailSchema.safeParse(email).success)
     return { ok: false, error: "Enter a valid email address." };
-  const weak = weakPassword(password, email, name);
+  const weak = weakPassword(password);
   if (weak) return { ok: false, error: weak };
 
   const existing = await one(`SELECT id FROM users WHERE email = ?`, [email]);
@@ -87,10 +97,12 @@ export async function registerAction(
     return { ok: false, error: "An account with this email already exists. Try logging in." };
 
   const id = nid("usr_");
+  // Every account gets a unique random handle (e.g. unicorn_256) it can rename later.
+  const username = await generateUsername();
   await run(
-    `INSERT INTO users (id, name, email, password_hash, provider, role)
-     VALUES (?,?,?,?,'email','buyer')`,
-    [id, name, email, await bcrypt.hash(password, 12)]
+    `INSERT INTO users (id, name, email, password_hash, provider, role, username)
+     VALUES (?,?,?,?,'email','buyer',?)`,
+    [id, name, email, await bcrypt.hash(password, 12), username]
   );
   await welcome(id, name);
   await mail.welcome(email, name);
@@ -162,9 +174,9 @@ export async function demoGoogleAction(next = "/dashboard"): Promise<ActionResul
   if (!user) {
     const id = nid("usr_");
     await run(
-      `INSERT INTO users (id, name, email, provider, role, country)
-       VALUES (?,?,?,'google','buyer','India')`,
-      [id, "Demo Buyer", email]
+      `INSERT INTO users (id, name, email, provider, role, country, username)
+       VALUES (?,?,?,'google','buyer','India',?)`,
+      [id, "Demo Buyer", email, await generateUsername()]
     );
     await welcome(id, "Demo Buyer");
     user = { id };
@@ -195,6 +207,83 @@ export async function updateProfileAction(formData: FormData): Promise<ActionRes
   return { ok: true };
 }
 
+/**
+ * Rename the public handle.
+ *
+ * The first two changes are free. Beyond that the account is charged a fee set
+ * by the admin (`username_change_fee`) and debited from the wallet balance.
+ * The debit, the rename and the counter increment all run in ONE transaction,
+ * so a failure can never take the money without applying the change, nor apply
+ * the change without taking the money.
+ *
+ * Uniqueness is checked up front for a friendly message, and enforced again by
+ * a UNIQUE index to close the race between two people claiming the same handle
+ * at the same moment.
+ */
+export async function changeUsernameAction(raw: string): Promise<ActionResult> {
+  const u = await getSessionUser();
+  if (!u) return { ok: false, error: "Not signed in." };
+
+  const wanted = String(raw ?? "").trim();
+  const shapeError = validateUsername(wanted);
+  if (shapeError) return { ok: false, error: shapeError };
+
+  const row = await one<{ username: string | null; username_changes: number; balance: number }>(
+    `SELECT username, username_changes, balance FROM users WHERE id=?`,
+    [u.id]
+  );
+  const current = row?.username ?? "";
+  if (current.toLowerCase() === wanted.toLowerCase())
+    return { ok: false, error: "That is already your username." };
+
+  if (!(await isUsernameFree(wanted, u.id)))
+    return { ok: false, error: "That username is already taken. Try another one." };
+
+  const used = Number(row?.username_changes ?? 0);
+  const fee = used >= FREE_CHANGES ? await usernameChangeFee() : 0;
+  const balance = Number(row?.balance ?? 0);
+
+  if (fee > 0 && balance < fee)
+    return {
+      ok: false,
+      error: `Changing your username costs $${fee.toFixed(2)}. Your wallet balance is $${balance.toFixed(2)} — please top up first.`,
+    };
+
+  const stmts: { sql: string; args: unknown[] }[] = [
+    {
+      sql: `UPDATE users SET username=?, username_changes=username_changes+1,
+                             updated_at=datetime('now')
+             WHERE id=?`,
+      args: [wanted, u.id],
+    },
+  ];
+
+  if (fee > 0) {
+    stmts.push({
+      sql: `UPDATE users SET balance = balance - ? WHERE id=?`,
+      args: [fee, u.id],
+    });
+    stmts.push({
+      sql: `INSERT INTO transactions (id,user_id,type,amount,reference)
+            VALUES (?,?, 'fee', ?, ?)`,
+      args: [nid("txn_"), u.id, -fee, `Username change to @${wanted}`],
+    });
+  }
+
+  try {
+    await tx(stmts as never);
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? "");
+    if (/UNIQUE|constraint/i.test(msg))
+      return { ok: false, error: "That username was just taken. Try another one." };
+    throw e;
+  }
+
+  revalidatePath("/dashboard/profile");
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 export async function changePasswordAction(formData: FormData): Promise<ActionResult> {
   const u = await getSessionUser();
   if (!u) return { ok: false, error: "Not signed in." };
@@ -203,7 +292,8 @@ export async function changePasswordAction(formData: FormData): Promise<ActionRe
   const next = String(formData.get("next") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
 
-  if (next.length < 8) return { ok: false, error: "New password must be 8+ characters." };
+  const weakNext = weakPassword(next);
+  if (weakNext) return { ok: false, error: weakNext };
   if (next !== confirm) return { ok: false, error: "New passwords do not match." };
 
   const row = await one<{ password_hash: string | null }>(

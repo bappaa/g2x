@@ -1,11 +1,12 @@
 import TimeAgo from "@/components/TimeAgo";
+import { sweepEscrowInBackground } from "@/lib/escrow";
 import Link from "next/link";
 import Image from "next/image";
 import { requireUser } from "@/lib/session";
 import { one } from "@/lib/db";
 import { getOrders, getBuyerDisputes, getNotifications } from "@/lib/queries";
 import { Section, Empty, Btn, Tag, FadeIn } from "@/components/ui";
-import { when, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 import { Package, Wallet, Gavel, Heart, ArrowRight } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +18,13 @@ type OrderRow = {
 };
 
 import { serverLocale } from "@/lib/locale";
+import LocalTime from "@/components/LocalTime";
+import { img } from "@/lib/img";
 
 export default async function Page() {
+  // Release any escrow whose 7-day hold has expired (throttled, non-blocking).
+  sweepEscrowInBackground();
+
   const { money } = await serverLocale();
   const u = await requireUser();
   const [orders, disputes, notifs, wish, spent] = await Promise.all([
@@ -92,7 +98,7 @@ export default async function Page() {
                 className="flex items-center gap-3 rounded-xl soft p-3 transition-all hover:-translate-y-0.5"
               >
                 <div className="relative h-11 w-11 overflow-hidden rounded-lg">
-                  <Image src={o.first_image} alt="" fill sizes="48px" className="object-cover" />
+                  <Image src={img(o.first_image)} alt="" fill sizes="48px" className="object-cover" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="line-clamp-1 text-[12.5px] font-semibold">
@@ -100,7 +106,7 @@ export default async function Page() {
                     {o.item_count > 1 && <span className="muted"> +{o.item_count - 1} more</span>}
                   </div>
                   <div className="text-[11px] muted">
-                    {o.code} · {when(o.created_at)}
+                    {o.code} · <LocalTime at={o.created_at} />
                   </div>
                 </div>
                 <Tag tone={statusTone(o.status)}>{label(o.status)}</Tag>

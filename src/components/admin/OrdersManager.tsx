@@ -5,8 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, Loader2, RotateCcw, Settings2 } from "lucide-react";
 import { Btn, Tag, Field, inputCls, Empty } from "@/components/ui";
 import { Table, Tr, Td, Toolbar, IconAction } from "@/components/admin/ui";
-import { money, when, statusTone, label } from "@/lib/fmt";
+import { money, statusTone, label } from "@/lib/fmt";
 import { adminOrderStatusAction, adminRefundAction } from "@/lib/actions/admin";
+import LocalTime from "@/components/LocalTime";
 
 type O = {
   id: string; code: string; buyer_name: string; buyer_email: string; total: number;
@@ -53,7 +54,7 @@ export default function OrdersManager({ rows, q }: { rows: O[]; q: string }) {
               <Td className="muted">{o.items}</Td>
               <Td className="font-bold">{money(o.total)}</Td>
               <Td><Tag tone={statusTone(o.status)}>{label(o.status)}</Tag></Td>
-              <Td className="whitespace-nowrap muted">{when(o.created_at)}</Td>
+              <Td className="whitespace-nowrap muted"><LocalTime at={o.created_at} /></Td>
               <Td>
                 <div className="flex justify-end gap-1.5">
                   <IconAction title="Change status" onClick={() => setModal({ o, mode: "status" })}>

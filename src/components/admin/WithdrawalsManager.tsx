@@ -5,8 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, X, Loader2, Banknote, Send } from "lucide-react";
 import { Btn, Tag, Field, inputCls, Empty } from "@/components/ui";
 import { Table, Tr, Td, IconAction } from "@/components/admin/ui";
-import { money, when, statusTone, label } from "@/lib/fmt";
+import { money, statusTone, label } from "@/lib/fmt";
 import { reviewWithdrawalAction } from "@/lib/actions/admin";
+import LocalTime from "@/components/LocalTime";
 
 type W = {
   id: string; seller_id: string; name: string; email: string; store_name: string | null;
@@ -31,7 +32,7 @@ export default function WithdrawalsManager({ rows }: { rows: W[] }) {
             <Td className="font-bold text-emerald-400">{money(w.amount)}</Td>
             <Td className="capitalize muted">{w.method}</Td>
             <Td className="max-w-[180px] truncate text-[11px] muted">{w.destination}</Td>
-            <Td className="whitespace-nowrap muted">{when(w.created_at)}</Td>
+            <Td className="whitespace-nowrap muted"><LocalTime at={w.created_at} /></Td>
             <Td><Tag tone={statusTone(w.status)}>{label(w.status)}</Tag></Td>
             <Td>
               <div className="flex justify-end gap-1.5">

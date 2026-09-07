@@ -1,11 +1,12 @@
 "use client";
 import { useState, useTransition } from "react";
+import LocalTime from "@/components/LocalTime";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Pencil, Trash2, X, Loader2, Ticket } from "lucide-react";
 import { Btn, Tag, Field, inputCls, Empty } from "@/components/ui";
 import { Table, Tr, Td, Toolbar, IconAction } from "@/components/admin/ui";
-import { money, day, statusTone, label } from "@/lib/fmt";
+import { money, statusTone, label } from "@/lib/fmt";
 import { saveCouponAction, deleteCouponAction } from "@/lib/actions/admin";
 
 type C = {
@@ -50,7 +51,7 @@ export default function CouponsManager({ rows }: { rows: C[] }) {
                 {Number(c.used_count ?? 0)}{c.usage_limit ? ` / ${c.usage_limit}` : ""}
               </Td>
               <Td className="text-[10.5px] muted">
-                {c.start_date ? day(c.start_date) : "Always"} → {c.end_date ? day(c.end_date) : "No end"}
+                {c.start_date ? <LocalTime at={c.start_date} mode="date" /> : "Always"} → {c.end_date ? <LocalTime at={c.end_date} mode="date" /> : "No end"}
               </Td>
               <Td><Tag tone={statusTone(c.status)}>{label(c.status)}</Tag></Td>
               <Td>

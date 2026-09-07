@@ -3,8 +3,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Send, Ticket } from "lucide-react";
 import { Btn, Tag, Field, inputCls, Empty } from "@/components/ui";
-import { when, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 import { ticketReplyAction } from "@/lib/actions/admin";
+import LocalTime from "@/components/LocalTime";
 
 type T = {
   id: string; code: string; subject: string; category: string; status: string;
@@ -28,7 +29,7 @@ export default function TicketsManager({ rows }: { rows: T[] }) {
             <span className="font-mono text-[11px] font-bold">{t.code}</span>
             <span className="text-[13px] font-semibold">{t.subject}</span>
             <Tag tone={statusTone(t.status)}>{label(t.status)}</Tag>
-            <span className="ml-auto text-[10.5px] muted">{t.name} · {when(t.created_at)}</span>
+            <span className="ml-auto text-[10.5px] muted">{t.name} · <LocalTime at={t.created_at} /></span>
           </button>
           <p className="mt-1.5 line-clamp-2 text-[11.5px] muted">{t.first_msg}</p>
           {open === t.code && <Reply code={t.code} status={t.status} />}

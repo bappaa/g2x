@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Wallet, Clock, Percent, TrendingUp, Loader2, Check } from "lucide-react";
 import { Btn, Field, Section, Tag, Empty, inputCls } from "@/components/ui";
-import { money, when, statusTone, label } from "@/lib/fmt";
+import { money, statusTone, label } from "@/lib/fmt";
 import { requestWithdrawalAction } from "@/lib/actions/seller";
+import LocalTime from "@/components/LocalTime";
 
 type W = { id: string; amount: number; method: string; detail: string; status: string; created_at: string };
 type T = { id: string; type: string; amount: number; reference: string; created_at: string };
@@ -65,7 +66,7 @@ export default function FinanceView({
                     <div className="min-w-0 flex-1">
                       <div className="text-[12.5px] font-semibold">{w.method}</div>
                       <div className="line-clamp-1 text-[10.5px] muted">
-                        {w.detail} · {when(w.created_at)}
+                        {w.detail} · <LocalTime at={w.created_at} />
                       </div>
                     </div>
                     <Tag tone={statusTone(w.status)}>{label(w.status)}</Tag>

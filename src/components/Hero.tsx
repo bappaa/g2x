@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { CategoryIcon } from "./CategoryIcon";
 import { useMoney } from "./LocaleProvider";
+import { img } from "@/lib/img";
 
 export type Perk = { icon: string; label: string };
 
@@ -127,7 +128,7 @@ export default function Hero({
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(139,61,255,.22),transparent_65%)]" />
               <div className="relative animate-floaty">
                 <Image
-                  src={image}
+                  src={img(image)}
                   alt={highlight || title}
                   width={900}
                   height={900}

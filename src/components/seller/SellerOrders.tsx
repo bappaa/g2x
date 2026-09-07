@@ -6,9 +6,11 @@ import { motion } from "framer-motion";
 import { Truck, XCircle, Plus, Loader2, User, MessageSquare } from "lucide-react";
 import { Btn, Empty, Tag, inputCls } from "@/components/ui";
 import Credentials from "@/components/dash/Credentials";
-import { money, when, statusTone, label } from "@/lib/fmt";
+import { money, statusTone, label } from "@/lib/fmt";
 import { deliverOrderAction, cancelOrderItemAction } from "@/lib/actions/seller";
 import { startThreadAction } from "@/lib/actions/shop";
+import LocalTime from "@/components/LocalTime";
+import { img } from "@/lib/img";
 
 type OI = {
   id: string; code: string; title: string; subtitle: string; image: string; qty: number;
@@ -46,12 +48,12 @@ function OrderRow({ o }: { o: OI }) {
     <motion.div layout className="rounded-2xl panel p-4">
       <button onClick={() => setOpen((v) => !v)} className="flex w-full flex-wrap items-center gap-3 text-left">
         <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg soft">
-          <Image src={o.image} alt="" fill sizes="48px" className="object-cover" />
+          <Image src={img(o.image)} alt="" fill sizes="48px" className="object-cover" />
         </div>
         <div className="min-w-[170px] flex-1">
           <div className="line-clamp-1 text-[13px] font-bold">{o.title}</div>
           <div className="text-[11px] muted">
-            {o.code} · {o.buyer_name} · {when(o.created_at)}
+            {o.code} · {o.buyer_name} · <LocalTime at={o.created_at} />
           </div>
         </div>
         <Tag tone={statusTone(o.status)}>{label(o.status)}</Tag>

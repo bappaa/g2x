@@ -3,8 +3,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
 import { Btn, Field, inputCls, Section, Tag } from "@/components/ui";
-import { day } from "@/lib/fmt";
+
 import { updateProfileAction } from "@/lib/actions/auth";
+import LocalTime from "@/components/LocalTime";
 
 export default function ProfileForm({
   name, email, phone, country, provider, joined,
@@ -31,7 +32,7 @@ export default function ProfileForm({
             <div className="mt-1.5 flex gap-1.5">
               <Tag tone="green">Verified buyer</Tag>
               <Tag tone="slate">{provider === "google" ? "Google account" : "Email account"}</Tag>
-              {joined && <Tag tone="slate">Joined {day(joined)}</Tag>}
+              {joined && <Tag tone="slate">Joined <LocalTime at={joined} mode="date" /></Tag>}
             </div>
           </div>
         </div>
