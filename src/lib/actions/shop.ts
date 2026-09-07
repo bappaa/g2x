@@ -22,6 +22,7 @@ const SERVICE_FEE = 0.02;
 import { mail } from "../mail";
 import { gatewayByCode, feeFor, limitError } from "../gateways";
 import { kycDueFor, markKycDue, kycThreshold } from "../buyer-kyc";
+import { ensureSchema } from "../ensure-schema";
 import { rateLimit } from "../ratelimit";
 
 async function notify(userId: string, title: string, body: string, href: string, kind = "order") {
@@ -491,6 +492,9 @@ export async function topUpWalletAction(
    */
   idemKey?: string
 ): Promise<R> {
+  // Repair any missing additive columns before we rely on `idem_key`.
+  await ensureSchema();
+
   const u = await requireUser();
   const amt = Math.round(amount * 100) / 100;
   if (!(amt > 0) || amt > 5000) return { ok: false, error: "Enter an amount between $1 and $5,000." };
@@ -545,13 +549,41 @@ export async function topUpWalletAction(
     ] as never);
   } catch (e) {
     const msg = String((e as Error)?.message ?? "");
+
     if (/UNIQUE|constraint/i.test(msg)) {
       // Same attempt replayed — the first one already credited the wallet.
       revalidatePath("/dashboard/wallet");
       revalidatePath("/dashboard");
       return { ok: true };
     }
-    throw e;
+
+    /**
+     * Last-resort fallback for a database that predates the idempotency
+     * column and could not be patched (e.g. a read-only replica). Losing the
+     * double-credit guard is bad; refusing every top-up with an opaque
+     * server-side exception is worse. Credit the wallet the old way and make
+     * the degradation visible in the logs.
+     */
+    if (/no column named idem_key|no such column: idem_key/i.test(msg)) {
+      console.warn("[topUpWallet] idem_key missing — run `npm run db:migrate`.");
+      await tx([
+        {
+          sql: `INSERT INTO transactions (id,user_id,type,amount,reference)
+                VALUES (?,?, 'deposit', ?, ?)`,
+          args: [
+            nid("txn_"),
+            u.id,
+            amt,
+            fee > 0
+              ? `Wallet top-up via ${gw.name} (charged $${charged.toFixed(2)}, fee $${fee.toFixed(2)})`
+              : `Wallet top-up via ${gw.name}`,
+          ],
+        },
+        { sql: `UPDATE users SET balance = balance + ? WHERE id=?`, args: [amt, u.id] },
+      ] as never);
+    } else {
+      throw e;
+    }
   }
 
   if (u.email) {

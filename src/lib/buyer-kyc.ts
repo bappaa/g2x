@@ -1,5 +1,6 @@
 import "server-only";
 import { one, run } from "./db";
+import { ensureSchema } from "./ensure-schema";
 
 
 /**
@@ -72,6 +73,7 @@ export async function kycDueFor(userId: string, amount: number): Promise<boolean
  */
 export async function markKycDue(userId: string, reason: string): Promise<void> {
   try {
+    await ensureSchema();
     await run(
       `UPDATE users SET kyc_due_at = COALESCE(kyc_due_at, datetime('now')), kyc_due_reason = ?
         WHERE id = ? AND kyc_due_at IS NULL`,
@@ -85,6 +87,7 @@ export async function markKycDue(userId: string, reason: string): Promise<void> 
 /** Clears the obligation once the buyer submits (or an admin approves). */
 export async function clearKycDue(userId: string): Promise<void> {
   try {
+    await ensureSchema();
     await run(`UPDATE users SET kyc_due_at = NULL, kyc_due_reason = NULL WHERE id = ?`, [userId]);
   } catch {
     /* non-fatal */
@@ -95,6 +98,7 @@ export async function clearKycDue(userId: string): Promise<void> {
 export async function pendingKycPrompt(
   userId: string
 ): Promise<{ due: boolean; since: string | null; reason: string | null; status: KycStatus }> {
+  await ensureSchema();
   const r = await one<{ kyc_due_at: string | null; kyc_due_reason: string | null }>(
     `SELECT kyc_due_at, kyc_due_reason FROM users WHERE id=?`,
     [userId]

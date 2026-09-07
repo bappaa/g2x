@@ -57,8 +57,17 @@ export async function getRates(): Promise<Record<string, number>> {
     void maybeRefresh(rows);
     const out: Record<string, number> = {};
     rows.forEach((r) => {
+      /**
+       * The `fx_` prefix is also used for bookkeeping rows (`fx_updated_at`,
+       * `fx_source`, `fx_manual`). Only accept keys shaped like a real
+       * currency code, otherwise `fx_updated_at` would be parsed as a rate for
+       * a currency called "UPDATED_AT".
+       */
+      const code = r.key.slice(3).toUpperCase();
+      if (!/^[A-Z]{3}$/.test(code)) return;
+
       const n = Number(r.value);
-      if (Number.isFinite(n) && n > 0) out[r.key.slice(3).toUpperCase()] = n;
+      if (Number.isFinite(n) && n > 0) out[code] = n;
     });
     return out;
   } catch {

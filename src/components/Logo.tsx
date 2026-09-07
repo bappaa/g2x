@@ -1,7 +1,8 @@
 export default function Logo({
   size = 38,
-  /** The "Pro Gaming Services" strapline. Hidden in the navbar, kept in the footer. */
-  tagline = true,
+  /** Optional "Pro Gaming Services" strapline. Off by default — the brand
+   *  mark reads as just G2X.GG in the navbar and the footer. */
+  tagline = false,
 }: {
   size?: number;
   tagline?: boolean;

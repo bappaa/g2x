@@ -250,3 +250,28 @@ frankfurter.dev as a fallback). No API key or env var is needed.
   refresher will then skip it). Clear the field to hand it back to the feed.
 - If every provider is unreachable, the last stored rates stay in use, and
   those in turn fall back to the static table in `src/lib/i18n.ts`.
+
+## Schema drift after a deploy (the "Digest: …" error)
+
+Code ships through git; **the database schema does not**. If a release adds a
+column and the hosted Turso database has not been migrated, the first request
+that touches it fails with `Application error: a server-side exception has
+occurred`. This is what broke `/dashboard/wallet` after the wallet
+double-credit fix, which introduced `transactions.idem_key`.
+
+Two protections are in place:
+
+1. **Run the migration as part of every deploy** — this is the correct fix:
+
+   ```bash
+   npm run db:migrate      # additive and idempotent; safe on a live database
+   ```
+
+2. **Runtime self-repair** — `src/lib/ensure-schema.ts` applies the small set
+   of additive columns/indexes that are fatal if missing, once per process,
+   before the code that needs them. It never drops or rewrites anything, and a
+   failure is logged rather than thrown. This is a safety net, not a substitute
+   for step 1.
+
+If you see a `Digest` error after a deploy, check the Netlify function log for
+`no such column` / `has no column named` before looking anywhere else.
