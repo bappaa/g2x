@@ -52,12 +52,23 @@ export default function OrderDetail({
     STEPS.reduce((acc, s, i) => (done.has(s) ? i : acc), 0)
   );
 
-  const act = (fn: () => Promise<{ ok: boolean; error?: string }>, okMsg: string) => {
+  const act = (
+    fn: () => Promise<{ ok: boolean; error?: string; id?: string }>,
+    okMsg: string,
+    /** When the action returns a thread id, open that conversation. */
+    gotoThread = false
+  ) => {
     setErr(""); setMsg("");
     start(async () => {
       const r = await fn();
       if (!r.ok) return setErr(r.error || "Something went wrong.");
       setMsg(okMsg);
+      if (gotoThread && r.id) {
+        // The dispute banner now lives in the conversation — take the buyer
+        // straight to it instead of leaving them on a page that can't show it.
+        router.push(`/dashboard/messages?t=${r.id}`);
+        return;
+      }
       router.refresh();
     });
   };
@@ -261,7 +272,8 @@ export default function OrderDetail({
                       }
                       act(
                         () => openDisputeAction(order.code, reason),
-                        "Dispute submitted — continue the conversation in Messages."
+                        "Dispute submitted — opening your conversation with the seller…",
+                        true
                       );
                     }}
                   >

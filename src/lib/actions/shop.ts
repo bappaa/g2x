@@ -378,7 +378,8 @@ export async function confirmReceiptAction(code: string): Promise<R> {
 
 export async function openDisputeAction(code: string, reason: string): Promise<R> {
   const u = await requireUser();
-  if (reason.trim().length < 10)
+  const text = reason.trim();
+  if (text.length < 10)
     return { ok: false, error: "Please describe the problem in at least 10 characters." };
 
   const order = await one<{ id: string; total: number }>(
@@ -387,40 +388,98 @@ export async function openDisputeAction(code: string, reason: string): Promise<R
   );
   if (!order) return { ok: false, error: "Order not found." };
 
+  // Don't let the same order be disputed twice.
+  const already = await one<{ id: string }>(
+    `SELECT id FROM disputes WHERE order_id=? AND status IN ('open','under_review')`,
+    [order.id]
+  );
+  if (already) return { ok: false, error: "There is already an open dispute on this order." };
+
   const item = await one<{ seller_id: string }>(
     `SELECT seller_id FROM order_items WHERE order_id=? LIMIT 1`,
     [order.id]
   );
+  const sellerId = item?.seller_id ?? "";
+
+  /**
+   * A dispute raised from the order page must land in the buyer <-> seller
+   * conversation, exactly like one raised from the chat. Reuse the thread for
+   * this order if there is one, otherwise fall back to any existing thread
+   * with the same seller, otherwise open a new one — so the buyer always ends
+   * up in a conversation that already contains the dispute banner.
+   */
+  let threadId: string | null = null;
+  if (sellerId) {
+    const t =
+      (await one<{ id: string }>(
+        `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? AND COALESCE(order_id,'') IN (?,?)`,
+        [u.id, sellerId, order.id, code]
+      )) ??
+      (await one<{ id: string }>(
+        `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? ORDER BY updated_at DESC LIMIT 1`,
+        [u.id, sellerId]
+      ));
+    if (t) {
+      threadId = t.id;
+    } else {
+      threadId = nid("thr_");
+      await run(`INSERT INTO threads (id,buyer_id,seller_id,order_id) VALUES (?,?,?,?)`, [
+        threadId, u.id, sellerId, order.id,
+      ]);
+    }
+  }
+
   const id = nid("dsp_");
   const dcode = "DSP" + Math.floor(10000 + Math.random() * 89999);
 
-  await tx([
+  const stmts: { sql: string; args: unknown[] }[] = [
     {
-      sql: `INSERT INTO disputes (id,code,order_id,buyer_id,seller_id,amount,reason,status)
-            VALUES (?,?,?,?,?,?,?, 'open')`,
-      args: [id, dcode, order.id, u.id, item?.seller_id ?? "", order.total, reason.trim()],
+      sql: `INSERT INTO disputes (id,code,order_id,buyer_id,seller_id,amount,reason,status,thread_id)
+            VALUES (?,?,?,?,?,?,?, 'open', ?)`,
+      args: [id, dcode, order.id, u.id, sellerId, order.total, text, threadId],
     },
     {
       sql: `INSERT INTO dispute_messages (id,dispute_id,sender,body) VALUES (?,?, 'buyer', ?)`,
-      args: [nid("dmg_"), id, reason.trim()],
+      args: [nid("dmg_"), id, text],
     },
     { sql: `UPDATE orders SET status='disputed' WHERE id=?`, args: [order.id] },
     { sql: `UPDATE order_items SET status='disputed' WHERE order_id=?`, args: [order.id] },
-  ] as never);
+  ];
 
-  if (item?.seller_id)
-    await notify(item.seller_id, "Dispute opened", `Order ${code} — respond within 24 hours.`, "/seller/disputes");
-    const [bMail, sMail] = await Promise.all([
-      one<{ email: string }>(`SELECT email FROM users WHERE id=?`, [u.id]),
-      one<{ email: string }>(`SELECT email FROM users WHERE id=?`, [item?.seller_id ?? ""]),
-    ]);
-    if (bMail?.email)
-      await mail.disputeOpened(bMail.email, { code: dcode, order: code, reason: reason.trim(), forSeller: false });
-    if (sMail?.email)
-      await mail.disputeOpened(sMail.email, { code: dcode, order: code, reason: reason.trim(), forSeller: true });
+  if (threadId) {
+    // The red banner both parties see in the conversation.
+    stmts.push({
+      sql: `INSERT INTO messages (id,thread_id,sender_id,body,kind,dispute_id)
+            VALUES (?,?,?,?, 'dispute', ?)`,
+      args: [nid("msg_"), threadId, u.id, text, id],
+    });
+    stmts.push({
+      sql: `UPDATE threads SET dispute_id=?, updated_at=datetime('now') WHERE id=?`,
+      args: [id, threadId],
+    });
+  }
 
+  await tx(stmts as never);
+
+  if (sellerId)
+    await notify(sellerId, "Dispute opened", `Order ${code} — respond in the conversation.`, "/seller/messages");
+
+  const [bMail, sMail] = await Promise.all([
+    one<{ email: string }>(`SELECT email FROM users WHERE id=?`, [u.id]),
+    one<{ email: string }>(`SELECT email FROM users WHERE id=?`, [sellerId]),
+  ]);
+  if (bMail?.email)
+    await mail.disputeOpened(bMail.email, { code: dcode, order: code, reason: text, forSeller: false });
+  if (sMail?.email)
+    await mail.disputeOpened(sMail.email, { code: dcode, order: code, reason: text, forSeller: true });
+
+  revalidatePath(`/dashboard/orders/${code}`);
+  revalidatePath("/dashboard/messages");
+  revalidatePath("/seller/messages");
   revalidatePath("/dashboard/disputes");
-  return { ok: true, code: dcode };
+  revalidatePath("/admin/disputes");
+  // `id` is the thread to open so the buyer sees their dispute immediately.
+  return { ok: true, code: dcode, id: threadId ?? undefined };
 }
 
 export async function disputeReplyAction(disputeCode: string, body: string): Promise<R> {

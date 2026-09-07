@@ -240,6 +240,11 @@ export default function MessagesView({
               <div className="min-w-0 flex-1">
                 <div className="line-clamp-1 text-[12.5px] font-bold">{t.other_name}</div>
                 <div className="line-clamp-1 text-[10.5px] muted">{t.last_body ?? "No messages yet"}</div>
+                {t.dispute_id && (
+                  <span className="mt-1 inline-block rounded bg-rose-500 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white">
+                    Disputed
+                  </span>
+                )}
               </div>
               {t.unread > 0 && (
                 <span className="shrink-0 rounded-full bg-rose-500 px-1.5 text-[9.5px] font-bold text-white">
