@@ -89,6 +89,13 @@ export type Dict = Record<string, string>;
 
 const en: Dict = {
   "nav.home": "Home",
+  "cat.trending": "Trending now",
+  "cat.searchBy": "Search by",
+  "cat.games": "games",
+  "cat.all": "All",
+  "cat.offer": "offer",
+  "cat.offers": "offers",
+  "cat.noGames": "No games match that search.",
   "nav.categories": "Categories",
   "nav.popularGames": "Popular games",
   "nav.allGames": "All games",

@@ -5,10 +5,10 @@ import OffersView from "@/components/seller/OffersView";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My Offers — G2X.GG" };
 
-export default async function Page({ searchParams }: { searchParams: { status?: string } }) {
+export default async function Page({ searchParams }: { searchParams: { status?: string; cat?: string } }) {
   const u = await requireUser();
   const [offers, catalog, fields] = await Promise.all([
-    getSellerOffers(u.id, searchParams.status),
+    getSellerOffers(u.id, searchParams.status, searchParams.cat),
     getCatalogForSeller(),
     getAllFieldTemplates(),
   ]);
@@ -18,6 +18,7 @@ export default async function Page({ searchParams }: { searchParams: { status?: 
       catalog={catalog}
       fields={fields}
       status={searchParams.status ?? "all"}
+      category={searchParams.cat ?? ""}
     />
   );
 }

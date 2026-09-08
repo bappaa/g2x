@@ -8,6 +8,8 @@ export type R = { ok: boolean; error?: string; id?: string };
 
 import { mail } from "../mail";
 import { escrowHoldHours } from "../escrow";
+import { scheduleSubscriptions } from "../subscription";
+import { getWallet, WITHDRAW_SQL } from "../wallet";
 
 async function notify(userId: string, title: string, body: string, href: string, kind = "order") {
   await run(
@@ -276,6 +278,20 @@ export async function deliverOrderAction(
     },
   ] as never);
 
+  /**
+   * A subscription is delivered over time, so its payout is spread over the
+   * term instead of landing in one lump. The plan is written here, keyed to
+   * the order's own `release_at`, so instalment 1 unlocks exactly when a
+   * normal product would have paid out and each later month follows 30 days
+   * behind. Idempotent, so re-delivering cannot double-schedule.
+   */
+  {
+    const o = await one<{ release_at: string | null }>(
+      `SELECT release_at FROM orders WHERE id=?`, [item.order_id]
+    );
+    if (o?.release_at) await scheduleSubscriptions(item.order_id, o.release_at);
+  }
+
   if (order) {
     await notify(
       order.buyer_id,
@@ -373,14 +389,32 @@ export async function requestWithdrawalAction(form: {
   amount: number; method: string; detail: string;
 }): Promise<R> {
   const s = await requireSeller();
+  const amt = Math.round(form.amount * 100) / 100;
+
+  /**
+   * Only *earned* money may leave the platform.
+   *
+   * The wallet is shared — a seller spends their earnings on the site like any
+   * buyer — but topped-up money is site credit, not cash. `users.withdrawable`
+   * is the earned portion, so the cap is the lower of that and the seller's
+   * released `available_bal`. Without this a seller could top up by card and
+   * withdraw it straight to a bank.
+   */
+  const wallet = await getWallet(s.id);
   const prof = await one<{ available_bal: number }>(
     `SELECT available_bal FROM seller_profiles WHERE user_id=?`, [s.id]
   );
-  const avail = Number(prof?.available_bal ?? 0);
-  const amt = Math.round(form.amount * 100) / 100;
+  const avail = Math.min(Number(prof?.available_bal ?? 0), wallet.withdrawable);
 
   if (!(amt >= 10)) return { ok: false, error: "Minimum withdrawal is $10.00." };
-  if (amt > avail) return { ok: false, error: `You can withdraw up to $${avail.toFixed(2)}.` };
+  if (amt > avail)
+    return {
+      ok: false,
+      error:
+        wallet.siteCredit > 0
+          ? `You can withdraw up to $${avail.toFixed(2)}. Topped-up balance ($${wallet.siteCredit.toFixed(2)}) can be spent on G2X but not withdrawn.`
+          : `You can withdraw up to $${avail.toFixed(2)}.`,
+    };
   if (!form.detail.trim()) return { ok: false, error: "Enter your payout details." };
 
   const pending = await one<{ n: number }>(
@@ -398,6 +432,12 @@ export async function requestWithdrawalAction(form: {
     {
       sql: `UPDATE seller_profiles SET available_bal = available_bal - ? WHERE user_id=?`,
       args: [amt, s.id],
+    },
+    {
+      // Money leaving the platform also leaves the shared wallet. The WHERE
+      // clause is the real guard against a concurrent double withdrawal.
+      sql: WITHDRAW_SQL,
+      args: [amt, amt, s.id, amt],
     },
     {
       sql: `INSERT INTO transactions (id,user_id,type,amount,reference)

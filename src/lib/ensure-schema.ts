@@ -48,6 +48,45 @@ const PATCHES: string[] = [
   `ALTER TABLE messages ADD COLUMN dispute_id TEXT`,
   `ALTER TABLE threads ADD COLUMN dispute_id TEXT`,
   `ALTER TABLE disputes ADD COLUMN thread_id TEXT`,
+
+  // --- Phase 18: split wallet -------------------------------------------
+  // `balance` stays the single spendable number. `withdrawable` tracks how
+  // much of it came from seller earnings — topped-up money can be spent but
+  // never cashed out, which stops the wallet being used to launder a card.
+  `ALTER TABLE users ADD COLUMN withdrawable REAL NOT NULL DEFAULT 0`,
+
+  // --- Phase 18: subscription drip-release --------------------------------
+  `ALTER TABLE products ADD COLUMN sub_months INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE offers ADD COLUMN sub_months INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE order_items ADD COLUMN sub_months INTEGER NOT NULL DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS subscription_schedule (
+     id TEXT PRIMARY KEY,
+     order_id TEXT NOT NULL,
+     order_item_id TEXT NOT NULL,
+     seller_id TEXT NOT NULL,
+     buyer_id TEXT NOT NULL,
+     month_no INTEGER NOT NULL,
+     months_total INTEGER NOT NULL,
+     amount REAL NOT NULL,
+     due_at TEXT NOT NULL,
+     released INTEGER NOT NULL DEFAULT 0,
+     released_at TEXT,
+     created_at TEXT DEFAULT (datetime('now'))
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_sub_due ON subscription_schedule(released, due_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_sub_order ON subscription_schedule(order_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_sub_item_month
+     ON subscription_schedule(order_item_id, month_no)`,
+
+  // --- Phase 18: dispute chat + 10-day media retention --------------------
+  `ALTER TABLE dispute_messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'`,
+  `ALTER TABLE dispute_messages ADD COLUMN attachment_name TEXT`,
+  `ALTER TABLE dispute_messages ADD COLUMN attachment_type TEXT`,
+  `ALTER TABLE dispute_messages ADD COLUMN attachment_size INTEGER`,
+  `ALTER TABLE dispute_messages ADD COLUMN attachment_data TEXT`,
+  `ALTER TABLE dispute_messages ADD COLUMN purged INTEGER NOT NULL DEFAULT 0`,
+  `CREATE INDEX IF NOT EXISTS idx_dmsg_dispute ON dispute_messages(dispute_id, created_at)`,
+  `ALTER TABLE messages ADD COLUMN purged INTEGER NOT NULL DEFAULT 0`,
 ];
 
 /**

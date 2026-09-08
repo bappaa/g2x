@@ -24,6 +24,7 @@ import { gatewayByCode, feeFor, limitError } from "../gateways";
 import { kycDueFor, markKycDue, kycThreshold } from "../buyer-kyc";
 import { ensureSchema } from "../ensure-schema";
 import { rateLimit } from "../ratelimit";
+import { SPEND_SQL, spendArgs } from "../wallet";
 
 async function notify(userId: string, title: string, body: string, href: string, kind = "order") {
   await run(
@@ -225,8 +226,10 @@ export async function placeOrderAction(form: {
 
   if (gw.code === "wallet") {
     stmts.push({
-      sql: `UPDATE users SET balance = balance - ? WHERE id=?`,
-      args: [total, u.id],
+      // Spends the non-withdrawable site credit first, so the seller's
+      // cashable earnings are preserved for as long as possible.
+      sql: SPEND_SQL,
+      args: spendArgs(total, u.id),
     });
     stmts.push({
       sql: `INSERT INTO transactions (id,user_id,type,amount,reference,order_id)
@@ -772,6 +775,18 @@ const MAX_ATTACHMENT = 2 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"];
 
 /**
+ * Dispute evidence may also be a short video, so the cap is larger there.
+ * Base64 inflates a payload by ~33%, and the row still has to fit comfortably
+ * inside a libSQL request, so 8 MB of source media is the practical ceiling.
+ */
+const MAX_EVIDENCE = 8 * 1024 * 1024;
+const ALLOWED_EVIDENCE = [
+  ...ALLOWED_TYPES,
+  "video/mp4", "video/webm", "video/quicktime",
+];
+const EVIDENCE_EXT = /\.(png|jpe?g|webp|gif|mp4|webm|mov)$/i;
+
+/**
  * Send an image in a chat thread.
  *
  * The file is stored in the database as a data URI rather than on disk,
@@ -819,6 +834,87 @@ export async function sendAttachmentAction(threadId: string, form: FormData): Pr
   revalidatePath("/dashboard/messages");
   revalidatePath("/seller/messages");
   revalidatePath("/admin/messages");
+  return { ok: true };
+}
+
+/**
+ * Post a message — optionally with image or video evidence — into a dispute.
+ *
+ * Both sides of a dispute need to show proof, so this is the one place that
+ * accepts video. Media lives in the database as a data URI (the host has no
+ * writable disk) and is purged automatically 10 days after the dispute closes
+ * by `purgeExpiredMedia`, so evidence never becomes permanent storage cost.
+ */
+export async function disputeMessageAction(disputeCode: string, form: FormData): Promise<R> {
+  const u = await requireUser();
+
+  const d = await one<{ id: string; buyer_id: string; seller_id: string; status: string }>(
+    `SELECT id, buyer_id, seller_id, status FROM disputes WHERE code=?`,
+    [disputeCode]
+  );
+  if (!d) return { ok: false, error: "Dispute not found." };
+
+  const sender = d.buyer_id === u.id ? "buyer" : d.seller_id === u.id ? "seller" : null;
+  if (!sender) return { ok: false, error: "Not allowed." };
+  if (["resolved", "rejected"].includes(d.status))
+    return { ok: false, error: "This dispute is closed." };
+
+  const body = String(form.get("body") ?? "").trim();
+  const file = form.get("file") as File | null;
+  const hasFile = !!file && typeof file !== "string" && file.size > 0;
+
+  if (!body && !hasFile) return { ok: false, error: "Write a message or attach evidence." };
+
+  let stmt: { sql: string; args: unknown[] };
+
+  if (hasFile) {
+    if (file.size > MAX_EVIDENCE)
+      return { ok: false, error: "Evidence must be 8 MB or smaller." };
+
+    const type = (file.type || "").toLowerCase();
+    if (!ALLOWED_EVIDENCE.includes(type) || !EVIDENCE_EXT.test(file.name || ""))
+      return { ok: false, error: "Attach a PNG, JPEG, WEBP, GIF, MP4, WEBM or MOV file." };
+
+    const buf = Buffer.from(await file.arrayBuffer());
+    const dataUri = `data:${type};base64,${buf.toString("base64")}`;
+    const kind = type.startsWith("video/") ? "video" : "image";
+
+    stmt = {
+      sql: `INSERT INTO dispute_messages
+              (id,dispute_id,sender,body,kind,attachment_name,attachment_type,attachment_size,attachment_data)
+            VALUES (?,?,?,?,?,?,?,?,?)`,
+      args: [
+        nid("dmg_"), d.id, sender, body || file.name.slice(0, 120), kind,
+        file.name.slice(0, 120), type, file.size, dataUri,
+      ],
+    };
+  } else {
+    stmt = {
+      sql: `INSERT INTO dispute_messages (id,dispute_id,sender,body,kind)
+            VALUES (?,?,?,?, 'text')`,
+      args: [nid("dmg_"), d.id, sender, body],
+    };
+  }
+
+  await tx([
+    stmt,
+    {
+      sql: `UPDATE disputes SET status='under_review' WHERE id=? AND status='open'`,
+      args: [d.id],
+    },
+  ] as never);
+
+  const other = sender === "buyer" ? d.seller_id : d.buyer_id;
+  await notify(
+    other,
+    "New message on a dispute",
+    `${disputeCode} — the ${sender} replied.`,
+    sender === "buyer" ? "/seller/disputes" : "/dashboard/orders"
+  );
+
+  revalidatePath("/seller/disputes");
+  revalidatePath("/dashboard/orders");
+  revalidatePath("/admin/disputes");
   return { ok: true };
 }
 

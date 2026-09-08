@@ -139,6 +139,25 @@ export const categoryBrands = unstable_cache(
  * Accounts, Boosting, Currency... This CASE pins the known slugs regardless,
  * and anything the admin adds later sorts after them by its own sort_order.
  */
+/**
+ * Catalog sort order used site-wide: **numbers first, then A-Z**.
+ *
+ * SQLite's default collation orders by code point, which already puts digits
+ * before letters, but it is also case-sensitive ("Zelda" < "apex"). Lowercasing
+ * inside the sort fixes that, and the leading CASE guarantees the numeric block
+ * comes first even for names starting with punctuation.
+ */
+export const NAME_SORT = (col: string) =>
+  `CASE WHEN substr(${col},1,1) GLOB '[0-9]' THEN 0 ELSE 1 END, lower(${col})`;
+
+/** JS equivalent of NAME_SORT, for sorting rows already in memory. */
+export function collate(a: string, b: string): number {
+  const na = /^[0-9]/.test(a) ? 0 : 1;
+  const nb = /^[0-9]/.test(b) ? 0 : 1;
+  if (na !== nb) return na - nb;
+  return a.toLowerCase().localeCompare(b.toLowerCase(), "en", { numeric: true });
+}
+
 export const CATEGORY_ORDER = [
   "currency",
   "top-up",
@@ -250,26 +269,51 @@ export const navMenu = unstable_cache(
       `SELECT c.slug, c.name FROM categories c
         WHERE c.status='active' ORDER BY ${CATEGORY_ORDER_SQL}`
     );
+    /**
+     * `sold` is real completed sales volume for that game *within that
+     * category*, so "Popular games" ranks itself from actual demand with no
+     * admin curation. `NAME_SORT` puts digits before letters so the full list
+     * reads 0-9 then A-Z, matching the alphabet index on the category pages.
+     */
     const rows = await all<{
-      category_slug: string; slug: string; name: string; logo: string; sort_order: number;
+      category_slug: string; slug: string; name: string; logo: string; sold: number;
     }>(
-      `SELECT gc.category_slug, g.slug, g.name, g.logo, g.sort_order
+      `SELECT gc.category_slug, g.slug, g.name, g.logo,
+              COALESCE((
+                SELECT SUM(oi.qty) FROM order_items oi
+                  JOIN products p ON p.id = oi.product_id
+                 WHERE p.game_slug = g.slug
+                   AND p.category_slug = gc.category_slug
+                   AND oi.status IN ('delivered','completed')
+              ), 0)
+              + COALESCE((
+                SELECT SUM(oi.qty) FROM order_items oi
+                  JOIN listings l ON l.id = oi.listing_id
+                 WHERE l.game_slug = g.slug
+                   AND l.category_slug = gc.category_slug
+                   AND oi.status IN ('delivered','completed')
+              ), 0) AS sold
          FROM games g
          JOIN game_categories gc ON gc.game_slug = g.slug
         WHERE g.status='active'
-        ORDER BY g.sort_order, g.name`
+        ORDER BY ${NAME_SORT("g.name")}`
     );
 
     return cats.map((c) => {
-      const games = rows
-        .filter((r) => r.category_slug === c.slug)
-        .map((g) => ({
-          slug: g.slug,
-          name: g.name,
-          logo: g.logo,
-          href: `/g/${g.slug}/${c.slug}`,
-        }));
-      return { slug: c.slug, name: c.name, popular: games.slice(0, 10), all: games };
+      const inCat = rows.filter((r) => r.category_slug === c.slug);
+      const toGame = (g: (typeof inCat)[number]) => ({
+        slug: g.slug,
+        name: g.name,
+        logo: g.logo,
+        href: `/g/${g.slug}/${c.slug}`,
+      });
+      // "All games" stays 0-9 then A-Z; "Popular" is purely sales-driven.
+      const all = inCat.map(toGame);
+      const popular = [...inCat]
+        .sort((a, b) => b.sold - a.sold || collate(a.name, b.name))
+        .slice(0, 10)
+        .map(toGame);
+      return { slug: c.slug, name: c.name, popular, all };
     });
   },
   ["nav-menu"],

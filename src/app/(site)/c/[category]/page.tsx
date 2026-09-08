@@ -1,15 +1,14 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   getCategory,
-  getGamesForCategory,
+  getCategoryGameIndex,
   getPopularProducts,
   getListings,
 } from "@/lib/queries";
-import { AnyLogo } from "@/components/BrandIcon";
 import { Breadcrumb, FadeIn } from "@/components/ui";
 import ProductCard from "@/components/browse/ProductCard";
 import ListingGrid from "@/components/browse/ListingGrid";
+import GameIndex from "@/components/browse/GameIndex";
 
 // Cached and shared by all visitors so navigation is instant. Per-user
 // state (wishlist hearts) hydrates client-side from /api/wishlist.
@@ -21,7 +20,7 @@ export default async function Page({ params }: { params: { category: string } })
 
   const isListing = cat.slug === "accounts" || cat.slug === "boosting";
   const [games, featured, listings] = await Promise.all([
-    getGamesForCategory(cat.slug),
+    getCategoryGameIndex(cat.slug),
     isListing ? Promise.resolve([]) : getPopularProducts(cat.slug, 12),
     isListing ? getListings({ category: cat.slug, limit: 48 }) : Promise.resolve([]),
   ]);
@@ -43,29 +42,9 @@ export default async function Page({ params }: { params: { category: string } })
         </div>
       </FadeIn>
 
-      <section className="mt-5 rounded-2xl panel p-4 sm:p-5">
-        <h2 className="mb-4 text-[14px] font-bold">Choose a game</h2>
-        <div className="grid min-w-0 grid-cols-3 gap-3 sm:grid-cols-5 sm:gap-4 lg:grid-cols-7">
-          {games.slice(0, 35).map((g) => (
-            <Link key={g.slug} href={`/g/${g.slug}/${cat.slug}`} className="group block">
-              <div className="tile aspect-square w-full border border-[var(--line)] soft">
-                <div className="grid h-full w-full place-items-center overflow-hidden transition-transform duration-500 group-hover:scale-110">
-                  <AnyLogo logo={g.logo} size={g.logo.startsWith("/") ? 200 : 44} />
-                </div>
-              </div>
-              <div className="mt-2 text-center text-[11px] font-medium transition-colors group-hover:text-brand-500">
-                {g.name}
-              </div>
-            </Link>
-          ))}
-        </div>
-        {games.length > 35 && (
-          <div className="mt-4 text-center text-[11.5px] muted">
-            +{games.length - 35} more games in {cat.name} — use the search bar above to jump straight
-            to one.
-          </div>
-        )}
-      </section>
+      <div className="mt-5">
+        <GameIndex games={games} category={cat.slug} />
+      </div>
 
       {isListing && (
         <div className="mt-5">

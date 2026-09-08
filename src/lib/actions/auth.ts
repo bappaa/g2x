@@ -36,6 +36,7 @@ async function welcome(userId: string, name: string) {
 }
 
 import { mail } from "../mail";
+import { SPEND_SQL, spendArgs } from "../wallet";
 import {
   generateUsername, validateUsername, isUsernameFree, usernameChangeFee, FREE_CHANGES,
 } from "../username";
@@ -260,8 +261,8 @@ export async function changeUsernameAction(raw: string): Promise<ActionResult> {
 
   if (fee > 0) {
     stmts.push({
-      sql: `UPDATE users SET balance = balance - ? WHERE id=?`,
-      args: [fee, u.id],
+      sql: SPEND_SQL,
+      args: spendArgs(fee, u.id),
     });
     stmts.push({
       sql: `INSERT INTO transactions (id,user_id,type,amount,reference)

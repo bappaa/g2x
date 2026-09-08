@@ -1,5 +1,7 @@
 import "server-only";
 import { all, one, run, tx, nid } from "./db";
+import { EARN_SQL } from "./wallet";
+import { monthsOf, releaseDueInstalments } from "./subscription";
 
 /**
  * ESCROW AUTO-RELEASE
@@ -62,8 +64,10 @@ export async function releaseDueEscrow(): Promise<{ released: number }> {
         );
         if (disputed) continue;
 
-        const items = await all<{ id: string; seller_id: string; seller_net: number }>(
-          `SELECT id, seller_id, seller_net FROM order_items WHERE order_id=?`,
+        const items = await all<{
+          id: string; seller_id: string; seller_net: number; sub_months: number | null;
+        }>(
+          `SELECT id, seller_id, seller_net, sub_months FROM order_items WHERE order_id=?`,
           [order.id]
         );
         if (!items.length) continue;
@@ -92,6 +96,15 @@ export async function releaseDueEscrow(): Promise<{ released: number }> {
         for (const it of items) {
           const net = Number(it.seller_net ?? 0);
           if (!(net > 0)) continue;
+
+          /**
+           * A subscription is delivered over time, so it is NOT paid out in
+           * one lump here. `scheduleSubscriptions` (below) has already written
+           * its instalment plan; the money stays in `pending_bal` and is
+           * released month by month by `releaseDueInstalments`.
+           */
+          if (monthsOf(it)) continue;
+
           stmts.push({
             sql: `UPDATE seller_profiles
                      SET pending_bal   = MAX(0, pending_bal - ?),
@@ -99,6 +112,8 @@ export async function releaseDueEscrow(): Promise<{ released: number }> {
                    WHERE user_id=?`,
             args: [net, net, it.seller_id],
           });
+          // Shared wallet: earnings are immediately spendable AND withdrawable.
+          stmts.push({ sql: EARN_SQL, args: [net, net, it.seller_id] });
           stmts.push({
             sql: `INSERT INTO transactions (id,user_id,type,amount,reference,order_id)
                   VALUES (?,?, 'payout', ?, ?, ?)`,
@@ -121,6 +136,9 @@ export async function releaseDueEscrow(): Promise<{ released: number }> {
   } catch {
     /* table missing or DB unavailable — nothing to do */
   }
+
+  // Subscription instalments run on the same sweep.
+  await releaseDueInstalments().catch(() => null);
 
   return { released };
 }

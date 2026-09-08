@@ -31,9 +31,11 @@ type FT = { id: string; category_slug: string; label: string; field_key: string;
 const TABS = ["all", "active", "paused", "out_of_stock", "draft"];
 
 export default function OffersView({
-  offers, catalog, fields, status,
+  offers, catalog, fields, status, category = "",
 }: {
   offers: Offer[]; catalog: Cat[]; fields: FT[]; status: string;
+  /** Set by the sidebar's My Offers drawer; "" means all categories. */
+  category?: string;
 }) {
   const router = useRouter();
   const [q, setQ] = useState("");
@@ -57,7 +59,12 @@ export default function OffersView({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-[18px] font-black sm:text-[22px] tracking-tight">My Offers</h1>
+        <h1 className="text-[18px] font-black sm:text-[22px] tracking-tight">
+          {category
+            ? offers[0]?.category_name ??
+              category.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+            : "My Offers"}
+        </h1>
         <Btn className="ml-auto flex items-center gap-1.5" onClick={() => { setEditing(null); setCreating(true); }}>
           <Plus size={14} /> New offer
         </Btn>
@@ -67,7 +74,13 @@ export default function OffersView({
         {TABS.map((t) => (
           <Link
             key={t}
-            href={t === "all" ? "/seller/offers" : `/seller/offers?status=${t}`}
+            href={
+              t === "all"
+                ? category
+                  ? `/seller/offers?cat=${category}`
+                  : "/seller/offers"
+                : `/seller/offers?status=${t}${category ? `&cat=${category}` : ""}`
+            }
             className={`rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all ${
               status === t ? "bg-brand-600 text-white" : "soft muted hover:text-brand-400"
             }`}

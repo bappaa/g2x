@@ -1,22 +1,10 @@
-import { requireUser } from "@/lib/session";
-import { getSellerListings, getGames, getCategories } from "@/lib/queries";
-import ListingsView from "@/components/seller/ListingsView";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-export const metadata = { title: "Listings — G2X.GG" };
-
-export default async function Page() {
-  const u = await requireUser();
-  const [listings, games, cats] = await Promise.all([
-    getSellerListings(u.id),
-    getGames(),
-    getCategories(),
-  ]);
-  return (
-    <ListingsView
-      listings={listings as never}
-      games={games.map((g) => ({ slug: g.slug, name: g.name }))}
-      categories={cats.filter((c) => ["accounts", "boosting"].includes(c.slug))}
-    />
-  );
+/**
+ * The standalone "Listings" page folded into the My Offers drawer, which is
+ * where sellers now manage everything they sell. Kept as a redirect so old
+ * links and bookmarks still land somewhere sensible.
+ */
+export default function Page() {
+  redirect("/seller/offers");
 }

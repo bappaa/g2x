@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { all, one } from "./db";
+import { NAME_SORT } from "./homepage";
 
 /* ============================ types ============================ */
 
@@ -54,6 +55,49 @@ export const getGamesForCategory = (category: string) =>
     `SELECT g.* FROM games g
        JOIN game_categories gc ON gc.game_slug=g.slug
       WHERE gc.category_slug=? AND g.status='active' ORDER BY g.sort_order`,
+    [category]
+  );
+
+/**
+ * Every game in a category with its live offer count and real sales volume.
+ *
+ * Powers the category browser: a sales-ranked "Trending now" strip plus the
+ * full 0-9 then A-Z index. Both come from the same query so the page needs a
+ * single round trip, and neither needs any admin curation — `sold` is actual
+ * delivered/completed quantity, so the ranking maintains itself.
+ */
+export const getCategoryGameIndex = (category: string) =>
+  all<{ slug: string; name: string; logo: string; offers: number; sold: number }>(
+    `SELECT g.slug, g.name, g.logo,
+            /* Accounts and Boosting stock lives in listings, everything else
+               in offers, so live inventory is the sum of both. */
+            COALESCE((
+              SELECT COUNT(*) FROM offers o
+                JOIN products p ON p.id = o.product_id
+               WHERE p.game_slug = g.slug AND p.category_slug = gc.category_slug
+                 AND o.status='active' AND o.stock > 0
+            ), 0)
+            + COALESCE((
+              SELECT COUNT(*) FROM listings l
+               WHERE l.game_slug = g.slug AND l.category_slug = gc.category_slug
+                 AND l.status='active' AND l.stock > 0
+            ), 0) AS offers,
+            COALESCE((
+              SELECT SUM(oi.qty) FROM order_items oi
+                JOIN products p ON p.id = oi.product_id
+               WHERE p.game_slug = g.slug AND p.category_slug = gc.category_slug
+                 AND oi.status IN ('delivered','completed')
+            ), 0)
+            + COALESCE((
+              SELECT SUM(oi.qty) FROM order_items oi
+                JOIN listings l ON l.id = oi.listing_id
+               WHERE l.game_slug = g.slug AND l.category_slug = gc.category_slug
+                 AND oi.status IN ('delivered','completed')
+            ), 0) AS sold
+       FROM games g
+       JOIN game_categories gc ON gc.game_slug = g.slug
+      WHERE gc.category_slug = ? AND g.status='active'
+      ORDER BY ${NAME_SORT("g.name")}`,
     [category]
   );
 
@@ -322,9 +366,9 @@ export const getSellerStats = async (sellerId: string) => {
   return { totals, today, pending: Number(pending?.n ?? 0), counts, rating };
 };
 
-export const getSellerOffers = (sellerId: string, status?: string) =>
-  all(
-    `SELECT o.*, p.name AS product_name, p.image, p.game_slug, p.category_slug, p.slug AS product_slug,
+export const getSellerOffers = (sellerId: string, status?: string, category?: string) => {
+  const args: (string | number)[] = [sellerId];
+  let sql = `SELECT o.*, p.name AS product_name, p.image, p.game_slug, p.category_slug, p.slug AS product_slug,
             g.name AS game_name, c.name AS category_name,
             (SELECT MIN(o2.price) FROM offers o2
               WHERE o2.product_id=o.product_id AND o2.status='active' AND o2.stock>0) AS market_min
@@ -332,10 +376,19 @@ export const getSellerOffers = (sellerId: string, status?: string) =>
        JOIN products p ON p.id=o.product_id
        JOIN games g ON g.slug=p.game_slug
        JOIN categories c ON c.slug=p.category_slug
-      WHERE o.seller_id=? ${status && status !== "all" ? "AND o.status=?" : ""}
-      ORDER BY o.updated_at DESC`,
-    status && status !== "all" ? [sellerId, status] : [sellerId]
-  );
+      WHERE o.seller_id=?`;
+  if (status && status !== "all") {
+    sql += ` AND o.status=?`;
+    args.push(status);
+  }
+  // Drives the "My Offers" category drawer in the seller sidebar.
+  if (category) {
+    sql += ` AND p.category_slug=?`;
+    args.push(category);
+  }
+  sql += ` ORDER BY o.updated_at DESC`;
+  return all(sql, args);
+};
 
 export const getSellerOffer = (id: string, sellerId: string) =>
   one(
