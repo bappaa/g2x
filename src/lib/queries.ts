@@ -2,6 +2,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { all, one } from "./db";
 import { NAME_SORT } from "./homepage";
+import { ensureSchema } from "./ensure-schema";
 
 /* ============================ types ============================ */
 
@@ -591,14 +592,61 @@ export type SellConfig = {
  * change — which is exactly the "admin can add what that product wants"
  * requirement.
  */
-export const getSellConfig = (slug: string) =>
-  one<SellConfig>(
-    `SELECT slug, name, unit_label, needs_title, needs_images, needs_credentials,
-            needs_quantity, allow_volume_discount, commission_pct,
-            sell_notice_title, sell_notice
-       FROM categories WHERE slug=? AND status='active'`,
+/**
+ * Sensible defaults for a category whose sell-flow columns have not been
+ * configured (or, on a database that has not been migrated yet, do not exist).
+ */
+const DEFAULT_SELL_CONFIG = {
+  unit_label: "unit",
+  needs_title: 1,
+  needs_images: 1,
+  needs_credentials: 0,
+  needs_quantity: 1,
+  allow_volume_discount: 1,
+  commission_pct: null as number | null,
+  sell_notice_title: null as string | null,
+  sell_notice: null as string | null,
+};
+
+export async function getSellConfig(slug: string): Promise<SellConfig | null> {
+  // A deploy can reach a database that has not been migrated yet (git deploys
+  // do not run migrations). Repair the schema first so the columns below exist.
+  await ensureSchema();
+
+  try {
+    const row = await one<SellConfig>(
+      `SELECT slug, name, unit_label, needs_title, needs_images, needs_credentials,
+              needs_quantity, allow_volume_discount, commission_pct,
+              sell_notice_title, sell_notice
+         FROM categories WHERE slug=? AND status='active'`,
+      [slug]
+    );
+    if (row) return { ...DEFAULT_SELL_CONFIG, ...row };
+  } catch {
+    /* falls through to the base query below */
+  }
+
+  /**
+   * Last resort: the sell-flow columns are still missing (an old replica, or a
+   * permission problem stopped the ALTER). Fall back to the columns that have
+   * always existed and serve defaults, so the seller can still list an item
+   * instead of hitting a 500.
+   */
+  const base = await one<{ slug: string; name: string }>(
+    `SELECT slug, name FROM categories WHERE slug=? AND status='active'`,
     [slug]
-  );
+  ).catch(() => null);
+  if (!base) return null;
+
+  return {
+    ...DEFAULT_SELL_CONFIG,
+    ...base,
+    // Accounts and subscriptions genuinely need the credential vault; without
+    // the config columns we infer it from the slug rather than losing it.
+    needs_credentials: ["accounts", "subscriptions"].includes(base.slug) ? 1 : 0,
+    allow_volume_discount: ["accounts", "boosting"].includes(base.slug) ? 0 : 1,
+  };
+}
 
 /**
  * Games a seller can list in, for step 2 of the wizard.

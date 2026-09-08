@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "tsx scripts/deploy-migrate.mts && next build",
     "start": "next start",
     "lint": "next lint",
     "db:push": "tsx scripts/seed.mts --schema-only",
@@ -18,7 +18,8 @@
     "db:content": "npm run db:migrate && npm run db:options && npm run db:cms && npm run db:nav && npm run db:gateways",
     "db:gateways": "tsx scripts/seed-gateways.mts",
     "check:env": "tsx scripts/check-env.mts",
-    "fx:refresh": "tsx scripts/fx-refresh.mts"
+    "fx:refresh": "tsx scripts/fx-refresh.mts",
+    "db:ensure": "tsx scripts/deploy-migrate.mts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

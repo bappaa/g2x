@@ -11,6 +11,7 @@ import { escrowHoldHours } from "../escrow";
 import { scheduleSubscriptions } from "../subscription";
 import { getWallet, WITHDRAW_SQL } from "../wallet";
 import { RESERVED_FIELD_KEYS } from "../queries";
+import { ensureSchema } from "../ensure-schema";
 
 async function notify(userId: string, title: string, body: string, href: string, kind = "order") {
   await run(
@@ -102,6 +103,8 @@ export async function saveOfferAction(form: FormData): Promise<R> {
  */
 export async function createOfferAction(form: FormData): Promise<R> {
   const s = await requireSeller();
+  // Git deploys do not migrate; make sure the Phase-19 columns exist first.
+  await ensureSchema();
 
   const productId = String(form.get("productId") ?? "").trim();
   const gameSlug = String(form.get("gameSlug") ?? "").trim();
@@ -137,7 +140,7 @@ export async function createOfferAction(form: FormData): Promise<R> {
     `SELECT needs_title, needs_credentials, allow_volume_discount
        FROM categories WHERE slug=?`,
     [product!.category_slug]
-  );
+  ).catch(() => null);
 
   const price = num(form.get("price"));
   const stock = Math.max(0, Math.floor(num(form.get("stock"))));
@@ -218,20 +221,37 @@ export async function createOfferAction(form: FormData): Promise<R> {
       ]
     );
   } else {
-    await run(
-      `INSERT INTO offers (id,seller_id,product_id,title,description,price,stock,min_qty,
-              delivery_time,delivery_method,login_method,region,platform,instructions,
-              custom_fields,images,volume_discounts,accounts_data,auto_delivery,status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        nid("off_"), s.id, productId, title.slice(0, 160), description || null,
-        price, finalStock, minQty, deliveryTime,
-        deliveryMethod || null, loginMethod || null, region || null, platform || null,
-        instructions || null, JSON.stringify(custom), JSON.stringify(images),
-        JSON.stringify(volume), accounts.length ? JSON.stringify(accounts) : null,
-        autoDelivery, status,
-      ]
-    );
+    const offerId = nid("off_");
+    try {
+      await run(
+        `INSERT INTO offers (id,seller_id,product_id,title,description,price,stock,min_qty,
+                delivery_time,delivery_method,login_method,region,platform,instructions,
+                custom_fields,images,volume_discounts,accounts_data,auto_delivery,status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          offerId, s.id, productId, title.slice(0, 160), description || null,
+          price, finalStock, minQty, deliveryTime,
+          deliveryMethod || null, loginMethod || null, region || null, platform || null,
+          instructions || null, JSON.stringify(custom), JSON.stringify(images),
+          JSON.stringify(volume), accounts.length ? JSON.stringify(accounts) : null,
+          autoDelivery, status,
+        ]
+      );
+    } catch (e) {
+      // If the Phase-19 columns are still absent, publish the offer with the
+      // long-standing columns rather than losing the seller's work.
+      if (!/no such column/i.test(String((e as Error)?.message ?? ""))) throw e;
+      await run(
+        `INSERT INTO offers (id,seller_id,product_id,title,price,stock,delivery_time,
+                delivery_method,login_method,region,platform,instructions,custom_fields,status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          offerId, s.id, productId, title.slice(0, 160), price, finalStock, deliveryTime,
+          deliveryMethod || null, loginMethod || null, region || null, platform || null,
+          instructions || null, JSON.stringify(custom), status,
+        ]
+      );
+    }
   }
 
   revalidatePath("/seller/offers");
