@@ -4,24 +4,35 @@ import Footer from "./Footer";
 import LiveSupport from "./LiveSupport";
 import { getSessionUser } from "@/lib/session";
 import { all, one } from "@/lib/db";
-import { getSearchIndex } from "@/lib/cache";
 import { footerNav, homeCategories, getBlocks, navMenu } from "@/lib/homepage";
 import { getLocale, getRates } from "@/lib/locale";
 import { dictFor } from "@/lib/i18n";
 import LocaleProvider from "./LocaleProvider";
 
 export default async function SiteShell({ children }: { children: React.ReactNode }) {
-  const u = await getSessionUser();
-
-  // Footer content is admin-managed: link columns from `nav_links`, the
-  // services rail from `categories`, and the blurb/site name from settings.
-  const [footerCols, footerCats, blocks, siteRow, menu] = await Promise.all([
+  /**
+   * PERFORMANCE: one waterfall, not five.
+   *
+   * Every one of these reads is independent of the others, but they used to run
+   * in four sequential stages (session -> footer/menu -> counters -> search ->
+   * rates). Locally that is invisible; against Turso each stage is a network
+   * round-trip, so the shell alone cost ~5 RTTs *before* the page itself began.
+   *
+   * The site-wide, user-independent reads are all cached (`unstable_cache`,
+   * tag "catalog"), so on a warm cache they cost nothing at all. Starting them
+   * together with the session lookup means the uncached path is a single hop.
+   */
+  const shellData = Promise.all([
     footerNav(),
     homeCategories(),
     getBlocks(),
     one<{ value: string }>(`SELECT value FROM settings WHERE key='site_name'`),
     navMenu(),
+    getRates(),
   ]);
+
+  const [u, [footerCols, footerCats, blocks, siteRow, menu, rates]] =
+    await Promise.all([getSessionUser(), shellData]);
   const footerServices = footerCats.slice(0, 4).map((c) => ({
     slug: c.slug,
     name: c.name,
@@ -74,9 +85,7 @@ export default async function SiteShell({ children }: { children: React.ReactNod
     }));
   }
 
-  const searchIndex = await getSearchIndex();
   const { lang, currency } = getLocale();
-  const rates = await getRates();
 
   return (
     <LocaleProvider lang={lang} currency={currency} dict={dictFor(lang)} rates={rates}>
@@ -99,7 +108,6 @@ export default async function SiteShell({ children }: { children: React.ReactNod
         cartCount={cartCount}
         notifications={notifications}
         unread={unread}
-        searchIndex={searchIndex}
         marquee={marquee}
         navMenu={menu}
       />

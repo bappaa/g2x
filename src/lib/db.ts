@@ -115,11 +115,46 @@ function plain<T>(row: unknown, columns: string[]): T {
   return out as T;
 }
 
+/**
+ * Transient failures worth one retry.
+ *
+ * Serverless functions reuse HTTP/2 connections between invocations. When the
+ * platform freezes a container the socket can be closed underneath us, and the
+ * next query fails with "Connection closed" / "stream closed" before it ever
+ * reaches Turso. That surfaced in production as
+ * `Error: Connection closed.` in the browser console with a blank page.
+ *
+ * These are connection-level faults, not query faults: the statement never
+ * executed, so retrying once is safe even for writes.
+ */
+function isTransient(e: unknown): boolean {
+  const m = String((e as Error)?.message ?? "").toLowerCase();
+  return (
+    m.includes("connection closed") ||
+    m.includes("stream closed") ||
+    m.includes("socket hang up") ||
+    m.includes("econnreset") ||
+    m.includes("fetch failed") ||
+    m.includes("network")
+  );
+}
+
+async function exec(sql: string, args: InArgs) {
+  try {
+    return await db.execute({ sql, args });
+  } catch (e) {
+    if (!isTransient(e)) throw e;
+    // One immediate retry on a fresh connection.
+    await new Promise((r) => setTimeout(r, 120));
+    return db.execute({ sql, args });
+  }
+}
+
 export async function all<T = Record<string, unknown>>(
   sql: string,
   args: InArgs = []
 ): Promise<T[]> {
-  const rs = await db.execute({ sql, args });
+  const rs = await exec(sql, args);
   const cols = rs.columns as string[];
   return rs.rows.map((r) => plain<T>(r, cols));
 }
@@ -133,7 +168,7 @@ export async function one<T = Record<string, unknown>>(
 }
 
 export async function run(sql: string, args: InArgs = []) {
-  return db.execute({ sql, args });
+  return exec(sql, args);
 }
 
 export async function tx(statements: { sql: string; args?: InArgs }[]) {

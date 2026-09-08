@@ -104,6 +104,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        {/*
+          Apply the saved theme before first paint.
+          The server always renders `class="dark"`, and the Header only reads
+          localStorage after hydration — so a light-theme visitor saw a dark
+          flash on every navigation. This runs synchronously in <head>, before
+          the browser paints anything, so the correct theme (and the matching
+          `color-scheme` for native dropdowns) is right from frame one.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("g2x.theme");if(t==="light"){document.documentElement.classList.remove("dark")}}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className={inter.className}>
         <script
           type="application/ld+json"

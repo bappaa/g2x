@@ -368,7 +368,21 @@ export const getSellerStats = async (sellerId: string) => {
   return { totals, today, pending: Number(pending?.n ?? 0), counts, rating };
 };
 
-export const getSellerOffers = (sellerId: string, status?: string, category?: string) => {
+/**
+ * A seller's offers, paginated.
+ *
+ * This used to return every row. A store with a few hundred offers rendered
+ * them all into the HTML — ~900 KB of markup on a single page — which is what
+ * made the offers page (and the "New offer" button on it) feel slow. Capping
+ * the page keeps the payload flat no matter how large the store grows.
+ */
+export const getSellerOffers = (
+  sellerId: string,
+  status?: string,
+  category?: string,
+  limit = 30,
+  offset = 0
+) => {
   const args: (string | number)[] = [sellerId];
   let sql = `SELECT o.*, p.name AS product_name, p.image, p.game_slug, p.category_slug, p.slug AS product_slug,
             g.name AS game_name, c.name AS category_name,
@@ -388,8 +402,20 @@ export const getSellerOffers = (sellerId: string, status?: string, category?: st
     sql += ` AND p.category_slug=?`;
     args.push(category);
   }
-  sql += ` ORDER BY o.updated_at DESC`;
+  sql += ` ORDER BY o.updated_at DESC LIMIT ? OFFSET ?`;
+  args.push(limit, offset);
   return all(sql, args);
+};
+
+/** Total offers matching the same filters — drives the pager. */
+export const countSellerOffers = (sellerId: string, status?: string, category?: string) => {
+  const args: (string | number)[] = [sellerId];
+  let sql = `SELECT COUNT(*) AS n FROM offers o
+               JOIN products p ON p.id=o.product_id
+              WHERE o.seller_id=?`;
+  if (status && status !== "all") { sql += ` AND o.status=?`; args.push(status); }
+  if (category) { sql += ` AND p.category_slug=?`; args.push(category); }
+  return one<{ n: number }>(sql, args);
 };
 
 export const getSellerOffer = (id: string, sellerId: string) =>
@@ -657,21 +683,26 @@ export async function getSellConfig(slug: string): Promise<SellConfig | null> {
  * A game qualifies if it is attached to the category at all — otherwise
  * Accounts and Boosting show an empty picker, since they have no products.
  */
-export const getSellGames = (category: string) =>
-  all<{ slug: string; name: string; logo: string; products: number }>(
-    `SELECT g.slug, g.name, g.logo,
-            (SELECT COUNT(*) FROM products p
-              WHERE p.game_slug = g.slug AND p.category_slug = ? AND p.status='active') AS products
-       FROM games g
-       JOIN game_categories gc ON gc.game_slug = g.slug
-      WHERE gc.category_slug = ? AND g.status='active'
-      ORDER BY ${NAME_SORT("g.name")}`,
-    [category, category]
-  );
+export const getSellGames = unstable_cache(
+  (category: string) =>
+    all<{ slug: string; name: string; logo: string; products: number }>(
+      `SELECT g.slug, g.name, g.logo,
+              (SELECT COUNT(*) FROM products p
+                WHERE p.game_slug = g.slug AND p.category_slug = ? AND p.status='active') AS products
+         FROM games g
+         JOIN game_categories gc ON gc.game_slug = g.slug
+        WHERE gc.category_slug = ? AND g.status='active'
+        ORDER BY ${NAME_SORT("g.name")}`,
+      [category, category]
+    ),
+  ["sell-games"],
+  { tags: ["catalog"], revalidate: 300 }
+);
 
 /** Admin-listed products for one game+category — step 3 of the wizard. */
-export const getSellProducts = (game: string, category: string) =>
-  all<{
+export const getSellProducts = unstable_cache(
+  (game: string, category: string) =>
+    all<{
     id: string; name: string; image: string; base_price: number;
     region: string | null; platform: string | null; delivery_method: string | null;
     market_min: number | null; offer_count: number;
@@ -682,15 +713,48 @@ export const getSellProducts = (game: string, category: string) =>
             (SELECT COUNT(*) FROM offers o
               WHERE o.product_id=p.id AND o.status='active' AND o.stock>0) AS offer_count
        FROM products p
-      WHERE p.game_slug=? AND p.category_slug=? AND p.status='active'
-      ORDER BY p.sort_order, p.base_price`,
-    [game, category]
-  );
+        WHERE p.game_slug=? AND p.category_slug=? AND p.status='active'
+        ORDER BY p.sort_order, p.base_price`,
+      [game, category]
+    ),
+  ["sell-products"],
+  { tags: ["catalog"], revalidate: 300 }
+);
+
+/**
+ * Every dropdown the offer form needs, in ONE query.
+ *
+ * The wizard needs six lists (region, platform, delivery method, delivery time,
+ * login method…). Fetching them individually is six network round-trips to
+ * Turso for what is a single small table; grouping them client-side turns that
+ * into one. Cached, because option lists only change when an admin edits them.
+ */
+export const getOptionLists = unstable_cache(
+  async (keys: string[]): Promise<Record<string, { value: string; label: string }[]>> => {
+    if (!keys.length) return {};
+    const rows = await all<{ list_key: string; value: string; label: string }>(
+      `SELECT list_key, value, label FROM option_lists
+        WHERE active=1 AND list_key IN (${keys.map(() => "?").join(",")})
+        ORDER BY sort_order, label`,
+      keys
+    );
+    const out: Record<string, { value: string; label: string }[]> = {};
+    for (const k of keys) out[k] = [];
+    for (const r of rows) (out[r.list_key] ??= []).push({ value: r.value, label: r.label });
+    return out;
+  },
+  ["option-lists"],
+  { tags: ["catalog", "options"], revalidate: 300 }
+);
 
 /** Admin-managed dropdown values (regions, platforms, delivery methods…). */
-export const getOptionList = (listKey: string) =>
-  all<{ value: string; label: string }>(
-    `SELECT value, label FROM option_lists
-      WHERE list_key=? AND active=1 ORDER BY sort_order, label`,
-    [listKey]
-  );
+export const getOptionList = unstable_cache(
+  (listKey: string) =>
+    all<{ value: string; label: string }>(
+      `SELECT value, label FROM option_lists
+        WHERE list_key=? AND active=1 ORDER BY sort_order, label`,
+      [listKey]
+    ),
+  ["option-list"],
+  { tags: ["catalog", "options"], revalidate: 300 }
+);

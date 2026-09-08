@@ -2,7 +2,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { requireSeller } from "@/lib/session";
 import { one } from "@/lib/db";
-import { getSellConfig, getFieldTemplates, getOptionList } from "@/lib/queries";
+import { getSellConfig, getFieldTemplates, getOptionLists } from "@/lib/queries";
 import { SellCrumbs, SellHeader } from "@/components/seller/SellWizard";
 import OfferForm from "@/components/seller/OfferForm";
 import { img } from "@/lib/img";
@@ -44,15 +44,16 @@ export default async function Page({
   };
 
   // Dropdown values are all admin-managed option lists.
-  const [fields, regions, platforms, deliveryMethods, deliveryTimes, loginMethods] =
-    await Promise.all([
-      getFieldTemplates(cfg.slug),
-      getOptionList("region"),
-      getOptionList("platform"),
-      getOptionList("delivery_method"),
-      getOptionList("delivery_time"),
-      getOptionList("login_method"),
-    ]);
+  const [fields, opts] = await Promise.all([
+    getFieldTemplates(cfg.slug),
+    // One query for all five dropdowns instead of five round-trips.
+    getOptionLists(["region", "platform", "delivery_method", "delivery_time", "login_method"]),
+  ]);
+  const regions = opts.region ?? [];
+  const platforms = opts.platform ?? [];
+  const deliveryMethods = opts.delivery_method ?? [];
+  const deliveryTimes = opts.delivery_time ?? [];
+  const loginMethods = opts.login_method ?? [];
 
   return (
     <div>

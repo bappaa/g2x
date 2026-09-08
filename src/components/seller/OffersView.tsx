@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -32,9 +32,10 @@ type FT = { id: string; category_slug: string; label: string; field_key: string;
 const TABS = ["all", "active", "paused", "out_of_stock", "draft"];
 
 export default function OffersView({
-  offers, catalog, fields, status, category = "",
+  offers, fields, status, category = "", page = 1, perPage = 30, total = 0,
 }: {
-  offers: Offer[]; catalog: Cat[]; fields: FT[]; status: string;
+  offers: Offer[]; fields: FT[]; status: string;
+  page?: number; perPage?: number; total?: number;
   /** Set by the sidebar's My Offers drawer; "" means all categories. */
   category?: string;
 }) {
@@ -178,11 +179,37 @@ export default function OffersView({
         </div>
       )}
 
+      {total > perPage && (
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <span className="text-[11.5px] muted">
+            Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
+          </span>
+          <div className="flex items-center gap-2">
+            <PageLink
+              to={page - 1}
+              disabled={page <= 1}
+              status={status}
+              category={category}
+              label="Previous"
+            />
+            <span className="text-[11.5px] muted">
+              {page} / {Math.ceil(total / perPage)}
+            </span>
+            <PageLink
+              to={page + 1}
+              disabled={page >= Math.ceil(total / perPage)}
+              status={status}
+              category={category}
+              label="Next"
+            />
+          </div>
+        </div>
+      )}
+
       <AnimatePresence>
         {(creating || editing) && (
           <OfferModal
             offer={editing}
-            catalog={catalog}
             fields={fields}
             onClose={() => { setCreating(false); setEditing(null); }}
             onSaved={() => { setCreating(false); setEditing(null); router.refresh(); }}
@@ -190,6 +217,35 @@ export default function OffersView({
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+/** Pager link that preserves the current status + category filters. */
+function PageLink({
+  to, disabled, status, category, label,
+}: {
+  to: number; disabled: boolean; status: string; category: string; label: string;
+}) {
+  const qs = new URLSearchParams();
+  if (status && status !== "all") qs.set("status", status);
+  if (category) qs.set("cat", category);
+  if (to > 1) qs.set("page", String(to));
+  const href = `/seller/offers${qs.toString() ? `?${qs}` : ""}`;
+
+  if (disabled)
+    return (
+      <span className="cursor-not-allowed rounded-lg soft px-3 py-1.5 text-[12px] font-semibold opacity-40">
+        {label}
+      </span>
+    );
+  return (
+    <Link
+      href={href}
+      scroll
+      className="rounded-lg soft px-3 py-1.5 text-[12px] font-semibold transition-colors hover:bg-brand-600/10 hover:text-brand-400"
+    >
+      {label}
+    </Link>
   );
 }
 
@@ -212,18 +268,27 @@ function IconBtn({
 }
 
 function OfferModal({
-  offer, catalog, fields, onClose, onSaved,
+  offer, fields, onClose, onSaved,
 }: {
-  offer: Offer | null; catalog: Cat[]; fields: FT[];
+  offer: Offer | null; fields: FT[];
   onClose: () => void; onSaved: () => void;
 }) {
   const money = useMoney();
   const [productId, setProductId] = useState(offer?.product_id ?? "");
+  const [filtered, setFiltered] = useState<Cat[]>([]);
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
 
-  const product = catalog.find((c) => c.id === productId);
+  /**
+   * The selected product comes from the fetched rows; when editing an existing
+   * offer the row may not be in the current search results, so fall back to the
+   * category already stored on the offer. Only `category_slug` is needed here,
+   * to decide which admin field templates apply.
+   */
+  const product =
+    filtered.find((c) => c.id === productId) ??
+    (offer ? ({ category_slug: offer.category_slug } as Cat) : undefined);
   const catFields = useMemo(
     () => fields.filter((f) => f.category_slug === (product?.category_slug ?? "")),
     [fields, product]
@@ -233,9 +298,21 @@ function OfferModal({
     existing = offer?.custom_fields ? JSON.parse(offer.custom_fields) : {};
   } catch {}
 
-  const filtered = catalog
-    .filter((c) => !q || `${c.game_name} ${c.name}`.toLowerCase().includes(q.toLowerCase()))
-    .slice(0, 40);
+  /**
+   * The catalog is fetched as the seller types rather than shipped with the
+   * page: embedding all 927 products cost ~1.3 MB of HTML on every load.
+   * Debounced so a fast typist does not fire a request per keystroke.
+   */
+  useEffect(() => {
+    let alive = true;
+    const id = setTimeout(() => {
+      fetch(`/api/seller/catalog?q=${encodeURIComponent(q)}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((rows: Cat[]) => { if (alive) setFiltered(rows); })
+        .catch(() => { if (alive) setFiltered([]); });
+    }, q ? 220 : 0);
+    return () => { alive = false; clearTimeout(id); };
+  }, [q]);
 
   return (
     <motion.div

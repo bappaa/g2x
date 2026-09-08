@@ -9,6 +9,9 @@
   --line: #e6e8ef;
   --text: #0b0d17;
   --soft: #f6f7fb;
+  /* Tells the browser to paint native widgets (select popups, scrollbars,
+     date pickers, autofill) with the light palette. */
+  color-scheme: light;
 }
 .dark {
   --bg: #05060c;
@@ -17,6 +20,43 @@
   --line: #1c2035;
   --text: #f3f4fb;
   --soft: #0a0c18;
+  /* Without this the operating system draws <select> dropdown lists in its own
+     light theme — white text on a near-white popup, which is unreadable in dark
+     mode. `color-scheme` is the only way to restyle a native option list; the
+     popup itself cannot be reached with CSS. */
+  color-scheme: dark;
+}
+
+/*
+ * Native form controls.
+ *
+ * `color-scheme` fixes the popup, and these rules keep the closed control
+ * consistent with the rest of the UI across browsers. Firefox needs the
+ * explicit background/colour on `option`, since it does not always inherit.
+ */
+select,
+option,
+optgroup {
+  background-color: var(--panel);
+  color: var(--text);
+}
+
+select option:checked,
+select option:hover {
+  background-color: var(--soft);
+  color: var(--text);
+}
+
+/* Chrome/Safari autofill would otherwise flash a hard-coded pale yellow. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: var(--text);
+  -webkit-box-shadow: 0 0 0 1000px var(--soft) inset;
+  caret-color: var(--text);
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 html,

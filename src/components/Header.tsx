@@ -45,6 +45,8 @@ export type HeaderUser = {
   balance: number;
 } | null;
 
+export type SearchRow = { label: string; href: string; logo: string; kind: string };
+
 export type HeaderNotif = { id: string; title: string; body: string | null; href: string | null; at: string; read: boolean };
 
 
@@ -53,7 +55,6 @@ export default function Header({
   cartCount,
   notifications,
   unread,
-  searchIndex,
   marquee = [],
   navMenu = [],
 }: {
@@ -61,7 +62,6 @@ export default function Header({
   cartCount: number;
   notifications: HeaderNotif[];
   unread: number;
-  searchIndex: { label: string; href: string; logo: string; kind: string }[];
   marquee?: string[];
   /** Category dropdowns, built from the live catalog. */
   navMenu?: MenuCategory[];
@@ -115,11 +115,29 @@ export default function Header({
     setBell(false);
   }, [path]);
 
-  const results = q.trim()
-    ? searchIndex
-        .filter((r) => r.label.toLowerCase().includes(q.trim().toLowerCase()))
-        .slice(0, 8)
-    : [];
+  /**
+   * Search results come from /api/search rather than a prop.
+   *
+   * The full index is ~45 KB and was embedded in every page's HTML for a box
+   * most visitors never open. Fetching it on demand (debounced, and cached for
+   * 5 minutes at the edge) removed that weight from the entire site.
+   */
+  const [results, setResults] = useState<SearchRow[]>([]);
+  useEffect(() => {
+    const term = q.trim();
+    if (!term) {
+      setResults([]);
+      return;
+    }
+    let alive = true;
+    const id = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(term)}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((rows: SearchRow[]) => { if (alive) setResults(rows.slice(0, 8)); })
+        .catch(() => { if (alive) setResults([]); });
+    }, 180);
+    return () => { alive = false; clearTimeout(id); };
+  }, [q]);
 
   return (
     <div
