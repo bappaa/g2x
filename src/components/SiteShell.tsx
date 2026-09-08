@@ -5,7 +5,7 @@ import LiveSupport from "./LiveSupport";
 import { getSessionUser } from "@/lib/session";
 import { all, one } from "@/lib/db";
 import { getSearchIndex } from "@/lib/cache";
-import { footerNav, homeCategories, getBlocks } from "@/lib/homepage";
+import { footerNav, homeCategories, getBlocks, navMenu } from "@/lib/homepage";
 import { getLocale, getRates } from "@/lib/locale";
 import { dictFor } from "@/lib/i18n";
 import LocaleProvider from "./LocaleProvider";
@@ -15,11 +15,12 @@ export default async function SiteShell({ children }: { children: React.ReactNod
 
   // Footer content is admin-managed: link columns from `nav_links`, the
   // services rail from `categories`, and the blurb/site name from settings.
-  const [footerCols, footerCats, blocks, siteRow] = await Promise.all([
+  const [footerCols, footerCats, blocks, siteRow, menu] = await Promise.all([
     footerNav(),
     homeCategories(),
     getBlocks(),
     one<{ value: string }>(`SELECT value FROM settings WHERE key='site_name'`),
+    navMenu(),
   ]);
   const footerServices = footerCats.slice(0, 4).map((c) => ({
     slug: c.slug,
@@ -99,6 +100,7 @@ export default async function SiteShell({ children }: { children: React.ReactNod
         unread={unread}
         searchIndex={searchIndex}
         marquee={marquee}
+        navMenu={menu}
       />
       <WishlistProvider>{children}</WishlistProvider>
       <Footer

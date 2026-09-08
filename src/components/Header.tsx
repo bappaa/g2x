@@ -30,6 +30,7 @@ import { useT } from "./LocaleProvider";
 import { logoutAction } from "@/lib/actions/auth";
 import { markNotificationsReadAction } from "@/lib/actions/shop";
 import { img } from "@/lib/img";
+import { DesktopNav, MobileCategoryNav, type MenuCategory } from "./NavMenu";
 
 export type HeaderUser = {
   id: string;
@@ -43,15 +44,6 @@ export type HeaderUser = {
 
 export type HeaderNotif = { id: string; title: string; body: string | null; href: string | null; at: string; read: boolean };
 
-const nav = [
-  { label: "Home", key: "nav.home", href: "/" },
-  { label: "Currency", key: "nav.currency", href: "/c/currency" },
-  { label: "Top Up", key: "nav.topup", href: "/c/top-up" },
-  { label: "Items", key: "nav.items", href: "/c/items" },
-  { label: "Accounts", key: "nav.accounts", href: "/c/accounts" },
-  { label: "Subscription", key: "nav.subscription", href: "/c/subscriptions" },
-  { label: "Boosting", key: "nav.boosting", href: "/c/boosting" },
-];
 
 export default function Header({
   user,
@@ -60,6 +52,7 @@ export default function Header({
   unread,
   searchIndex,
   marquee = [],
+  navMenu = [],
 }: {
   user: HeaderUser;
   cartCount: number;
@@ -67,6 +60,8 @@ export default function Header({
   unread: number;
   searchIndex: { label: string; href: string; logo: string; kind: string }[];
   marquee?: string[];
+  /** Category dropdowns, built from the live catalog. */
+  navMenu?: MenuCategory[];
 }) {
   const t = useT();
   const [dark, setDark] = useState(true);
@@ -152,28 +147,7 @@ export default function Header({
             <Logo />
           </Link>
 
-          <nav className="ml-1 hidden shrink-0 items-center gap-3.5 xl:flex 2xl:gap-4">
-            {nav.map((n) => {
-              const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
-              return (
-                <Link
-                  key={n.label}
-                  href={n.href}
-                  className={`relative whitespace-nowrap py-1.5 text-[13px] font-medium transition-colors hover:text-brand-500 ${
-                    active ? "text-brand-500" : ""
-                  }`}
-                >
-                  {t(n.key)}
-                  {active && (
-                    <motion.span
-                      layoutId="navline"
-                      className="absolute -bottom-1 left-0 h-[2.5px] w-full rounded-full bg-brand-500"
-                    />
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
+          <DesktopNav menu={navMenu} homeActive={path === "/"} />
 
           <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
             {/* search — the flexible element; nav + controls keep their width */}
@@ -382,20 +356,21 @@ export default function Header({
                   <LocaleSwitcher compact />
                 </div>
 
-                {nav.map((n) => {
-                  const active = path === n.href;
-                  return (
-                    <Link
-                      key={n.label}
-                      href={n.href}
-                      className={`flex items-center rounded-xl px-3 py-2.5 text-[13.5px] transition-colors ${
-                        active ? "bg-brand-600/15 font-semibold text-brand-400" : "hover:bg-brand-600/10"
-                      }`}
-                    >
-                      {t(n.key)}
-                    </Link>
-                  );
-                })}
+                <Link
+                  href="/"
+                  className={`flex items-center rounded-xl px-3 py-2.5 text-[13.5px] transition-colors ${
+                    path === "/" ? "bg-brand-600/15 font-semibold text-brand-400" : "hover:bg-brand-600/10"
+                  }`}
+                >
+                  {t("nav.home")}
+                </Link>
+
+                <div className="my-1.5 border-t border-[var(--line)] pt-1.5">
+                  <div className="px-3 pb-1.5 text-[11px] font-bold muted">
+                    {t("nav.categories", "Categories")}
+                  </div>
+                  <MobileCategoryNav menu={navMenu} onNavigate={() => setOpen(false)} />
+                </div>
 
                 {user?.isSeller && user.sellerStatus === "active" && (
                   <Link

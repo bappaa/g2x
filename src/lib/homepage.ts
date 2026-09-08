@@ -128,12 +128,39 @@ export const categoryBrands = unstable_cache(
   { tags: ["catalog"], revalidate: 300 }
 );
 
+/**
+ * Canonical category order — the same order as the main navigation:
+ * Currency, Top Up, Items, Accounts, Subscription, Boosting.
+ *
+ * `categories.sort_order` is the real source of truth, but a database that
+ * was seeded before sort_order existed (or restored without it) leaves every
+ * row at 0, and `ORDER BY sort_order, name` then silently degrades to
+ * alphabetical — which is why the homepage tiles and the footer were showing
+ * Accounts, Boosting, Currency... This CASE pins the known slugs regardless,
+ * and anything the admin adds later sorts after them by its own sort_order.
+ */
+export const CATEGORY_ORDER = [
+  "currency",
+  "top-up",
+  "items",
+  "accounts",
+  "subscriptions",
+  "boosting",
+] as const;
+
+/** SQL fragment ordering categories the same way the navbar does. */
+const CATEGORY_ORDER_SQL = `
+  CASE c.slug
+    ${CATEGORY_ORDER.map((slug, i) => `WHEN '${slug}' THEN ${i}`).join("\n    ")}
+    ELSE 100 + COALESCE(c.sort_order, 0)
+  END, c.sort_order, c.name`;
+
 /** Category rail definitions come from the `categories` table, admin-managed. */
 export const homeCategories = unstable_cache(
   async () =>
     all<{ slug: string; name: string; icon: string; blurb: string }>(
-      `SELECT slug, name, icon, blurb FROM categories
-        WHERE status='active' ORDER BY sort_order, name`
+      `SELECT c.slug, c.name, c.icon, c.blurb FROM categories c
+        WHERE c.status='active' ORDER BY ${CATEGORY_ORDER_SQL}`
     ),
   ["home-categories"],
   { tags: ["catalog"], revalidate: 300 }
@@ -192,5 +219,59 @@ export const footerNav = unstable_cache(
     return order.map((heading) => ({ heading, links: map[heading] }));
   },
   ["footer-nav"],
+  { tags: ["catalog", "nav"], revalidate: 300 }
+);
+
+/* ==================================================================== */
+/* Navigation mega-menu                                                  */
+/* ==================================================================== */
+
+export type MenuGame = { slug: string; name: string; logo: string; href: string };
+export type MenuCategory = {
+  slug: string;
+  name: string;
+  /** Highest `sort_order` games — the short "Popular" column. */
+  popular: MenuGame[];
+  /** Every game in the category, for the searchable "All games" column. */
+  all: MenuGame[];
+};
+
+/**
+ * Data behind the header's category dropdowns.
+ *
+ * One row per active category, each carrying the games that actually have
+ * listings in it, so the menu is entirely admin-driven: remove a game or a
+ * category in the admin panel and it disappears from the nav. Cached with the
+ * catalog tag, so a catalog write refreshes it.
+ */
+export const navMenu = unstable_cache(
+  async (): Promise<MenuCategory[]> => {
+    const cats = await all<{ slug: string; name: string }>(
+      `SELECT c.slug, c.name FROM categories c
+        WHERE c.status='active' ORDER BY ${CATEGORY_ORDER_SQL}`
+    );
+    const rows = await all<{
+      category_slug: string; slug: string; name: string; logo: string; sort_order: number;
+    }>(
+      `SELECT gc.category_slug, g.slug, g.name, g.logo, g.sort_order
+         FROM games g
+         JOIN game_categories gc ON gc.game_slug = g.slug
+        WHERE g.status='active'
+        ORDER BY g.sort_order, g.name`
+    );
+
+    return cats.map((c) => {
+      const games = rows
+        .filter((r) => r.category_slug === c.slug)
+        .map((g) => ({
+          slug: g.slug,
+          name: g.name,
+          logo: g.logo,
+          href: `/g/${g.slug}/${c.slug}`,
+        }));
+      return { slug: c.slug, name: c.name, popular: games.slice(0, 10), all: games };
+    });
+  },
+  ["nav-menu"],
   { tags: ["catalog", "nav"], revalidate: 300 }
 );
