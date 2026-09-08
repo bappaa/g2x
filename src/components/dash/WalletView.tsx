@@ -229,7 +229,7 @@ export default function WalletView({
                     <span className="ml-1 opacity-70">
                       ({gw.feePercent > 0 ? `${gw.feePercent}%` : ""}
                       {gw.feePercent > 0 && gw.feeFixed > 0 ? " + " : ""}
-                      {gw.feeFixed > 0 ? `$${gw.feeFixed.toFixed(2)}` : ""})
+                      {gw.feeFixed > 0 ? money(gw.feeFixed) : ""})
                     </span>
                   )}
                 </span>

@@ -33,7 +33,7 @@ export default function BuyerKyc({
   dueReason?: string | null;
 }) {
   const router = useRouter();
-  const [country, setCountry] = useState("IN");
+  const [country, setCountry] = useState("");
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
   const types = idTypesFor(country);
@@ -130,9 +130,12 @@ export default function BuyerKyc({
                 <select
                   name="country"
                   value={country}
+                  required
                   onChange={(e) => setCountry(e.target.value)}
                   className={inputCls}
                 >
+                  {/* No pre-selected country — the visitor picks their own. */}
+                  <option value="" disabled>Select country</option>
                   {COUNTRIES.map((c) => (
                     <option key={c.code} value={c.code}>{c.name}</option>
                   ))}

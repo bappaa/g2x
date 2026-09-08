@@ -4,6 +4,7 @@ import { one } from "@/lib/db";
 import { getUnreadCount } from "@/lib/queries";
 import DashboardNav from "@/components/dash/DashboardNav";
 import PanelShell from "@/components/dash/PanelShell";
+import PanelBadge from "@/components/PanelBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       sidebar={
         <DashboardNav
           name={u.name}
+          username={u.username}
           balance={Number(u.balance ?? 0)}
           orders={Number(stats?.orders ?? 0)}
           unread={unread}
@@ -30,6 +32,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
         />
       }
     >
+      <PanelBadge
+        panel="buyer"
+        isSeller={!!u.isSeller}
+        sellerActive={u.isSeller && u.sellerStatus === "active"}
+      />
       {children}
     </PanelShell>
   );

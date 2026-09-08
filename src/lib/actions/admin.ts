@@ -124,6 +124,52 @@ export async function reorderGamesAction(order: string[]): Promise<R> {
 /* CATEGORIES                                                           */
 /* ==================================================================== */
 
+/**
+ * Configure a category's "create offer" wizard.
+ *
+ * This is what lets the admin decide, per category, what a seller must supply
+ * — a title, photos, account credentials, volume discounts, what the unit is
+ * called and the commission — without anyone touching code. Combined with the
+ * per-category `field_templates`, the admin fully owns the sell flow.
+ */
+export async function saveSellConfigAction(form: FormData): Promise<R> {
+  const a = await requireAdmin("catalog");
+  const slug = String(form.get("slug") ?? "").trim();
+  if (!slug) return { ok: false, error: "Missing category." };
+
+  const cat = await one(`SELECT slug FROM categories WHERE slug=?`, [slug]);
+  if (!cat) return { ok: false, error: "Category not found." };
+
+  const flag = (k: string) => (form.get(k) ? 1 : 0);
+  const unit = String(form.get("unitLabel") ?? "").trim() || "unit";
+  const noticeTitle = String(form.get("noticeTitle") ?? "").trim();
+  const notice = String(form.get("notice") ?? "").trim();
+
+  const commRaw = String(form.get("commissionPct") ?? "").trim();
+  const comm = commRaw === "" ? null : Number(commRaw);
+  if (comm !== null && (!Number.isFinite(comm) || comm < 0 || comm > 90))
+    return { ok: false, error: "Commission must be between 0 and 90%." };
+
+  await run(
+    `UPDATE categories
+        SET unit_label=?, needs_title=?, needs_images=?, needs_credentials=?,
+            needs_quantity=?, allow_volume_discount=?, commission_pct=?,
+            sell_notice_title=?, sell_notice=?
+      WHERE slug=?`,
+    [
+      unit, flag("needsTitle"), flag("needsImages"), flag("needsCredentials"),
+      flag("needsQuantity"), flag("allowVolumeDiscount"), comm,
+      noticeTitle || null, notice || null, slug,
+    ]
+  );
+
+  await audit(a.id, "category.sellconfig", slug);
+  bustCatalog();
+  revalidatePath("/admin/categories");
+  revalidatePath("/seller/sell", "layout");
+  return { ok: true };
+}
+
 export async function saveCategoryAction(form: FormData): Promise<R> {
   const a = await requireAdmin("catalog");
   const original = String(form.get("original") ?? "").trim();

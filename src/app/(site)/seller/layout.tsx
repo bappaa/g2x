@@ -4,6 +4,7 @@ import { getSellerProfile } from "@/lib/queries";
 import { one } from "@/lib/db";
 import SellerNav from "@/components/seller/SellerNav";
 import PanelShell from "@/components/dash/PanelShell";
+import PanelBadge from "@/components/PanelBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ export default async function SellerLayout({ children }: { children: React.React
         />
       }
     >
+      <PanelBadge panel="seller" isSeller sellerActive />
       {children}
     </PanelShell>
   );

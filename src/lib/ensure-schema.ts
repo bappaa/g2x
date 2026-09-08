@@ -87,6 +87,26 @@ const PATCHES: string[] = [
   `ALTER TABLE dispute_messages ADD COLUMN purged INTEGER NOT NULL DEFAULT 0`,
   `CREATE INDEX IF NOT EXISTS idx_dmsg_dispute ON dispute_messages(dispute_id, created_at)`,
   `ALTER TABLE messages ADD COLUMN purged INTEGER NOT NULL DEFAULT 0`,
+
+  // --- Phase 19: admin-configurable offer wizard --------------------------
+  // Each category describes its own "create offer" flow, so the admin decides
+  // what a seller must supply per category without a code change.
+  `ALTER TABLE categories ADD COLUMN sell_notice TEXT`,
+  `ALTER TABLE categories ADD COLUMN sell_notice_title TEXT`,
+  `ALTER TABLE categories ADD COLUMN unit_label TEXT`,
+  `ALTER TABLE categories ADD COLUMN needs_title INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE categories ADD COLUMN needs_images INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE categories ADD COLUMN needs_credentials INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE categories ADD COLUMN needs_quantity INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE categories ADD COLUMN allow_volume_discount INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE categories ADD COLUMN commission_pct REAL`,
+  // Volume discounts + account credential sets live as JSON on the offer.
+  `ALTER TABLE offers ADD COLUMN volume_discounts TEXT`,
+  `ALTER TABLE offers ADD COLUMN accounts_data TEXT`,
+  `ALTER TABLE offers ADD COLUMN images TEXT`,
+  `ALTER TABLE offers ADD COLUMN description TEXT`,
+  `ALTER TABLE offers ADD COLUMN min_qty INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE offers ADD COLUMN auto_delivery INTEGER NOT NULL DEFAULT 1`,
 ];
 
 /**

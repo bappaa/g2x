@@ -87,6 +87,7 @@ export default async function SiteShell({ children }: { children: React.ReactNod
             ? {
                 id: u.id,
                 name: u.name,
+                username: u.username,
                 email: u.email,
                 avatar: u.avatar,
                 isSeller: u.isSeller,

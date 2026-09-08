@@ -6,11 +6,12 @@ import { motion } from "framer-motion";
 import { Truck, XCircle, Plus, Loader2, User, MessageSquare } from "lucide-react";
 import { Btn, Empty, Tag, inputCls } from "@/components/ui";
 import Credentials from "@/components/dash/Credentials";
-import { money, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 import { deliverOrderAction, cancelOrderItemAction } from "@/lib/actions/seller";
 import { startThreadAction } from "@/lib/actions/shop";
 import LocalTime from "@/components/LocalTime";
 import { img } from "@/lib/img";
+import { useMoney } from "@/components/LocaleProvider";
 
 type OI = {
   id: string; code: string; title: string; subtitle: string; image: string; qty: number;
@@ -34,6 +35,7 @@ export default function SellerOrders({ orders }: { orders: OI[] }) {
 }
 
 function OrderRow({ o }: { o: OI }) {
+  const money = useMoney();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [fields, setFields] = useState([{ label: "Code", value: "" }]);
@@ -66,7 +68,7 @@ function OrderRow({ o }: { o: OI }) {
       {open && (
         <div className="mt-4 space-y-3 border-t border-[var(--line)] pt-3">
           <div className="grid gap-2 sm:grid-cols-2">
-            <Info l="Buyer" v={`${o.buyer_name} · ${o.buyer_email}`} icon={User} />
+            <Info l="Buyer" v={o.buyer_name} icon={User} />
             <Info l="Delivery UID" v={o.delivery_uid} />
             <Info l="Quantity" v={`${o.qty} × ${money(o.unit_price)}`} />
             {o.opt_region && <Info l="Game server" v={o.opt_region} />}

@@ -20,6 +20,8 @@ function secret() {
 export type SessionUser = {
   id: string;
   name: string;
+  /** Public handle. This — never the legal name — is what other users see. */
+  username: string | null;
   email: string;
   avatar: string | null;
   role: "buyer" | "seller" | "admin";
@@ -104,6 +106,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   return {
     id: String(row.id),
     name: String(row.name),
+    username: (row.username as string) ?? null,
     email: String(row.email),
     avatar: (row.avatar as string) ?? null,
     role: row.role as SessionUser["role"],

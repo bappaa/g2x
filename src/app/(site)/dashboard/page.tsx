@@ -20,6 +20,7 @@ type OrderRow = {
 import { serverLocale } from "@/lib/locale";
 import LocalTime from "@/components/LocalTime";
 import { img } from "@/lib/img";
+import { handle } from "@/lib/handle";
 
 export default async function Page() {
   // Release any escrow whose 7-day hold has expired (throttled, non-blocking).
@@ -52,7 +53,7 @@ export default async function Page() {
         <div className="relative overflow-hidden rounded-2xl panel p-4 sm:p-6">
           <div className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 animate-pulseGlow rounded-full bg-brand-600/25 blur-[80px]" />
           <h1 className="text-[18px] font-black sm:text-[22px] tracking-tight">
-            Welcome back, <span className="grad-text">{u.name.split(" ")[0]}</span> 👋
+            Welcome back, <span className="grad-text">{handle(u)}</span> 👋
           </h1>
           <p className="mt-1 text-[12.5px] muted">
             {open.length

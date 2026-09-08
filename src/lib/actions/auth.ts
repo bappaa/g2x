@@ -176,7 +176,7 @@ export async function demoGoogleAction(next = "/dashboard"): Promise<ActionResul
     const id = nid("usr_");
     await run(
       `INSERT INTO users (id, name, email, provider, role, country, username)
-       VALUES (?,?,?,'google','buyer','India',?)`,
+       VALUES (?,?,?,'google','buyer','',?)`,
       [id, "Demo Buyer", email, await generateUsername()]
     );
     await welcome(id, "Demo Buyer");

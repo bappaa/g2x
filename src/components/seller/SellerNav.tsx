@@ -3,11 +3,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
+import { useMoney } from "@/components/LocaleProvider";
 import {
   LayoutDashboard, Tag as TagIcon, Package, Star, Wallet, Store, Gavel, ArrowLeft,
   ChevronDown,
 } from "lucide-react";
-import { money } from "@/lib/fmt";
 
 const links = [
   { href: "/seller", label: "Overview", icon: LayoutDashboard },
@@ -39,6 +39,7 @@ export default function SellerNav({
 }: {
   store: string; level: string; rating: number; available: number; pendingBal: number; toDeliver: number;
 }) {
+  const money = useMoney();
   const path = usePathname();
   return (
     <div className="rounded-2xl panel p-3 sm:p-4">

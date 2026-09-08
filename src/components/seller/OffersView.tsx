@@ -8,8 +8,9 @@ import {
   Plus, Search, Pause, Play, Copy, Trash2, Pencil, X, Loader2, TrendingDown, TrendingUp, Check,
 } from "lucide-react";
 import { Btn, Empty, Field, Tag, inputCls } from "@/components/ui";
-import { money, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 import { img } from "@/lib/img";
+import { useMoney } from "@/components/LocaleProvider";
 import {
   saveOfferAction, offerStatusAction, offerStockAction, deleteOfferAction, duplicateOfferAction,
 } from "@/lib/actions/seller";
@@ -37,6 +38,7 @@ export default function OffersView({
   /** Set by the sidebar's My Offers drawer; "" means all categories. */
   category?: string;
 }) {
+  const money = useMoney();
   const router = useRouter();
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<Offer | null>(null);
@@ -65,9 +67,14 @@ export default function OffersView({
               category.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
             : "My Offers"}
         </h1>
-        <Btn className="ml-auto flex items-center gap-1.5" onClick={() => { setEditing(null); setCreating(true); }}>
+        {/* Creating goes through the guided wizard, which asks for whatever the
+            admin configured for this category. The inline modal stays for edits. */}
+        <Link
+          href={category ? `/seller/sell/${category}` : "/seller/sell"}
+          className="ml-auto flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-[12.5px] font-bold text-white transition-all hover:bg-brand-500"
+        >
           <Plus size={14} /> New offer
-        </Btn>
+        </Link>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -210,6 +217,7 @@ function OfferModal({
   offer: Offer | null; catalog: Cat[]; fields: FT[];
   onClose: () => void; onSaved: () => void;
 }) {
+  const money = useMoney();
   const [productId, setProductId] = useState(offer?.product_id ?? "");
   const [q, setQ] = useState("");
   const [err, setErr] = useState("");

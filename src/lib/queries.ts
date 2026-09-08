@@ -312,7 +312,8 @@ export const getPurchased = (userId: string) =>
 export const getThreads = (userId: string) =>
   all(
     `SELECT t.*,
-            CASE WHEN t.buyer_id=? THEN sp.store_name ELSE bu.name END AS other_name,
+            CASE WHEN t.buyer_id=? THEN sp.store_name
+                 ELSE COALESCE('@' || bu.username, '@user_' || substr(bu.id,-6)) END AS other_name,
             CASE WHEN t.buyer_id=? THEN t.seller_id ELSE t.buyer_id END AS other_id,
             (SELECT m.body FROM messages m WHERE m.thread_id=t.id ORDER BY m.created_at DESC LIMIT 1) AS last_body,
             (SELECT COUNT(*) FROM messages m WHERE m.thread_id=t.id AND m.read_flag=0 AND m.sender_id<>?) AS unread
@@ -419,7 +420,8 @@ export const getSellerListing = (id: string, sellerId: string) =>
 export const getSellerOrders = (sellerId: string, status?: string) =>
   all(
     `SELECT oi.*, o.code, o.created_at, o.delivery_uid, o.buyer_note, o.payment_method,
-            u.name AS buyer_name, u.email AS buyer_email, o.buyer_id
+            COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_name,
+            COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_email, o.buyer_id
        FROM order_items oi
        JOIN orders o ON o.id=oi.order_id
        JOIN users u ON u.id=o.buyer_id
@@ -431,7 +433,8 @@ export const getSellerOrders = (sellerId: string, status?: string) =>
 export const getSellerOrderItem = (id: string, sellerId: string) =>
   one(
     `SELECT oi.*, o.code, o.created_at, o.delivery_uid, o.buyer_note, o.payment_method,
-            u.name AS buyer_name, u.email AS buyer_email, o.buyer_id
+            COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_name,
+            COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_email, o.buyer_id
        FROM order_items oi
        JOIN orders o ON o.id=oi.order_id
        JOIN users u ON u.id=o.buyer_id
@@ -441,7 +444,7 @@ export const getSellerOrderItem = (id: string, sellerId: string) =>
 
 export const getSellerReviews = (sellerId: string) =>
   all(
-    `SELECT r.*, u.name AS buyer_name FROM reviews r
+    `SELECT r.*, COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_name FROM reviews r
        JOIN users u ON u.id=r.buyer_id
       WHERE r.seller_id=? ORDER BY r.created_at DESC`,
     [sellerId]
@@ -449,7 +452,7 @@ export const getSellerReviews = (sellerId: string) =>
 
 export const getSellerDisputes = (sellerId: string) =>
   all(
-    `SELECT d.*, u.name AS buyer_name FROM disputes d
+    `SELECT d.*, COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_name FROM disputes d
        JOIN users u ON u.id=d.buyer_id
       WHERE d.seller_id=? ORDER BY d.created_at DESC`,
     [sellerId]
@@ -484,8 +487,31 @@ export const getTopSellerProducts = (sellerId: string) =>
     [sellerId]
   );
 
+/**
+ * Field keys the offer form already renders as first-class controls.
+ *
+ * Older seeds also defined these as generic templates, which made the wizard
+ * ask for Price / Stock / Delivery Time twice — once as the real control and
+ * again as a stray text box. Templates are for *extra* attributes, so the
+ * reserved keys are filtered out rather than deleted (an admin may still want
+ * them visible on the public product page).
+ */
+export const RESERVED_FIELD_KEYS = [
+  "price", "stock", "quantity", "amount", "min_qty",
+  "delivery_time", "delivery_method", "login_method",
+  "region", "platform", "instructions", "title", "description",
+];
+
 export const getFieldTemplates = (category: string) =>
-  all(`SELECT * FROM field_templates WHERE category_slug=? ORDER BY sort_order`, [category]);
+  all<{
+    id: string; category_slug: string; label: string; field_key: string;
+    field_type: string; options: string | null; required: number; sort_order: number;
+  }>(
+    `SELECT * FROM field_templates
+      WHERE category_slug=? AND lower(field_key) NOT IN (${RESERVED_FIELD_KEYS.map(() => "?").join(",")})
+      ORDER BY sort_order`,
+    [category, ...RESERVED_FIELD_KEYS]
+  );
 
 /** products a seller can create an offer against */
 export const getSellableProducts = () =>
@@ -544,3 +570,79 @@ export const activeBanners = unstable_cache(
   ["banners"],
   { tags: ["catalog", "banners"], revalidate: 300 }
 );
+
+/* ==================================================================== */
+/* Sell wizard (admin-configured per category)                           */
+/* ==================================================================== */
+
+export type SellConfig = {
+  slug: string; name: string; unit_label: string | null;
+  needs_title: number; needs_images: number; needs_credentials: number;
+  needs_quantity: number; allow_volume_discount: number;
+  commission_pct: number | null;
+  sell_notice_title: string | null; sell_notice: string | null;
+};
+
+/**
+ * The shape of one category's "create offer" flow.
+ *
+ * Everything a seller is asked for is a column here, so the admin controls the
+ * wizard per category (and per game via `field_templates`) without a code
+ * change — which is exactly the "admin can add what that product wants"
+ * requirement.
+ */
+export const getSellConfig = (slug: string) =>
+  one<SellConfig>(
+    `SELECT slug, name, unit_label, needs_title, needs_images, needs_credentials,
+            needs_quantity, allow_volume_discount, commission_pct,
+            sell_notice_title, sell_notice
+       FROM categories WHERE slug=? AND status='active'`,
+    [slug]
+  );
+
+/**
+ * Games a seller can list in, for step 2 of the wizard.
+ *
+ * Two different inventory models live side by side: most categories sell
+ * admin-defined `products`, but Accounts and Boosting are free-form
+ * `listings` (every account is unique, so there is nothing to pre-define).
+ * A game qualifies if it is attached to the category at all — otherwise
+ * Accounts and Boosting show an empty picker, since they have no products.
+ */
+export const getSellGames = (category: string) =>
+  all<{ slug: string; name: string; logo: string; products: number }>(
+    `SELECT g.slug, g.name, g.logo,
+            (SELECT COUNT(*) FROM products p
+              WHERE p.game_slug = g.slug AND p.category_slug = ? AND p.status='active') AS products
+       FROM games g
+       JOIN game_categories gc ON gc.game_slug = g.slug
+      WHERE gc.category_slug = ? AND g.status='active'
+      ORDER BY ${NAME_SORT("g.name")}`,
+    [category, category]
+  );
+
+/** Admin-listed products for one game+category — step 3 of the wizard. */
+export const getSellProducts = (game: string, category: string) =>
+  all<{
+    id: string; name: string; image: string; base_price: number;
+    region: string | null; platform: string | null; delivery_method: string | null;
+    market_min: number | null; offer_count: number;
+  }>(
+    `SELECT p.id, p.name, p.image, p.base_price, p.region, p.platform, p.delivery_method,
+            (SELECT MIN(o.price) FROM offers o
+              WHERE o.product_id=p.id AND o.status='active' AND o.stock>0) AS market_min,
+            (SELECT COUNT(*) FROM offers o
+              WHERE o.product_id=p.id AND o.status='active' AND o.stock>0) AS offer_count
+       FROM products p
+      WHERE p.game_slug=? AND p.category_slug=? AND p.status='active'
+      ORDER BY p.sort_order, p.base_price`,
+    [game, category]
+  );
+
+/** Admin-managed dropdown values (regions, platforms, delivery methods…). */
+export const getOptionList = (listKey: string) =>
+  all<{ value: string; label: string }>(
+    `SELECT value, label FROM option_lists
+      WHERE list_key=? AND active=1 ORDER BY sort_order, label`,
+    [listKey]
+  );

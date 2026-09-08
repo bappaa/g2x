@@ -3,10 +3,11 @@ import { sweepEscrowInBackground } from "@/lib/escrow";
 import { requireUser } from "@/lib/session";
 import { getSellerStats, getSellerOrders, getSellerSalesSeries, getTopSellerProducts } from "@/lib/queries";
 import { Section, Tag, Empty, FadeIn } from "@/components/ui";
-import { money, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 import { DollarSign, Package, Percent, Star, ArrowRight } from "lucide-react";
 import SalesChart from "@/components/seller/SalesChart";
 import LocalTime from "@/components/LocalTime";
+import { serverLocale } from "@/lib/locale";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Seller Overview — G2X.GG" };
@@ -14,6 +15,7 @@ export const metadata = { title: "Seller Overview — G2X.GG" };
 type OI = { id: string; code: string; title: string; line_total: number; status: string; created_at: string; buyer_name: string };
 
 export default async function Page() {
+  const { money } = await serverLocale();
   // Release any escrow whose 7-day hold has expired (throttled, non-blocking).
   sweepEscrowInBackground();
 

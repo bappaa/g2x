@@ -1,8 +1,9 @@
 "use client";
 import { motion } from "framer-motion";
-import { money } from "@/lib/fmt";
+import { useMoney } from "@/components/LocaleProvider";
 
 export default function SalesChart({ data }: { data: { d: string; revenue: number; orders: number }[] }) {
+  const money = useMoney();
   if (!data.length)
     return <div className="py-10 text-center text-[12px] muted">No sales in this period yet.</div>;
 

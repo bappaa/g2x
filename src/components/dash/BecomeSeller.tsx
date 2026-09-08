@@ -37,7 +37,7 @@ export default function BecomeSeller({
 }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [country, setCountry] = useState("IN");
+  const [country, setCountry] = useState("");
   const [idType, setIdType] = useState("aadhaar");
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
@@ -241,11 +241,14 @@ export default function BecomeSeller({
                   name="country"
                   className={inputCls}
                   value={country}
+                  required
                   onChange={(e) => {
                     setCountry(e.target.value);
                     setIdType(idTypesFor(e.target.value)[0]?.value ?? "passport");
                   }}
                 >
+                  {/* No pre-selected country — the seller picks their own. */}
+                  <option value="" disabled>Select country</option>
                   {COUNTRIES.map((c) => (
                     <option key={c.code} value={c.code}>{c.name}</option>
                   ))}

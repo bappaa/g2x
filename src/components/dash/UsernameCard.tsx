@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { AtSign, Loader2, Check, Info } from "lucide-react";
 import { Btn, inputCls } from "@/components/ui";
 import { changeUsernameAction } from "@/lib/actions/auth";
+import { useMoney } from "@/components/LocaleProvider";
 
 /**
  * Public username editor.
@@ -29,6 +30,7 @@ export default function UsernameCard({
   fee: number;
   balance: number;
 }) {
+  const money = useMoney();
   const router = useRouter();
   const [value, setValue] = useState(username);
   const [msg, setMsg] = useState("");
@@ -56,7 +58,7 @@ export default function UsernameCard({
     if (localError) return setErr(localError);
     if (willCharge && balance < fee)
       return setErr(
-        `This change costs $${fee.toFixed(2)} but your wallet has $${balance.toFixed(2)}. Top up first.`
+        `This change costs ${money(fee)} but your wallet has ${money(balance)}. Top up first.`
       );
 
     start(async () => {
@@ -64,7 +66,7 @@ export default function UsernameCard({
       if (!r.ok) return setErr(r.error || "Could not change your username.");
       setMsg(
         willCharge
-          ? `Username updated. $${fee.toFixed(2)} was deducted from your wallet.`
+          ? `Username updated. ${money(fee)} was deducted from your wallet.`
           : "Username updated."
       );
       router.refresh();

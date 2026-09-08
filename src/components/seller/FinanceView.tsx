@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Wallet, Clock, Percent, TrendingUp, Loader2, Check } from "lucide-react";
 import { Btn, Field, Section, Tag, Empty, inputCls } from "@/components/ui";
-import { money, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 import { requestWithdrawalAction } from "@/lib/actions/seller";
 import LocalTime from "@/components/LocalTime";
+import { useMoney } from "@/components/LocaleProvider";
 
 type W = { id: string; amount: number; method: string; detail: string; status: string; created_at: string };
 type T = { id: string; type: string; amount: number; reference: string; created_at: string };
@@ -18,6 +19,7 @@ export default function FinanceView({
   available: number; pendingBal: number; commissionPct: number; lifetimeNet: number;
   commissionPaid: number; payoutMethod: string; payoutDetail: string; withdrawals: W[]; txns: T[];
 }) {
+  const money = useMoney();
   const router = useRouter();
   const [amount, setAmount] = useState(Math.max(10, Math.floor(available)));
   const [method, setMethod] = useState(payoutMethod);
@@ -58,7 +60,7 @@ export default function FinanceView({
         <div className="space-y-4">
           <Section title="Withdrawal requests">
             {withdrawals.length === 0 ? (
-              <Empty title="No withdrawals yet" sub="Request a payout once you have $10 available." />
+              <Empty title="No withdrawals yet" sub={`Request a payout once you have ${money(10)} available.`} />
             ) : (
               <div className="space-y-2">
                 {withdrawals.map((w) => (
@@ -99,7 +101,7 @@ export default function FinanceView({
 
         <div className="rounded-2xl panel p-4 sm:p-5 lg:sticky lg:top-[150px] lg:self-start">
           <h3 className="text-[14px] font-bold">Request a payout</h3>
-          <p className="mt-1 text-[11px] muted">Minimum $10. Processed within 1–3 business days.</p>
+          <p className="mt-1 text-[11px] muted">Minimum {money(10)}. Processed within 1–3 business days.</p>
           <div className="mt-3 space-y-3">
             <Field label="Amount (USD)">
               <input

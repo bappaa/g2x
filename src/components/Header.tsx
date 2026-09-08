@@ -30,11 +30,14 @@ import { useT } from "./LocaleProvider";
 import { logoutAction } from "@/lib/actions/auth";
 import { markNotificationsReadAction } from "@/lib/actions/shop";
 import { img } from "@/lib/img";
+import { handle, handleInitial } from "@/lib/handle";
 import { DesktopNav, MobileCategoryNav, type MenuCategory } from "./NavMenu";
 
 export type HeaderUser = {
   id: string;
   name: string;
+  /** Public handle — shown instead of the real name everywhere. */
+  username: string | null;
   email: string;
   avatar: string | null;
   isSeller: boolean;
@@ -306,11 +309,11 @@ export default function Header({
                     />
                   ) : (
                     <span className="grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-700 text-[10px] font-bold text-white">
-                      {user.name.slice(0, 1).toUpperCase()}
+                      {handleInitial(user)}
                     </span>
                   )}
-                  <span className="hidden max-w-[80px] truncate text-[12.5px] font-medium sm:block">
-                    {user.name.split(" ")[0]}
+                  <span className="hidden max-w-[110px] truncate text-[12.5px] font-medium sm:block">
+                    {handle(user)}
                   </span>
                   <ChevronDown size={13} className="muted" />
                 </button>
@@ -416,7 +419,7 @@ function UserMenu({ user }: { user: NonNullable<HeaderUser> }) {
       className="absolute right-0 top-[44px] z-[95] w-[min(236px,calc(100vw-1.5rem))] rounded-xl panel p-2 shadow-2xl"
     >
       <div className="rounded-lg soft px-3 py-2.5">
-        <div className="truncate text-[12.5px] font-semibold">{user.name}</div>
+        <div className="truncate text-[12.5px] font-semibold">{handle(user)}</div>
         <div className="truncate text-[10.5px] muted">{user.email}</div>
         <div className="mt-1.5 text-[11px]">
           Wallet <span className="font-bold text-brand-500">${user.balance.toFixed(2)}</span>

@@ -1,7 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { one, run, tx, nid } from "../db";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { all, one, run, tx, nid } from "../db";
 import { requireSeller } from "../session";
 
 export type R = { ok: boolean; error?: string; id?: string };
@@ -10,6 +10,7 @@ import { mail } from "../mail";
 import { escrowHoldHours } from "../escrow";
 import { scheduleSubscriptions } from "../subscription";
 import { getWallet, WITHDRAW_SQL } from "../wallet";
+import { RESERVED_FIELD_KEYS } from "../queries";
 
 async function notify(userId: string, title: string, body: string, href: string, kind = "order") {
   await run(
@@ -87,6 +88,156 @@ export async function saveOfferAction(form: FormData): Promise<R> {
   }
 
   revalidatePath("/seller/offers");
+  return { ok: true };
+}
+
+/**
+ * Create an offer from the multi-step sell wizard.
+ *
+ * Distinct from `saveOfferAction` (the quick inline editor) because the wizard
+ * collects the richer, admin-configured payload: images, per-account
+ * credentials, volume discounts and whatever `field_templates` the admin
+ * defined for the category. Validation mirrors the client so a crafted request
+ * cannot bypass it.
+ */
+export async function createOfferAction(form: FormData): Promise<R> {
+  const s = await requireSeller();
+
+  const productId = String(form.get("productId") ?? "").trim();
+  const gameSlug = String(form.get("gameSlug") ?? "").trim();
+  const categorySlug = String(form.get("categorySlug") ?? "").trim();
+
+  /**
+   * Two inventory models:
+   *  - `products`  — admin-defined SKUs (currency, top-ups, items…). The seller
+   *                  picks one and competes on price.
+   *  - `listings`  — free-form, one-of-a-kind (accounts, boosting). There is no
+   *                  product to pick, so the seller describes it themselves.
+   */
+  const freeForm = !productId;
+
+  let product: { name: string; category_slug: string } | null = null;
+  if (!freeForm) {
+    product = await one<{ name: string; category_slug: string }>(
+      `SELECT name, category_slug FROM products WHERE id=? AND status='active'`,
+      [productId]
+    );
+    if (!product) return { ok: false, error: "That product no longer exists." };
+  } else {
+    if (!gameSlug || !categorySlug)
+      return { ok: false, error: "Missing game or category." };
+    const g = await one(`SELECT slug FROM games WHERE slug=? AND status='active'`, [gameSlug]);
+    if (!g) return { ok: false, error: "That game no longer exists." };
+    product = { name: "", category_slug: categorySlug };
+  }
+
+  const cfg = await one<{
+    needs_title: number; needs_credentials: number; allow_volume_discount: number;
+  }>(
+    `SELECT needs_title, needs_credentials, allow_volume_discount
+       FROM categories WHERE slug=?`,
+    [product!.category_slug]
+  );
+
+  const price = num(form.get("price"));
+  const stock = Math.max(0, Math.floor(num(form.get("stock"))));
+  const minQty = Math.max(1, Math.floor(num(form.get("minQty")) || 1));
+  const title = String(form.get("title") ?? "").trim() || product?.name || "";
+  const description = String(form.get("description") ?? "").trim();
+  const deliveryTime = String(form.get("deliveryTime") ?? "").trim();
+  const deliveryMethod = String(form.get("deliveryMethod") ?? "").trim();
+  const region = String(form.get("region") ?? "").trim();
+  const platform = String(form.get("platform") ?? "").trim();
+  const loginMethod = String(form.get("loginMethod") ?? "").trim();
+  const instructions = String(form.get("instructions") ?? "").trim();
+  const autoDelivery = String(form.get("autoDelivery") ?? "1") === "1" ? 1 : 0;
+
+  if (!(price > 0)) return { ok: false, error: "Price must be greater than 0." };
+  if (!deliveryTime) return { ok: false, error: "Delivery time is required." };
+  if (cfg?.needs_title && !String(form.get("title") ?? "").trim())
+    return { ok: false, error: "Offer title is required." };
+
+  // Admin-defined fields for this category, re-validated server-side.
+  const templates = await all<{ label: string; field_key: string; required: number }>(
+    `SELECT label, field_key, required FROM field_templates
+      WHERE category_slug=? AND lower(field_key) NOT IN (${RESERVED_FIELD_KEYS.map(() => "?").join(",")})`,
+    [product!.category_slug, ...RESERVED_FIELD_KEYS]
+  );
+  const custom: Record<string, string> = {};
+  Array.from(form.keys()).forEach((k) => {
+    if (k.startsWith("cf_")) custom[k.slice(3)] = String(form.get(k));
+  });
+  for (const t of templates) {
+    if (t.required && !String(custom[t.field_key] ?? "").trim())
+      return { ok: false, error: `${t.label} is required.` };
+  }
+
+  const parseJson = <T,>(key: string, fallback: T): T => {
+    try {
+      const v = JSON.parse(String(form.get(key) ?? ""));
+      return (v ?? fallback) as T;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const images = parseJson<string[]>("images", []).filter(
+    (d) => typeof d === "string" && d.startsWith("data:image/")
+  );
+  const volume = cfg?.allow_volume_discount
+    ? parseJson<{ qty: number; pct: number }[]>("volumeDiscounts", []).filter(
+        (v) => Number(v.qty) > 0 && Number(v.pct) > 0 && Number(v.pct) < 100
+      )
+    : [];
+
+  let accounts: unknown[] = [];
+  if (cfg?.needs_credentials && autoDelivery) {
+    accounts = parseJson<Record<string, string>[]>("accounts", []);
+    const bad = accounts.findIndex((a) => {
+      const r = a as Record<string, string>;
+      return !String(r?.login ?? "").trim() || !String(r?.password ?? "").trim();
+    });
+    if (bad >= 0) return { ok: false, error: `Account #${bad + 1} needs a login and password.` };
+  }
+
+  const finalStock = cfg?.needs_credentials && autoDelivery ? Math.max(1, accounts.length) : stock;
+  const status = finalStock <= 0 ? "out_of_stock" : "active";
+
+  if (freeForm) {
+    // One-of-a-kind item: it lives in `listings`, which the accounts and
+    // boosting grids read from.
+    await run(
+      `INSERT INTO listings
+              (id,seller_id,game_slug,category_slug,title,description,image,price,stock,
+               delivery_time,status)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        nid("lst_"), s.id, gameSlug, categorySlug, title.slice(0, 160),
+        description || null, images[0] ?? null, price, finalStock,
+        deliveryTime, status === "out_of_stock" ? "paused" : "active",
+      ]
+    );
+  } else {
+    await run(
+      `INSERT INTO offers (id,seller_id,product_id,title,description,price,stock,min_qty,
+              delivery_time,delivery_method,login_method,region,platform,instructions,
+              custom_fields,images,volume_discounts,accounts_data,auto_delivery,status)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        nid("off_"), s.id, productId, title.slice(0, 160), description || null,
+        price, finalStock, minQty, deliveryTime,
+        deliveryMethod || null, loginMethod || null, region || null, platform || null,
+        instructions || null, JSON.stringify(custom), JSON.stringify(images),
+        JSON.stringify(volume), accounts.length ? JSON.stringify(accounts) : null,
+        autoDelivery, status,
+      ]
+    );
+  }
+
+  revalidatePath("/seller/offers");
+  revalidatePath("/seller");
+  // A new offer changes the public product page's cheapest price.
+  revalidateTag("catalog");
   return { ok: true };
 }
 

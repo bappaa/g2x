@@ -58,10 +58,10 @@ export default function ProfileForm({
             <input value={email} readOnly className={inputCls} />
           </Field>
           <Field label="Phone">
-            <input name="phone" defaultValue={phone} className={inputCls} placeholder="+91 …" />
+            <input name="phone" defaultValue={phone} className={inputCls} placeholder="Phone number" />
           </Field>
           <Field label="Country">
-            <input name="country" defaultValue={country} className={inputCls} placeholder="India" />
+            <input name="country" defaultValue={country} className={inputCls} placeholder="Country" />
           </Field>
           <div className="sm:col-span-2">
             {err && <div className="mb-2 text-[11.5px] text-rose-400">{err}</div>}

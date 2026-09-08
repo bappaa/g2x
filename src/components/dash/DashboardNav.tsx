@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { logoutAction } from "@/lib/actions/auth";
+import { handle, handleInitial } from "@/lib/handle";
 
 const groups = [
   { title: "Overview", links: [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
@@ -46,9 +47,9 @@ const groups = [
 ];
 
 export default function DashboardNav({
-  name, balance, orders, unread, isSeller,
+  name, username, balance, orders, unread, isSeller,
 }: {
-  name: string; balance: number; orders: number; unread: number; isSeller: boolean;
+  name: string; username: string | null; balance: number; orders: number; unread: number; isSeller: boolean;
 }) {
   const money = useMoney();
   const path = usePathname();
@@ -57,10 +58,10 @@ export default function DashboardNav({
     <div className="rounded-2xl panel p-3 sm:p-4">
       <div className="flex items-center gap-3 rounded-xl soft p-3 group-data-[collapsed=true]/rail:justify-center group-data-[collapsed=true]/rail:p-2">
           <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-700 text-[14px] font-bold text-white">
-            {name.slice(0, 1).toUpperCase()}
+            {handleInitial({ username, name })}
           </span>
         <div className="min-w-0 group-data-[collapsed=true]/rail:hidden">
-          <div className="truncate text-[12.5px] font-bold">{name}</div>
+          <div className="truncate text-[12.5px] font-bold">{handle({ username, name })}</div>
           <div className="text-[10.5px] muted">{isSeller ? "Buyer + Seller" : "Buyer Account"}</div>
         </div>
       </div>

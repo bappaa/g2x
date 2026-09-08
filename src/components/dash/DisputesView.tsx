@@ -5,10 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Gavel, Send, Loader2 } from "lucide-react";
 import { Empty, Tag, Btn, inputCls } from "@/components/ui";
-import { money, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 import { disputeReplyAction } from "@/lib/actions/shop";
 import MonitorNotice from "@/components/MonitorNotice";
 import LocalTime from "@/components/LocalTime";
+import { useMoney } from "@/components/LocaleProvider";
 
 type D = {
   id: string; code: string; order_id: string; amount: number; reason: string;
@@ -17,6 +18,7 @@ type D = {
 type M = { id: string; dispute_id: string; sender: string; body: string; created_at: string };
 
 export default function DisputesView({ disputes, messages }: { disputes: D[]; messages: M[] }) {
+  const money = useMoney();
   const router = useRouter();
   const [open, setOpen] = useState<string | null>(disputes[0]?.code ?? null);
   const [text, setText] = useState("");

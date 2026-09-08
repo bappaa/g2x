@@ -6,11 +6,12 @@ import {
   Gavel, Send, Loader2, Paperclip, X, AlertCircle, CheckCircle2, FileWarning,
 } from "lucide-react";
 import { Btn, Empty, Tag, inputCls } from "@/components/ui";
-import { money, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 import { disputeMessageAction } from "@/lib/actions/shop";
 import MonitorNotice from "@/components/MonitorNotice";
 import LocalTime from "@/components/LocalTime";
 import TimeAgo from "@/components/TimeAgo";
+import { useMoney } from "@/components/LocaleProvider";
 
 type D = {
   id: string; code: string; amount: number; reason: string; status: string;
@@ -32,6 +33,7 @@ const fileSize = (n?: number | null) =>
 
 /** One dispute = one conversation. Kept self-contained so each has its own composer state. */
 function DisputeThread({ d, thread }: { d: D; thread: M[] }) {
+  const money = useMoney();
   const router = useRouter();
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);

@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Pause, Play, Trash2, Pencil, X, Loader2 } from "lucide-react";
 import { Btn, Empty, Field, Tag, inputCls } from "@/components/ui";
-import { money, statusTone, label } from "@/lib/fmt";
+import { statusTone, label } from "@/lib/fmt";
 import { saveListingAction, listingStatusAction, deleteListingAction } from "@/lib/actions/seller";
 import { img } from "@/lib/img";
+import { useMoney } from "@/components/LocaleProvider";
 
 type L = {
   id: string; game_slug: string; category_slug: string; game_name: string; category_name: string;
@@ -27,6 +28,7 @@ export default function ListingsView({
 }: {
   listings: L[]; games: Opt[]; categories: Opt[];
 }) {
+  const money = useMoney();
   const router = useRouter();
   const [edit, setEdit] = useState<L | null>(null);
   const [open, setOpen] = useState(false);
