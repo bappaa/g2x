@@ -3,7 +3,29 @@ import { all } from "@/lib/db";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+/**
+ * Inter.
+ *
+ * `display: "swap"` renders text immediately in a fallback and swaps the web
+ * font in when it arrives, instead of blocking paint on the font download.
+ *
+ * `preload: false` stops Next emitting a <link rel="preload"> for a font file
+ * the CSS may never reference. That mismatch is what produced the console
+ * warning "…was preloaded using link preload but not used within a few seconds
+ * from the window's load event" — the browser fetched a font nothing asked for,
+ * wasting bandwidth on the critical path. The font still loads normally via
+ * @font-face; it is just no longer force-preloaded.
+ *
+ * `adjustFontFallback` keeps the fallback metrically close to Inter so the swap
+ * does not shift the layout (avoids a CLS penalty).
+ */
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  preload: false,
+  adjustFontFallback: true,
+  fallback: ["system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
+});
 
 /** Canonical origin. Must be the exact production URL, no trailing slash. */
 const SITE_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://g2x.gg").replace(/\/+$/, "");
@@ -97,7 +119,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       name,
       alternateName: "G2X",
       url: `${SITE_URL}/`,
-      logo: { "@type": "ImageObject", url: `${SITE_URL}/art/placeholder.png` },
+      logo: { "@type": "ImageObject", url: `${SITE_URL}/art/logo-64.png` },
       description,
     },
   ];

@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { all } from "./db";
+import { runAfter } from "./after";
 import {
   DEFAULT_LANG, DEFAULT_CURRENCY, LANG_COOKIE, CUR_COOKIE,
   isLang, isCurrency, getCurrency, formatMoney, translator,
@@ -32,12 +33,15 @@ function maybeRefresh(rows: { key: string; value: string }[]) {
   const stale = !stamp || Date.now() - stamp > 60 * 60 * 1000;
   if (!stale || inflight) return;
 
-  inflight = import("./fx")
-    .then((m) => m.refreshRates())
-    .catch(() => null)
-    .finally(() => {
-      inflight = null;
-    });
+  runAfter(() => {
+    inflight = import("./fx")
+      .then((m) => m.refreshRates())
+      .catch(() => null)
+      .finally(() => {
+        inflight = null;
+      });
+    return inflight;
+  });
 }
 
 /**

@@ -1,5 +1,6 @@
 import "server-only";
 import { run } from "./db";
+import { runAfter } from "./after";
 
 /**
  * CHAT MEDIA RETENTION
@@ -88,9 +89,12 @@ const MIN_GAP_MS = 60 * 60 * 1000;
 export function purgeMediaInBackground(): void {
   if (inflight || Date.now() - lastRun < MIN_GAP_MS) return;
   lastRun = Date.now();
-  inflight = purgeExpiredMedia()
-    .catch(() => null)
-    .finally(() => {
-      inflight = null;
-    });
+  runAfter(() => {
+    inflight = purgeExpiredMedia()
+      .catch(() => null)
+      .finally(() => {
+        inflight = null;
+      });
+    return inflight;
+  });
 }

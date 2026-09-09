@@ -173,6 +173,7 @@ function OffersDrawer() {
               <Link
                 key={c.slug || "all"}
                 href={c.slug ? `/seller/offers?cat=${c.slug}` : "/seller/offers"}
+                prefetch
                 className={`block rounded-lg px-2.5 py-1.5 text-[12px] transition-colors hover:bg-brand-600/10 ${
                   active ? "bg-brand-600/15 font-semibold text-brand-400" : "muted"
                 }`}

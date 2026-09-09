@@ -72,6 +72,7 @@ export default function OffersView({
             admin configured for this category. The inline modal stays for edits. */}
         <Link
           href={category ? `/seller/sell/${category}` : "/seller/sell"}
+          prefetch
           className="ml-auto flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-[12.5px] font-bold text-white transition-all hover:bg-brand-500"
         >
           <Plus size={14} /> New offer
@@ -286,9 +287,12 @@ function OfferModal({
    * category already stored on the offer. Only `category_slug` is needed here,
    * to decide which admin field templates apply.
    */
-  const product =
-    filtered.find((c) => c.id === productId) ??
-    (offer ? ({ category_slug: offer.category_slug } as Cat) : undefined);
+  const product = useMemo(
+    () =>
+      filtered.find((c) => c.id === productId) ??
+      (offer ? ({ category_slug: offer.category_slug } as Cat) : undefined),
+    [filtered, productId, offer]
+  );
   const catFields = useMemo(
     () => fields.filter((f) => f.category_slug === (product?.category_slug ?? "")),
     [fields, product]

@@ -2,7 +2,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { requireSeller } from "@/lib/session";
 import { one } from "@/lib/db";
-import { getSellConfig, getFieldTemplates, getOptionLists } from "@/lib/queries";
+import { getSellConfig, getFieldTemplates, getOptionLists, mergeSellConfig } from "@/lib/queries";
 import { SellCrumbs, SellHeader } from "@/components/seller/SellWizard";
 import OfferForm from "@/components/seller/OfferForm";
 import { img } from "@/lib/img";
@@ -26,8 +26,9 @@ export default async function Page({
     ),
     params.product === "new"
       ? Promise.resolve(null)
-      : one<{ id: string; name: string; image: string; base_price: number }>(
-          `SELECT id, name, image, base_price FROM products
+      : one<Record<string, unknown>>(
+          // `p.*` so the per-product sell-flow overrides come along too.
+          `SELECT * FROM products
             WHERE id=? AND game_slug=? AND category_slug=? AND status='active'`,
           [params.product, params.game, cfg.slug]
         ),
@@ -36,12 +37,17 @@ export default async function Page({
   // "new" = a free-form listing (Accounts, Boosting): the seller titles it.
   if (params.product !== "new" && !product) notFound();
 
-  const target = product ?? {
-    id: "",
-    name: game.name,
-    image: game.logo,
-    base_price: 0,
-  };
+  const target = product
+    ? {
+        id: String(product.id),
+        name: String(product.name),
+        image: String(product.image ?? ""),
+        base_price: Number(product.base_price ?? 0),
+      }
+    : { id: "", name: game.name, image: game.logo, base_price: 0 };
+
+  // Product overrides win over the category defaults.
+  const sell = mergeSellConfig(cfg, product);
 
   // Dropdown values are all admin-managed option lists.
   const [fields, opts] = await Promise.all([
@@ -82,7 +88,7 @@ export default async function Page({
         }
       />
       <OfferForm
-        config={cfg}
+        config={sell}
         product={target}
         game={params.game}
         fields={fields}

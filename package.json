@@ -19,7 +19,9 @@
     "db:gateways": "tsx scripts/seed-gateways.mts",
     "check:env": "tsx scripts/check-env.mts",
     "fx:refresh": "tsx scripts/fx-refresh.mts",
-    "db:ensure": "tsx scripts/deploy-migrate.mts"
+    "db:ensure": "tsx scripts/deploy-migrate.mts",
+    "db:catalog-new": "tsx scripts/reseed-catalog.mts",
+    "db:times": "tsx scripts/seed-delivery-times.mts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

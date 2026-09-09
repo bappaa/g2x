@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, ChevronDown, Globe, Loader2 } from "lucide-react";
 import { LANGUAGES, CURRENCIES, type LangCode, type CurrencyCode } from "@/lib/i18n";
-import { useLocale } from "./LocaleProvider";
+import { useLocaleStrict } from "./LocaleProvider";
 
 export default function LocaleSwitcher({ compact = false, up = false }: { compact?: boolean; up?: boolean }) {
-  const { lang, currency, setLang, setCurrency, pending } = useLocale();
+  const { lang, currency, setLang, setCurrency, pending } = useLocaleStrict();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"lang" | "cur">("lang");
   const ref = useRef<HTMLDivElement>(null);

@@ -1,6 +1,7 @@
 import "server-only";
 import { all, one, run, tx, nid } from "./db";
 import { EARN_SQL } from "./wallet";
+import { runAfter } from "./after";
 import { monthsOf, releaseDueInstalments } from "./subscription";
 
 /**
@@ -157,11 +158,16 @@ const MIN_GAP_MS = 60_000;
 export function sweepEscrowInBackground(): void {
   if (inflight || Date.now() - lastRun < MIN_GAP_MS) return;
   lastRun = Date.now();
-  inflight = releaseDueEscrow()
-    .catch(() => null)
-    .finally(() => {
-      inflight = null;
-    });
+  // runAfter keeps the container alive until this settles (waitUntil), so the
+  // sweep cannot be cut off mid-query and report "Connection closed".
+  runAfter(() => {
+    inflight = releaseDueEscrow()
+      .catch(() => null)
+      .finally(() => {
+        inflight = null;
+      });
+    return inflight;
+  });
 }
 
 /**

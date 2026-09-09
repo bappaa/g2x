@@ -267,6 +267,63 @@ export async function deleteTemplateFieldAction(id: string): Promise<R> {
 /* PRODUCTS / PACKAGES                                                  */
 /* ==================================================================== */
 
+/**
+ * Per-product sell-flow overrides.
+ *
+ * Category defaults are too blunt on their own: a Crunchyroll subscription and
+ * a game account can sit in the same category yet need completely different
+ * fields from the seller. Every value here is tri-state — "inherit" leaves the
+ * category in charge, so nothing changes until the admin deliberately overrides
+ * it.
+ */
+export async function saveProductSellFlowAction(form: FormData): Promise<R> {
+  const a = await requireAdmin("catalog");
+  const id = String(form.get("id") ?? "").trim();
+  if (!id) return { ok: false, error: "Missing product." };
+
+  const product = await one(`SELECT id FROM products WHERE id=?`, [id]);
+  if (!product) return { ok: false, error: "Product not found." };
+
+  /** "" = inherit the category, "1"/"0" = explicit override. */
+  const tri = (key: string): number | null => {
+    const v = String(form.get(key) ?? "").trim();
+    return v === "" ? null : v === "1" ? 1 : 0;
+  };
+
+  const unit = String(form.get("unitLabel") ?? "").trim() || null;
+  const notice = String(form.get("sellNotice") ?? "").trim() || null;
+
+  const commRaw = String(form.get("commissionPct") ?? "").trim();
+  const comm = commRaw === "" ? null : Number(commRaw);
+  if (comm !== null && (!Number.isFinite(comm) || comm < 0 || comm > 90))
+    return { ok: false, error: "Commission must be between 0 and 90%." };
+
+  const fulfilment = String(form.get("fulfilment") ?? "").trim();
+  if (fulfilment && !["both", "auto", "manual"].includes(fulfilment))
+    return { ok: false, error: "Invalid fulfilment mode." };
+
+  await run(
+    `UPDATE products
+        SET needs_title=?, needs_images=?, needs_credentials=?, needs_quantity=?,
+            allow_volume_discount=?, unit_label=?, commission_pct=?,
+            fulfilment=?, show_delivery_method=?, show_region=?,
+            show_platform=?, show_login_method=?, sell_notice=?
+      WHERE id=?`,
+    [
+      tri("needsTitle"), tri("needsImages"), tri("needsCredentials"),
+      tri("needsQuantity"), tri("allowVolumeDiscount"), unit, comm,
+      fulfilment || null, tri("showDeliveryMethod"), tri("showRegion"),
+      tri("showPlatform"), tri("showLoginMethod"), notice, id,
+    ]
+  );
+
+  await audit(a.id, "product.sellflow", id);
+  bustCatalog();
+  revalidatePath("/admin/products");
+  revalidatePath("/seller/sell", "layout");
+  return { ok: true };
+}
+
 export async function saveProductAction(form: FormData): Promise<R> {
   const a = await requireAdmin("catalog");
   const id = String(form.get("id") ?? "").trim();
@@ -321,9 +378,28 @@ export async function saveProductAction(form: FormData): Promise<R> {
        instructions || null, status, popular, featured, pinned, sortOrder]
     );
   }
+  /**
+   * Link the game to the category.
+   *
+   * Every public and seller-side query reaches products through
+   * `game_categories` (that table is what decides which games appear under
+   * "Currency", "Accounts", …). Creating a product without the link meant the
+   * row existed and showed in the admin table, but was invisible everywhere
+   * else — the product simply never appeared on the site or in the seller
+   * wizard. Inserting the pair here keeps the two in step automatically.
+   */
+  await run(
+    `INSERT OR IGNORE INTO game_categories (game_slug, category_slug) VALUES (?,?)`,
+    [game, category]
+  );
+
   await audit(a.id, id ? "product.update" : "product.create", id || slug);
   bustCatalog();
   revalidatePath("/admin/products");
+  // The seller wizard and the storefront read this catalog too.
+  revalidatePath("/seller/sell", "layout");
+  revalidatePath(`/c/${category}`);
+  revalidatePath(`/g/${game}`, "layout");
   return { ok: true };
 }
 

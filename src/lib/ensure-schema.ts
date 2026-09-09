@@ -107,6 +107,35 @@ const PATCHES: string[] = [
   `ALTER TABLE offers ADD COLUMN description TEXT`,
   `ALTER TABLE offers ADD COLUMN min_qty INTEGER NOT NULL DEFAULT 1`,
   `ALTER TABLE offers ADD COLUMN auto_delivery INTEGER NOT NULL DEFAULT 1`,
+
+  // --- Phase 20: per-PRODUCT sell-flow overrides --------------------------
+  // Category defaults were too blunt: a Crunchyroll subscription and a game
+  // account both live under one category yet need completely different fields.
+  // NULL on any of these means "inherit the category setting", so existing
+  // products keep working untouched.
+  `ALTER TABLE products ADD COLUMN needs_title INTEGER`,
+  `ALTER TABLE products ADD COLUMN needs_images INTEGER`,
+  `ALTER TABLE products ADD COLUMN needs_credentials INTEGER`,
+  `ALTER TABLE products ADD COLUMN needs_quantity INTEGER`,
+  `ALTER TABLE products ADD COLUMN allow_volume_discount INTEGER`,
+  `ALTER TABLE products ADD COLUMN unit_label TEXT`,
+  `ALTER TABLE products ADD COLUMN commission_pct REAL`,
+  // Which fulfilment modes the seller may pick for THIS product.
+  //   'both' | 'auto' | 'manual'
+  `ALTER TABLE products ADD COLUMN fulfilment TEXT`,
+  // Toggle individual blocks off for products that do not need them.
+  `ALTER TABLE products ADD COLUMN show_delivery_method INTEGER`,
+  `ALTER TABLE products ADD COLUMN show_region INTEGER`,
+  `ALTER TABLE products ADD COLUMN show_platform INTEGER`,
+  `ALTER TABLE products ADD COLUMN show_login_method INTEGER`,
+  `ALTER TABLE products ADD COLUMN sell_notice TEXT`,
+
+  // Same switches at category level, so a whole category can hide a block.
+  `ALTER TABLE categories ADD COLUMN fulfilment TEXT`,
+  `ALTER TABLE categories ADD COLUMN show_delivery_method INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE categories ADD COLUMN show_region INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE categories ADD COLUMN show_platform INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE categories ADD COLUMN show_login_method INTEGER NOT NULL DEFAULT 1`,
 ];
 
 /**

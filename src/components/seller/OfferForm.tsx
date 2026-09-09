@@ -12,6 +12,11 @@ export type SellConfig = {
   needs_quantity: number; allow_volume_discount: number;
   commission_pct: number | null;
   sell_notice_title: string | null; sell_notice: string | null;
+  fulfilment?: string;
+  show_delivery_method?: number;
+  show_region?: number;
+  show_platform?: number;
+  show_login_method?: number;
 };
 export type FieldTpl = {
   id: string; label: string; field_key: string; field_type: string;
@@ -110,7 +115,19 @@ export default function OfferForm({
   const [region, setRegion] = useState("");
   const [platform, setPlatform] = useState("");
   const [loginMethod, setLoginMethod] = useState("");
-  const [auto, setAuto] = useState(true);
+  /**
+   * Fulfilment mode.
+   *
+   * 'auto'   — the seller pre-fills the details now and G2X delivers instantly.
+   * 'manual' — the seller sends the details through chat after the sale.
+   * 'both'   — the seller chooses (the default).
+   *
+   * The admin sets this per product, so a product that can only ever be
+   * hand-delivered never shows the credential vault, and an instant-code
+   * product never offers "Manual".
+   */
+  const mode = config.fulfilment || "both";
+  const [auto, setAuto] = useState(mode !== "manual");
   const [instructions, setInstructions] = useState("");
   const [custom, setCustom] = useState<Record<string, string>>({});
   const [volume, setVolume] = useState<{ qty: string; pct: string }[]>([{ qty: "", pct: "" }]);
@@ -157,8 +174,9 @@ export default function OfferForm({
     if ((config.needs_title || !product.id) && !title.trim())
       return setErr("Offer title is required.");
     if (!(priceNum > 0)) return setErr("Enter a price greater than 0.");
-    if (!deliveryTime) return setErr("Guaranteed delivery time is required.");
-    if (config.needs_credentials && auto) {
+    // Automatic delivery is instant; only hand-delivery needs a promised time.
+    if (!auto && !deliveryTime) return setErr("Guaranteed delivery time is required.");
+    if (config.needs_credentials && auto && mode !== "manual") {
       const bad = accounts.findIndex((a) => !a.login.trim() || !a.password.trim());
       if (bad >= 0) return setErr(`Account #${bad + 1} needs a login and password.`);
     }
@@ -181,7 +199,7 @@ export default function OfferForm({
         fd.set("price", String(priceNum));
         fd.set("stock", stock);
         fd.set("minQty", minQty);
-        fd.set("deliveryTime", deliveryTime);
+        fd.set("deliveryTime", auto ? deliveryTime || "Instant" : deliveryTime);
         fd.set("deliveryMethod", deliveryMethod);
         fd.set("region", region);
         fd.set("platform", platform);
@@ -303,7 +321,7 @@ export default function OfferForm({
 
       {/* ---------- images ---------- */}
       {config.needs_images === 1 && (
-        <Card title="Upload offer photo(s)">
+        <Card title="Upload offer photo(s) (Optional)">
           <Hint>We recommend that your images are at least 800 pixels square.</Hint>
           <div className="mt-3 flex flex-wrap gap-2">
             {images.map((im, i) => (
@@ -364,7 +382,7 @@ export default function OfferForm({
 
       {/* ---------- delivery ---------- */}
       <Card title="Delivery">
-        {config.needs_credentials === 1 && (
+        {mode === "both" && (
           <div className="mb-3">
             <Label>Delivery method</Label>
             <div className="space-y-1.5">
@@ -389,16 +407,28 @@ export default function OfferForm({
           </div>
         )}
 
-        <Label req>Guaranteed Delivery Time</Label>
-        <select value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} className={field}>
-          <option value="">Choose</option>
-          {deliveryTimes.map((d) => (
-            <option key={d.value} value={d.label}>{d.label}</option>
-          ))}
-        </select>
-        <Hint>Faster delivery time improves your offer&apos;s ranking in the offer list.</Hint>
+        {/*
+          Guaranteed delivery time.
 
-        {deliveryMethods.length > 0 && config.needs_credentials !== 1 && (
+          Automatic fulfilment is instant by definition — the buyer gets the
+          pre-filled details the moment they pay — so the field only appears
+          when the seller is delivering by hand, exactly as in the approved
+          design. It stays required in that case.
+        */}
+        {!auto && (
+          <>
+            <Label req>Guaranteed Delivery Time</Label>
+            <select value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} className={field}>
+              <option value="">Choose</option>
+              {deliveryTimes.map((d) => (
+                <option key={d.value} value={d.label}>{d.label}</option>
+              ))}
+            </select>
+            <Hint>Faster delivery time improves your offer&apos;s ranking in the offer list.</Hint>
+          </>
+        )}
+
+        {deliveryMethods.length > 0 && config.show_delivery_method !== 0 && mode !== "manual" && (
           <div className="mt-3">
             <Label>Delivery method</Label>
             <div className="grid gap-1.5 sm:grid-cols-2">
@@ -419,7 +449,7 @@ export default function OfferForm({
         )}
 
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {regions.length > 0 && (
+          {regions.length > 0 && config.show_region !== 0 && (
             <div>
               <Label>Region</Label>
               <select value={region} onChange={(e) => setRegion(e.target.value)} className={field}>
@@ -430,7 +460,7 @@ export default function OfferForm({
               </select>
             </div>
           )}
-          {platforms.length > 0 && (
+          {platforms.length > 0 && config.show_platform !== 0 && (
             <div>
               <Label>Platform</Label>
               <select value={platform} onChange={(e) => setPlatform(e.target.value)} className={field}>
@@ -441,7 +471,7 @@ export default function OfferForm({
               </select>
             </div>
           )}
-          {loginMethods.length > 0 && config.needs_credentials !== 1 && (
+          {loginMethods.length > 0 && config.show_login_method !== 0 && (
             <div>
               <Label>Login method</Label>
               <select value={loginMethod} onChange={(e) => setLoginMethod(e.target.value)} className={field}>
@@ -456,7 +486,7 @@ export default function OfferForm({
       </Card>
 
       {/* ---------- account credential vault ---------- */}
-      {config.needs_credentials === 1 && auto && (
+      {config.needs_credentials === 1 && auto && mode !== "manual" && (
         <Card title="Account information shared with buyer">
           <div className="space-y-4">
             {accounts.map((a, i) => (
@@ -562,7 +592,7 @@ export default function OfferForm({
         </Card>
       )}
 
-      {config.needs_credentials === 1 && !auto && (
+      {(mode === "manual" || (config.needs_credentials === 1 && !auto)) && (
         <Card title="Manual delivery">
           <Hint>
             You will receive the order in your seller panel and must send the account details to the

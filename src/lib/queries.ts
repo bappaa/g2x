@@ -608,7 +608,52 @@ export type SellConfig = {
   needs_quantity: number; allow_volume_discount: number;
   commission_pct: number | null;
   sell_notice_title: string | null; sell_notice: string | null;
+  /** 'both' | 'auto' | 'manual' — which fulfilment modes the seller may pick. */
+  fulfilment: string;
+  show_delivery_method: number;
+  show_region: number;
+  show_platform: number;
+  show_login_method: number;
 };
+
+/**
+ * Resolve a product's sell-flow settings over its category's.
+ *
+ * A category is too blunt on its own — a Crunchyroll subscription and a game
+ * account can share a category yet need completely different fields, which is
+ * why the wizard was asking every product for a Region, a Platform and twelve
+ * delivery methods it did not need.
+ *
+ * Any per-product column that is NULL inherits the category value, so existing
+ * products keep behaving exactly as before until an admin overrides something.
+ */
+export function mergeSellConfig(
+  cat: SellConfig,
+  product?: Record<string, unknown> | null
+): SellConfig {
+  if (!product) return cat;
+  const pick = <K extends keyof SellConfig>(key: K): SellConfig[K] => {
+    const v = product[key as string];
+    return (v === null || v === undefined ? cat[key] : v) as SellConfig[K];
+  };
+  return {
+    ...cat,
+    unit_label: pick("unit_label"),
+    needs_title: pick("needs_title"),
+    needs_images: pick("needs_images"),
+    needs_credentials: pick("needs_credentials"),
+    needs_quantity: pick("needs_quantity"),
+    allow_volume_discount: pick("allow_volume_discount"),
+    commission_pct: pick("commission_pct"),
+    fulfilment: pick("fulfilment") || cat.fulfilment || "both",
+    show_delivery_method: pick("show_delivery_method"),
+    show_region: pick("show_region"),
+    show_platform: pick("show_platform"),
+    show_login_method: pick("show_login_method"),
+    // A product-level notice replaces the category one when present.
+    sell_notice: (product.sell_notice as string) ?? cat.sell_notice,
+  };
+}
 
 /**
  * The shape of one category's "create offer" flow.
@@ -632,6 +677,11 @@ const DEFAULT_SELL_CONFIG = {
   commission_pct: null as number | null,
   sell_notice_title: null as string | null,
   sell_notice: null as string | null,
+  fulfilment: "both",
+  show_delivery_method: 1,
+  show_region: 1,
+  show_platform: 1,
+  show_login_method: 1,
 };
 
 export async function getSellConfig(slug: string): Promise<SellConfig | null> {
@@ -643,7 +693,8 @@ export async function getSellConfig(slug: string): Promise<SellConfig | null> {
     const row = await one<SellConfig>(
       `SELECT slug, name, unit_label, needs_title, needs_images, needs_credentials,
               needs_quantity, allow_volume_discount, commission_pct,
-              sell_notice_title, sell_notice
+              sell_notice_title, sell_notice, fulfilment,
+              show_delivery_method, show_region, show_platform, show_login_method
          FROM categories WHERE slug=? AND status='active'`,
       [slug]
     );

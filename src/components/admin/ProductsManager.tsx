@@ -2,12 +2,12 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, Pencil, Trash2, X, Loader2, Layers, Check } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, X, Loader2, Layers, Check, SlidersHorizontal } from "lucide-react";
 import { Btn, Tag, Field, inputCls, Empty } from "@/components/ui";
 import { Table, Tr, Td, Toolbar, IconAction } from "@/components/admin/ui";
 import { money } from "@/lib/fmt";
 import ImagePicker from "@/components/admin/ImagePicker";
-import { saveProductAction, deleteProductAction, bulkProductAction } from "@/lib/actions/admin";
+import { saveProductAction, deleteProductAction, bulkProductAction, saveProductSellFlowAction } from "@/lib/actions/admin";
 
 export type Opt = { id: string; value: string; label: string };
 
@@ -18,6 +18,14 @@ type P = {
   delivery_time: string; login_method: string | null; delivery_instructions: string | null;
   status: string; popular: number; featured: number; pinned: number; sort_order: number;
   offer_count: number; min_price: number | null;
+  // Per-product sell-flow overrides. NULL = inherit the category.
+  needs_title?: number | null; needs_images?: number | null;
+  needs_credentials?: number | null; needs_quantity?: number | null;
+  allow_volume_discount?: number | null; unit_label?: string | null;
+  commission_pct?: number | null; fulfilment?: string | null;
+  show_delivery_method?: number | null; show_region?: number | null;
+  show_platform?: number | null; show_login_method?: number | null;
+  sell_notice?: string | null;
 };
 type G = { slug: string; name: string };
 type C = { slug: string; name: string };
@@ -33,6 +41,7 @@ export default function ProductsManager({
   const [term, setTerm] = useState(filters.q);
   const [sel, setSel] = useState<string[]>([]);
   const [edit, setEdit] = useState<P | "new" | null>(null);
+  const [flow, setFlow] = useState<P | null>(null);
   const [busy, start] = useTransition();
 
   const nav = (patch: Record<string, string>) => {
@@ -140,6 +149,9 @@ export default function ProductsManager({
               </Td>
               <Td>
                 <div className="flex justify-end gap-1.5">
+                  <IconAction title="Sell flow" onClick={() => setFlow(p)}>
+                    <SlidersHorizontal size={12} />
+                  </IconAction>
                   <IconAction title="Edit" onClick={() => setEdit(p)}><Pencil size={12} /></IconAction>
                   <IconAction title="Delete" danger disabled={busy} onClick={() => remove(p)}><Trash2 size={12} /></IconAction>
                 </div>
@@ -159,8 +171,152 @@ export default function ProductsManager({
             onClose={() => setEdit(null)}
           />
         )}
+        {flow && <SellFlowForm p={flow} onClose={() => setFlow(null)} />}
       </AnimatePresence>
     </div>
+  );
+}
+
+/**
+ * Per-product sell-flow editor.
+ *
+ * Every switch is tri-state: "Inherit" leaves the category in charge, so an
+ * admin only overrides what actually differs for this product. That is what
+ * stops, say, a subscription being asked for a Region and a Platform it will
+ * never use.
+ */
+function SellFlowForm({ p, onClose }: { p: P; onClose: () => void }) {
+  const router = useRouter();
+  const [busy, start] = useTransition();
+  const [err, setErr] = useState("");
+
+  const Tri = ({ name, label, hint, def }: {
+    name: string; label: string; hint: string; def?: number | null;
+  }) => (
+    <div className="flex items-start justify-between gap-3 rounded-lg soft px-3 py-2.5">
+      <div className="min-w-0">
+        <div className="text-[12.5px] font-semibold">{label}</div>
+        <div className="mt-0.5 text-[11px] muted">{hint}</div>
+      </div>
+      <select
+        name={name}
+        defaultValue={def === null || def === undefined ? "" : String(def)}
+        className="h-8 shrink-0 rounded-lg border border-[var(--line)] bg-transparent px-2 text-[12px] soft"
+      >
+        <option value="">Inherit</option>
+        <option value="1">Show</option>
+        <option value="0">Hide</option>
+      </select>
+    </div>
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="fixed inset-0 z-[120] grid place-items-center bg-black/70 p-4"
+    >
+      <motion.form
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 10, scale: 0.98 }}
+        onClick={(e) => e.stopPropagation()}
+        action={(fd) =>
+          start(async () => {
+            const r = await saveProductSellFlowAction(fd);
+            if (!r.ok) { setErr(r.error ?? "Could not save."); return; }
+            onClose();
+            router.refresh();
+          })
+        }
+        className="max-h-[88vh] w-full max-w-[580px] overflow-y-auto rounded-2xl panel p-4 sm:p-5"
+      >
+        <input type="hidden" name="id" value={p.id} />
+
+        <div className="mb-1 flex items-center gap-2">
+          <h2 className="text-[15px] font-black">Sell flow — {p.name}</h2>
+          <button type="button" onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400">
+            <X size={15} />
+          </button>
+        </div>
+        <p className="mb-4 text-[11.5px] muted">
+          Overrides the <b>{p.category_name}</b> category defaults for this product only.
+        </p>
+
+        <Field label="How is this product fulfilled?">
+          <select
+            name="fulfilment"
+            defaultValue={p.fulfilment ?? ""}
+            className={inputCls}
+          >
+            <option value="">Inherit from category</option>
+            <option value="both">Seller chooses (Automatic or Manual)</option>
+            <option value="auto">Automatic only — seller pre-fills the details now</option>
+            <option value="manual">Manual only — seller sends details in chat after the sale</option>
+          </select>
+        </Field>
+        <div className="mb-3 mt-1.5 rounded-lg soft px-3 py-2 text-[11px] leading-relaxed muted">
+          <b>Automatic</b> shows the encrypted credential vault, and the buyer gets the
+          details the instant they pay. <b>Manual</b> hides it and the seller delivers
+          through the order chat.
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Unit label">
+            <input name="unitLabel" defaultValue={p.unit_label ?? ""} placeholder="Inherit" className={inputCls} />
+          </Field>
+          <Field label="Commission %">
+            <input
+              name="commissionPct"
+              type="number"
+              step="0.1"
+              min={0}
+              max={90}
+              defaultValue={p.commission_pct ?? ""}
+              placeholder="Inherit"
+              className={inputCls}
+            />
+          </Field>
+        </div>
+
+        <div className="mt-3 space-y-1.5">
+          <Tri name="needsTitle" label="Offer title" hint="Ask the seller for their own headline." def={p.needs_title} />
+          <Tri name="needsImages" label="Offer photos" hint="Show the image uploader." def={p.needs_images} />
+          <Tri name="needsCredentials" label="Account credentials" hint="The encrypted login / 2FA vault." def={p.needs_credentials} />
+          <Tri name="needsQuantity" label="Quantity" hint="Turn off for one-off services." def={p.needs_quantity} />
+          <Tri name="allowVolumeDiscount" label="Volume discounts" hint="Bulk pricing tiers." def={p.allow_volume_discount} />
+          <Tri name="showDeliveryMethod" label="Delivery method list" hint="In-game trade, mail, auction house…" def={p.show_delivery_method} />
+          <Tri name="showRegion" label="Region" hint="Hide for region-free products." def={p.show_region} />
+          <Tri name="showPlatform" label="Platform" hint="Hide for platform-free products." def={p.show_platform} />
+          <Tri name="showLoginMethod" label="Login method" hint="How the buyer signs in." def={p.show_login_method} />
+        </div>
+
+        <div className="mt-3">
+          <Field label="Notice for the seller (optional)">
+            <textarea
+              name="sellNotice"
+              rows={3}
+              defaultValue={p.sell_notice ?? ""}
+              placeholder="Replaces the category notice for this product."
+              className={inputCls}
+            />
+          </Field>
+        </div>
+
+        {err && <div className="mt-3 text-[12px] text-rose-400">{err}</div>}
+
+        <div className="mt-4 flex items-center gap-2">
+          <Btn type="submit" disabled={busy} className="flex items-center gap-1.5">
+            {busy && <Loader2 size={13} className="animate-spin" />} Save
+          </Btn>
+          <button type="button" onClick={onClose} className="rounded-lg soft px-4 py-2 text-[12.5px] font-semibold">
+            Cancel
+          </button>
+        </div>
+      </motion.form>
+    </motion.div>
   );
 }
 

@@ -4,7 +4,7 @@ import { createContext, useContext, useCallback, useMemo, useState, useTransitio
 import { useRouter } from "next/navigation";
 import {
   type LangCode, type CurrencyCode, type CurrencyDef, type Dict,
-  getCurrency, formatMoney, LANG_COOKIE, CUR_COOKIE,
+  getCurrency, formatMoney, LANG_COOKIE, CUR_COOKIE, DEFAULT_LANG, DEFAULT_CURRENCY,
 } from "@/lib/i18n";
 
 type Ctx = {
@@ -83,9 +83,42 @@ export default function LocaleProvider({
   return <LocaleCtx.Provider value={value}>{children}</LocaleCtx.Provider>;
 }
 
+/**
+ * Locale context, with a safe fallback outside the provider.
+ *
+ * The admin panel is deliberately NOT wrapped in <LocaleProvider>: admins work
+ * in USD so the numbers match the ledger, whatever currency a visitor has
+ * chosen. But admin reuses shared components (SalesChart, Tag, …) that call
+ * these hooks, and throwing there took the whole panel down with
+ * "useLocale must be used inside <LocaleProvider>" the moment an admin logged in.
+ *
+ * A missing provider is therefore treated as "no localisation": English, USD,
+ * unconverted amounts. That is exactly what the admin panel wants, and it means
+ * a shared component can never crash a tree just by being reused.
+ */
+const FALLBACK: Ctx = {
+  lang: DEFAULT_LANG,
+  currency: getCurrency(DEFAULT_CURRENCY),
+  rates: {},
+  t: (_key: string, fallback?: string) => fallback ?? "",
+  money: (usd: number | null | undefined) =>
+    formatMoney(usd, getCurrency(DEFAULT_CURRENCY)),
+  setLang: () => {},
+  setCurrency: () => {},
+  pending: false,
+};
+
 export function useLocale(): Ctx {
+  return useContext(LocaleCtx) ?? FALLBACK;
+}
+
+/**
+ * Strict variant for components that genuinely require a provider (the locale
+ * switcher itself). Keeps the original loud failure where it is useful.
+ */
+export function useLocaleStrict(): Ctx {
   const c = useContext(LocaleCtx);
-  if (!c) throw new Error("useLocale must be used inside <LocaleProvider>");
+  if (!c) throw new Error("useLocaleStrict must be used inside <LocaleProvider>");
   return c;
 }
 
