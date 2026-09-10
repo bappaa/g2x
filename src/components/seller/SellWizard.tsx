@@ -8,6 +8,7 @@ import { ChevronRight, Search, Info, ChevronDown, Plus } from "lucide-react";
 import { AnyLogo } from "@/components/BrandIcon";
 import { useMoney } from "@/components/LocaleProvider";
 import { img } from "@/lib/img";
+import { resolveLogo } from "@/lib/gameart";
 
 export type WizGame = { slug: string; name: string; logo: string; products: number };
 export type WizProduct = {
@@ -104,9 +105,22 @@ export function GamePicker({
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<WizGame | null>(null);
 
+  /**
+   * Cap the rendered list.
+   *
+   * A category can hold 100+ games; painting them all into an open dropdown is
+   * wasted work when only ~8 are visible. Searching narrows it, so 60 rows is
+   * always more than enough to scroll through.
+   */
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return s ? games.filter((g) => g.name.toLowerCase().includes(s)) : games;
+    const list = s ? games.filter((g) => g.name.toLowerCase().includes(s)) : games;
+    return list.slice(0, 60);
+  }, [q, games]);
+  const hiddenCount = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    const total = s ? games.filter((g) => g.name.toLowerCase().includes(s)).length : games.length;
+    return Math.max(0, total - 60);
   }, [q, games]);
 
   return (
@@ -156,13 +170,18 @@ export function GamePicker({
                       }}
                       className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12.5px] transition-colors hover:bg-brand-600/10"
                     >
-                      <GameLogo logo={g.logo} name={g.name} />
+                      <GameLogo logo={g.logo} name={g.name} slug={g.slug} />
                       <span className="min-w-0 flex-1 truncate">{g.name}</span>
                       <span className="shrink-0 text-[10.5px] muted">{g.products}</span>
                     </button>
                   ))
                 ) : (
                   <div className="px-3 py-8 text-center text-[12px] muted">No games match that search.</div>
+                )}
+                {hiddenCount > 0 && (
+                  <div className="px-3 py-2 text-center text-[11px] muted">
+                    +{hiddenCount} more — type to narrow the list
+                  </div>
                 )}
               </div>
             </motion.div>
@@ -198,19 +217,26 @@ export function GamePicker({
   );
 }
 
-function GameLogo({ logo, name, size = 22 }: { logo: string; name: string; size?: number }) {
-  const isImage = logo?.startsWith("/") || logo?.startsWith("http") || logo?.startsWith("data:");
-  if (!isImage) return <AnyLogo logo={logo} size={size} />;
+function GameLogo({ logo, name, slug, size = 22 }: {
+  logo: string; name: string; slug?: string; size?: number;
+}) {
+  /**
+   * Generated tiles are inlined as data URIs, so a 115-game picker costs zero
+   * network requests. Plain <img> on purpose: next/image adds no value to an
+   * inline SVG and would only add markup.
+   */
+  const src = resolveLogo(logo, slug || name, name);
+  if (src.startsWith("data:image/svg+xml")) {
+    /* eslint-disable-next-line @next/next/no-img-element */
+    return (
+      <img src={src} alt="" width={size} height={size} className="shrink-0 rounded-md" />
+    );
+  }
+  const isImage = src.startsWith("/") || src.startsWith("http") || src.startsWith("data:");
+  if (!isImage) return <AnyLogo logo={src} size={size} />;
   return (
     <span className="relative shrink-0 overflow-hidden rounded-md" style={{ width: size, height: size }}>
-      <Image
-        src={img(logo)}
-        alt={name}
-        fill
-        sizes={`${size}px`}
-        unoptimized={logo.startsWith("/api/")}
-        className="object-cover"
-      />
+      <Image src={img(src)} alt={name} fill sizes={`${size}px`} className="object-cover" />
     </span>
   );
 }

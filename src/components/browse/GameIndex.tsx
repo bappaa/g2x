@@ -7,6 +7,7 @@ import { Search, TrendingUp } from "lucide-react";
 import { AnyLogo } from "@/components/BrandIcon";
 import { useT } from "@/components/LocaleProvider";
 import { img } from "@/lib/img";
+import { resolveLogo } from "@/lib/gameart";
 
 export type IndexGame = {
   slug: string;
@@ -25,22 +26,28 @@ const bucketOf = (name: string) => {
 };
 
 function GameTile({ g, href }: { g: IndexGame; href: string }) {
-  const isImage = g.logo?.startsWith("/") || g.logo?.startsWith("http") || g.logo?.startsWith("data:");
+  // Generated tiles inline as data URIs — a 115-game index makes no requests.
+  const logo = resolveLogo(g.logo, g.slug, g.name);
+  const isImage = logo.startsWith("/") || logo.startsWith("http") || logo.startsWith("data:");
   return (
     <Link href={href} className="group block">
       <div className="tile relative aspect-square w-full overflow-hidden border border-[var(--line)] soft transition-all duration-300 group-hover:-translate-y-1 group-hover:border-brand-500/70 group-hover:shadow-[0_16px_36px_-20px_rgba(139,61,255,.95)]">
         {isImage ? (
+          logo.startsWith("data:image/svg+xml") ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={logo} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+          ) : (
           <Image
-            src={img(g.logo)}
+            src={img(logo)}
             alt={g.name}
             fill
             sizes="(max-width:640px) 33vw, 140px"
-            unoptimized={g.logo.startsWith("/api/")}
             className="object-cover transition-transform duration-500 group-hover:scale-110"
           />
+          )
         ) : (
           <div className="grid h-full w-full place-items-center transition-transform duration-500 group-hover:scale-110">
-            <AnyLogo logo={g.logo} size={44} />
+            <AnyLogo logo={logo} size={44} />
           </div>
         )}
       </div>
@@ -169,20 +176,19 @@ export default function GameIndex({
                 className="group flex items-center gap-3 py-2.5 transition-colors hover:bg-brand-600/[.06]"
               >
                 <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg soft">
-                  {g.logo?.startsWith("/") || g.logo?.startsWith("http") ? (
-                    <Image
-                      src={img(g.logo)}
-                      alt={g.name}
-                      fill
-                      sizes="36px"
-                      unoptimized={g.logo.startsWith("/api/")}
-                      className="object-cover"
-                    />
-                  ) : (
-                    <span className="grid h-full w-full place-items-center">
-                      <AnyLogo logo={g.logo} size={20} />
-                    </span>
-                  )}
+                  {(() => {
+                    const lg = resolveLogo(g.logo, g.slug, g.name);
+                    if (lg.startsWith("data:image/svg+xml"))
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      return <img src={lg} alt="" className="h-full w-full object-cover" />;
+                    if (lg.startsWith("/") || lg.startsWith("http"))
+                      return <Image src={img(lg)} alt={g.name} fill sizes="36px" className="object-cover" />;
+                    return (
+                      <span className="grid h-full w-full place-items-center">
+                        <AnyLogo logo={lg} size={20} />
+                      </span>
+                    );
+                  })()}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[12.5px] font-semibold transition-colors group-hover:text-brand-500">

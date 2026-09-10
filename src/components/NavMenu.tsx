@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, ChevronLeft, Search, X } from "lucide-react"
 import { AnyLogo } from "./BrandIcon";
 import { useT } from "./LocaleProvider";
 import { img } from "@/lib/img";
+import { resolveLogo } from "@/lib/gameart";
 
 export type MenuGame = { slug: string; name: string; logo: string; href: string };
 export type MenuCategory = { slug: string; name: string; popular: MenuGame[]; all: MenuGame[] };
@@ -16,23 +17,23 @@ export type MenuCategory = { slug: string; name: string; popular: MenuGame[]; al
 /* ------------------------------------------------------------------ */
 
 /** Small square game icon. Falls back to the brand-glyph renderer. */
-function GameIcon({ logo, name, size = 22 }: { logo: string; name: string; size?: number }) {
-  const isImage =
-    logo?.startsWith("/") || logo?.startsWith("http") || logo?.startsWith("data:");
-  if (!isImage) return <AnyLogo logo={logo} size={size} />;
+function GameIcon({ logo, name, slug, size = 22 }: {
+  logo: string; name: string; slug?: string; size?: number;
+}) {
+  // Inline data URI = no request. The mega-menu lists every game in a category.
+  const src = resolveLogo(logo, slug || name, name);
+  if (src.startsWith("data:image/svg+xml")) {
+    /* eslint-disable-next-line @next/next/no-img-element */
+    return <img src={src} alt="" width={size} height={size} className="shrink-0 rounded-md" />;
+  }
+  const isImage = src.startsWith("/") || src.startsWith("http") || src.startsWith("data:");
+  if (!isImage) return <AnyLogo logo={src} size={size} />;
   return (
     <span
       className="relative shrink-0 overflow-hidden rounded-md"
       style={{ width: size, height: size }}
     >
-      <Image
-        src={img(logo)}
-        alt={name}
-        fill
-        sizes={`${size}px`}
-        unoptimized={logo.startsWith("/api/")}
-        className="object-cover"
-      />
+      <Image src={img(src)} alt={name} fill sizes={`${size}px`} className="object-cover" />
     </span>
   );
 }
@@ -44,7 +45,7 @@ function GameRow({ g, onClick }: { g: MenuGame; onClick?: () => void }) {
       onClick={onClick}
       className="flex items-center gap-2.5 rounded-lg px-2 py-[7px] text-[12.5px] transition-colors hover:bg-brand-600/10 hover:text-brand-400"
     >
-      <GameIcon logo={g.logo} name={g.name} />
+      <GameIcon logo={g.logo} name={g.name} slug={g.slug} />
       <span className="truncate">{g.name}</span>
     </Link>
   );

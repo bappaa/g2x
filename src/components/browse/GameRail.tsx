@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronDown, LayoutGrid, X } from "lucide-react";
 import { AnyLogo } from "@/components/BrandIcon";
+import { gameArt } from "@/lib/gameart";
 
 const cats = [
   { slug: "top-up", name: "Top Up" },
@@ -179,7 +180,12 @@ function GameList({
               activeGame === g.slug ? "bg-brand-600/15 font-semibold text-brand-400" : ""
             }`}
           >
-            <AnyLogo logo={g.logo} size={20} />
+            {g.logo ? (
+              <AnyLogo logo={g.logo} size={20} />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={gameArt(g.slug, g.name)} alt="" width={20} height={20} className="shrink-0 rounded" />
+            )}
             <span className="truncate">{g.name}</span>
           </Link>
         ))}

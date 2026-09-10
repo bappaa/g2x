@@ -77,9 +77,10 @@ async function main() {
   let links = 0;
   for (const [slug, g] of games) {
     await db.execute({
+      // Empty logo = generate a tile inline (see src/lib/gameart.ts).
       sql: `INSERT INTO games (slug,name,logo,accent,status,sort_order)
             VALUES (?,?,?,?, 'active', ?)`,
-      args: [slug, g.name, `/api/gameart/${slug}`, accent(g.name), n],
+      args: [slug, g.name, "", accent(g.name), n],
     });
     for (const c of g.cats) {
       await db.execute({
