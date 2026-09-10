@@ -15,16 +15,9 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 
 import { createClient } from "@libsql/client";
+import { makeDb } from "./db-url.mjs";
 
-const url = process.env.TURSO_DATABASE_URL?.startsWith("libsql://")
-  ? process.env.TURSO_DATABASE_URL
-  : "file:./g2x.db";
-
-const db = createClient(
-  url.startsWith("libsql://")
-    ? { url, authToken: process.env.TURSO_AUTH_TOKEN }
-    : { url }
-);
+const db = makeDb(createClient, { quiet: true });
 
 const CODES = ["INR", "CAD", "AUD", "EUR", "GBP", "JPY", "BRL", "SGD", "CHF", "SEK"];
 

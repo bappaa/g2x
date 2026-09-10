@@ -1,42 +1,31 @@
 import "server-only";
 import type { Client, InArgs } from "@libsql/client";
-// Pure-fetch HTTP/WS entry point with NO native dependency. Safe in serverless
-// and edge runtimes (Netlify, Vercel, Cloudflare) where a .node binary cannot
-// be loaded. This is the ONLY statically imported client.
-import { createClient as createWebClient } from "@libsql/client/web";
 
 /**
- * Load the Node client lazily, and only for `file:` URLs.
+ * DATABASE — local SQLite on the VPS NVMe.
+ * ========================================
+ * The app used to talk to Turso over HTTP because it ran on Netlify, where
+ * there is no persistent disk. On a VPS that indirection is pure cost: every
+ * query was a network round-trip to another machine.
  *
- * `@libsql/client` (the default export) statically imports the native `libsql`
- * addon so it can open local SQLite files. A serverless bundler follows that
- * static import and then fails to ship/dlopen the .node binary, which crashes
- * the function at import time — the whole site returns "Application error: a
- * server-side exception has occurred".
+ * Reading straight off NVMe turns a ~30-60 ms hop into a ~0.05 ms file read,
+ * and removes a whole class of failure (auth tokens, rate limits, and the
+ * "Connection closed" errors that came from frozen serverless sockets).
  *
- * Requiring it behind a runtime branch keeps it out of the serverless bundle
- * entirely: on Turso we never reach this line.
- */
-function createFileClient(url: string): Client {
-  /* eslint-disable-next-line @typescript-eslint/no-require-imports --
-     Intentional: a static import would drag the native addon into the
-     serverless bundle and crash the function before any code runs. */
-  const { createClient } = require("@libsql/client") as typeof import("@libsql/client");
-  return createClient({ url });
-}
-
-/**
- * Turso / libSQL client.
+ * Configuration is a single env var:
  *
- * Production:  TURSO_DATABASE_URL=libsql://<db>-<org>.turso.io
- *              TURSO_AUTH_TOKEN=<token>
- * Local dev:   falls back to a local SQLite file so the app runs
- *              with zero configuration.
+ *   DATABASE_PATH=/var/lib/g2x/g2x.db      <- recommended on the VPS
+ *
+ * If it is unset the app falls back to ./g2x.db so a fresh clone runs with no
+ * configuration at all. `TURSO_DATABASE_URL` is still honoured if present, so
+ * an existing remote deployment keeps working without edits.
  */
 
 declare global {
   // eslint-disable-next-line no-var
   var __g2xDb: Client | undefined;
+  // eslint-disable-next-line no-var
+  var __g2xDbTuned: boolean | undefined;
 }
 
 /** Leftovers from copying .env.example without editing it. */
@@ -47,54 +36,94 @@ const PLACEHOLDERS = [
 const isPlaceholder = (v?: string) =>
   !!v && PLACEHOLDERS.some((p) => v.trim().toLowerCase().includes(p));
 
-const LOCAL_DB = "file:./g2x.db";
+/**
+ * Resolve the database location.
+ *
+ * Accepts a bare path (/var/lib/g2x/g2x.db) or a file: URL, and normalises to
+ * the `file:` form libSQL expects.
+ */
+function resolveLocalUrl(): string {
+  const raw = process.env.DATABASE_PATH?.trim() || process.env.DATABASE_URL?.trim();
+  if (!raw || isPlaceholder(raw)) return "file:./g2x.db";
+  if (raw.startsWith("file:")) return raw;
+  return `file:${raw}`;
+}
+
+/**
+ * Node client. Statically required (not imported) so bundlers that follow
+ * static imports do not try to trace the native addon into an edge bundle.
+ */
+function createFileClient(url: string): Client {
+  /* eslint-disable-next-line @typescript-eslint/no-require-imports --
+     Kept as require() so the native binding is resolved at runtime only. */
+  const { createClient } = require("@libsql/client") as typeof import("@libsql/client");
+  return createClient({ url });
+}
 
 function make(): Client {
-  const url = process.env.TURSO_DATABASE_URL?.trim();
-  const authToken = process.env.TURSO_AUTH_TOKEN?.trim();
+  const turso = process.env.TURSO_DATABASE_URL?.trim();
+  const token = process.env.TURSO_AUTH_TOKEN?.trim();
 
-  // No URL configured -> local file, zero config.
-  if (!url) return createFileClient(LOCAL_DB);
-
-  // Placeholder left in .env.local -> fall back rather than throw a 404.
-  if (isPlaceholder(url)) {
-    console.warn(
-      "\n⚠  TURSO_DATABASE_URL still contains the example placeholder.\n" +
-        `   Falling back to the local database (${LOCAL_DB}).\n` +
-        "   Comment the line out in .env.local, or set a real Turso URL.\n"
-    );
-    return createFileClient(LOCAL_DB);
-  }
-
-  if (url.startsWith("libsql://") || url.startsWith("https://")) {
-    if (!authToken || isPlaceholder(authToken)) {
+  // Still support a remote libSQL/Turso URL if one is explicitly configured.
+  if (turso && !isPlaceholder(turso) && /^(libsql|https):\/\//.test(turso)) {
+    if (!token || isPlaceholder(token)) {
       console.warn(
         "\n⚠  TURSO_DATABASE_URL is set but TURSO_AUTH_TOKEN is missing/placeholder.\n" +
-          `   Falling back to the local database (${LOCAL_DB}).\n` +
-          "   Create one with: turso db tokens create <your-db>\n"
+          "   Falling back to the local database.\n"
       );
-      return createFileClient(LOCAL_DB);
+      return createFileClient(resolveLocalUrl());
     }
-    /**
-     * Remote Turso -> ALWAYS use the web (pure fetch) client.
-     *
-     * The default "@libsql/client" export resolves to its Node build, which
-     * statically imports the native `libsql` addon (a .node binary) to support
-     * `file:` URLs. Serverless bundlers (Netlify/Vercel functions) cannot ship
-     * or dlopen that binary, so the function throws at import time and every
-     * page renders "Application error: a server-side exception has occurred".
-     *
-     * The /web entry speaks the same Turso HTTP protocol using only `fetch`,
-     * so it works identically here and in any serverless runtime.
-     */
-    return createWebClient({ url, authToken });
+    /* eslint-disable-next-line @typescript-eslint/no-require-imports */
+    const { createClient } = require("@libsql/client/web") as typeof import("@libsql/client/web");
+    return createClient({ url: turso, authToken: token });
   }
 
-  return createFileClient(url);
+  return createFileClient(resolveLocalUrl());
 }
 
 export const db: Client = globalThis.__g2xDb ?? make();
-if (process.env.NODE_ENV !== "production") globalThis.__g2xDb = db;
+// Reuse one client across hot reloads AND across the production process, so we
+// never open a second connection to the same file.
+globalThis.__g2xDb = db;
+
+/**
+ * SQLite pragmas that matter for a web app on NVMe.
+ *
+ * Applied once per process, fire-and-forget so a cold request is never blocked:
+ *
+ *   journal_mode=WAL   readers no longer block the writer (the single biggest
+ *                      win — the default rollback journal serialises everything)
+ *   synchronous=NORMAL fsync on checkpoint rather than every commit; safe under
+ *                      WAL and dramatically faster on writes
+ *   busy_timeout       wait for a lock instead of instantly throwing SQLITE_BUSY
+ *   foreign_keys       enforce the constraints the schema declares
+ *   cache_size=-64000  64 MB page cache (negative = KiB)
+ *   temp_store=MEMORY  sorts and temp tables in RAM
+ */
+function tune(): void {
+  if (globalThis.__g2xDbTuned) return;
+  globalThis.__g2xDbTuned = true;
+
+  const pragmas = [
+    "PRAGMA journal_mode = WAL",
+    "PRAGMA synchronous = NORMAL",
+    "PRAGMA busy_timeout = 5000",
+    "PRAGMA foreign_keys = ON",
+    "PRAGMA cache_size = -64000",
+    "PRAGMA temp_store = MEMORY",
+  ];
+
+  void (async () => {
+    for (const p of pragmas) {
+      try {
+        await db.execute(p);
+      } catch {
+        /* remote libSQL ignores some pragmas — never fatal */
+      }
+    }
+  })();
+}
+tune();
 
 /* ------------------------- tiny query helpers ------------------------- */
 
@@ -118,18 +147,16 @@ function plain<T>(row: unknown, columns: string[]): T {
 /**
  * Transient failures worth one retry.
  *
- * Serverless functions reuse HTTP/2 connections between invocations. When the
- * platform freezes a container the socket can be closed underneath us, and the
- * next query fails with "Connection closed" / "stream closed" before it ever
- * reaches Turso. That surfaced in production as
- * `Error: Connection closed.` in the browser console with a blank page.
- *
- * These are connection-level faults, not query faults: the statement never
- * executed, so retrying once is safe even for writes.
+ * On a local file the realistic case is SQLITE_BUSY: another request holds the
+ * write lock. `busy_timeout` handles most of it, and this catches the rest.
+ * (The network cases are kept for the remote-libSQL fallback path.)
  */
 function isTransient(e: unknown): boolean {
   const m = String((e as Error)?.message ?? "").toLowerCase();
   return (
+    m.includes("database is locked") ||
+    m.includes("sqlite_busy") ||
+    m.includes("busy") ||
     m.includes("connection closed") ||
     m.includes("stream closed") ||
     m.includes("socket hang up") ||
@@ -144,7 +171,6 @@ async function exec(sql: string, args: InArgs) {
     return await db.execute({ sql, args });
   } catch (e) {
     if (!isTransient(e)) throw e;
-    // One immediate retry on a fresh connection.
     await new Promise((r) => setTimeout(r, 120));
     return db.execute({ sql, args });
   }

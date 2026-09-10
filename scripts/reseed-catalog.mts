@@ -17,10 +17,10 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 import { createClient } from "@libsql/client";
+import { makeDb, resolveDbConfig } from "./db-url.mjs";
 import { readFileSync } from "node:fs";
 
-const url = process.env.TURSO_DATABASE_URL?.trim() || "file:./g2x.db";
-const db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
+const db = makeDb(createClient, { quiet: true });
 
 const CATALOG: Record<string, string[]> = JSON.parse(
   readFileSync("scripts/catalog.json", "utf8")
@@ -46,7 +46,7 @@ function accent(name: string): string {
 }
 
 async function main() {
-  console.log(`[reseed] target: ${url.startsWith("file:") ? url : "Turso (remote)"}`);
+  console.log(`[reseed] target: ${resolveDbConfig().url}`);
 
   // --- collect unique games and the categories each belongs to -------------
   const games = new Map<string, { name: string; cats: string[] }>();

@@ -15,7 +15,9 @@
  * the runtime guard repairs the schema on the first request.
  */
 import { config } from "dotenv";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { resolveDbConfig } from "./db-url.mjs";
 import { createClient } from "@libsql/client";
 
 config({ path: ".env.local" });
@@ -42,13 +44,30 @@ function patches(): string[] {
 const benign = (m: string) => /duplicate column|already exists/i.test(m);
 
 async function main() {
-  const url = process.env.TURSO_DATABASE_URL;
-  if (!url) {
-    console.log("[deploy-migrate] no TURSO_DATABASE_URL — skipping (runtime guard will handle it).");
-    return;
+  /**
+   * Always migrate.
+   *
+   * This used to bail out unless TURSO_DATABASE_URL was set, which was correct
+   * for Netlify but wrong on a VPS: the local database would silently never be
+   * migrated, and the app would only self-repair on the first request that
+   * happened to need a new column.
+   */
+  const cfg = resolveDbConfig();
+  console.log(`[deploy-migrate] target: ${cfg.url}`);
+
+  // Make sure the directory exists — /var/lib/g2x on a fresh box.
+  if (cfg.url.startsWith("file:")) {
+    const file = cfg.url.slice("file:".length);
+    const dir = dirname(resolve(file));
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+      console.log(`[deploy-migrate] created ${dir}`);
+    }
   }
 
-  const db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
+  const db = cfg.authToken
+    ? createClient({ url: cfg.url, authToken: cfg.authToken })
+    : createClient({ url: cfg.url });
   const list = patches();
   let applied = 0;
   let present = 0;

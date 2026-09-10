@@ -12,6 +12,9 @@ config({ path: ".env.local" });
 
 import { createClient } from "@libsql/client";
 import { createClient as createWebClient } from "@libsql/client/web";
+import { existsSync, accessSync, constants as fsConstants } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { resolveDbConfig } from "./db-url.mjs";
 
 const PLACEHOLDERS = [
   "your-db-your-org", "your-db", "your-org", "yourdomain",
@@ -46,23 +49,38 @@ else if (prod && !appUrl.startsWith("https://")) meh(`NEXT_PUBLIC_APP_URL is not
 else ok(`NEXT_PUBLIC_APP_URL = ${appUrl}`);
 
 head("Database");
-const url = process.env.TURSO_DATABASE_URL?.trim();
-const token = process.env.TURSO_AUTH_TOKEN?.trim();
-let dbUrl = "file:./g2x.db";
+const cfg = resolveDbConfig();
+const dbUrl = cfg.url;
 
-if (!url) {
-  (prod ? meh : ok)(
-    prod
-      ? "TURSO_DATABASE_URL is not set — using the local SQLite file. Fine for a single VPS, but data lives only on that disk (back it up!)."
-      : "No Turso URL set — using the local SQLite file (./g2x.db)."
-  );
-} else if (isPlaceholder(url)) {
-  bad("TURSO_DATABASE_URL is still the example placeholder. Comment it out or set a real URL.");
-} else if (!token || isPlaceholder(token)) {
-  bad("TURSO_DATABASE_URL is set but TURSO_AUTH_TOKEN is missing/placeholder.");
+if (cfg.note) meh(cfg.note);
+
+if (cfg.mode === "turso") {
+  ok(`Remote libSQL = ${dbUrl}`);
 } else {
-  dbUrl = url;
-  ok(`Turso URL = ${url}`);
+  const file = dbUrl.replace(/^file:/, "");
+  const abs = resolve(file);
+  if (prod && !process.env.DATABASE_PATH?.trim()) {
+    meh(
+      `DATABASE_PATH is not set — using ${abs}. ` +
+        "Inside the app folder a git checkout or rebuild can wipe it. " +
+        "Set DATABASE_PATH=/var/lib/g2x/g2x.db"
+    );
+  } else {
+    ok(`SQLite file = ${abs}`);
+  }
+
+  // The directory must exist and be writable, or every write 500s.
+  const dir = dirname(abs);
+  if (!existsSync(dir)) {
+    bad(`Database directory ${dir} does not exist. Run: sudo mkdir -p ${dir}`);
+  } else {
+    try {
+      accessSync(dir, fsConstants.W_OK);
+      ok(`Directory writable: ${dir}`);
+    } catch {
+      bad(`Database directory ${dir} is not writable by this user.`);
+    }
+  }
 }
 
 try {

@@ -22,7 +22,9 @@
     "db:ensure": "tsx scripts/deploy-migrate.mts",
     "db:catalog-new": "tsx scripts/reseed-catalog.mts",
     "db:times": "tsx scripts/seed-delivery-times.mts",
-    "db:sellflow": "tsx scripts/seed-sellflow.mts"
+    "db:sellflow": "tsx scripts/seed-sellflow.mts",
+    "db:backup": "tsx scripts/backup-db.mts",
+    "db:restore": "tsx scripts/restore-db.mts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
@@ -38,7 +40,6 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@netlify/plugin-nextjs": "^5.15.13",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^18",

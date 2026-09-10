@@ -7,11 +7,9 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
 import { createClient } from "@libsql/client";
+import { makeDb } from "./db-url.mjs";
 
-const db = createClient({
-  url: process.env.TURSO_DATABASE_URL?.trim() || "file:./g2x.db",
-  authToken: process.env.TURSO_AUTH_TOKEN,
-});
+const db = makeDb(createClient, { quiet: true });
 
 const TIMES = [
   "Instant", "5 minutes", "10 minutes", "15 minutes", "30 minutes", "45 minutes",
