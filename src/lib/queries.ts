@@ -21,6 +21,8 @@ export type DbOffer = {
   status: string; featured: number; sold_count: number;
   store_name: string; seller_slug: string; level: string; verified: number;
   rating: number; total_orders: number;
+  /** JSON array of data URIs uploaded by the seller with this offer. */
+  images: string | null;
 };
 export type DbListing = {
   id: string; seller_id: string; game_slug: string; category_slug: string; title: string;

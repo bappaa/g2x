@@ -21,7 +21,8 @@
     "fx:refresh": "tsx scripts/fx-refresh.mts",
     "db:ensure": "tsx scripts/deploy-migrate.mts",
     "db:catalog-new": "tsx scripts/reseed-catalog.mts",
-    "db:times": "tsx scripts/seed-delivery-times.mts"
+    "db:times": "tsx scripts/seed-delivery-times.mts",
+    "db:sellflow": "tsx scripts/seed-sellflow.mts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

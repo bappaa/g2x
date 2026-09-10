@@ -196,11 +196,20 @@ export async function createOfferAction(form: FormData): Promise<R> {
   let accounts: unknown[] = [];
   if (cfg?.needs_credentials && autoDelivery) {
     accounts = parseJson<Record<string, string>[]>("accounts", []);
+    // Gift cards store the code in `login` and need nothing else.
+    const isGiftCard = product!.category_slug === "gift-cards";
     const bad = accounts.findIndex((a) => {
       const r = a as Record<string, string>;
-      return !String(r?.login ?? "").trim() || !String(r?.password ?? "").trim();
+      const noCode = !String(r?.login ?? "").trim();
+      return isGiftCard ? noCode : noCode || !String(r?.password ?? "").trim();
     });
-    if (bad >= 0) return { ok: false, error: `Account #${bad + 1} needs a login and password.` };
+    if (bad >= 0)
+      return {
+        ok: false,
+        error: isGiftCard
+          ? `Gift Card #${bad + 1} needs a code.`
+          : `Account #${bad + 1} needs a login and password.`,
+      };
   }
 
   const finalStock = cfg?.needs_credentials && autoDelivery ? Math.max(1, accounts.length) : stock;

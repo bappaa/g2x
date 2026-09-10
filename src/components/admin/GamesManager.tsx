@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -15,16 +15,32 @@ type G = {
 };
 type C = { slug: string; name: string };
 
-export default function GamesManager({ games, categories }: { games: G[]; categories: C[] }) {
+export default function GamesManager({
+  games, categories, page = 1, perPage = 40, total = 0, query = "",
+}: {
+  games: G[]; categories: C[];
+  page?: number; perPage?: number; total?: number; query?: string;
+}) {
   const router = useRouter();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(query);
   const [edit, setEdit] = useState<G | "new" | null>(null);
   const [busy, start] = useTransition();
 
-  const rows = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    return s ? games.filter((g) => g.name.toLowerCase().includes(s) || g.slug.includes(s)) : games;
-  }, [games, q]);
+  /**
+   * The table is paginated server-side, so filtering the current page in the
+   * browser would only ever search 40 of 169+ games. The query is pushed into
+   * the URL (debounced) and the server returns the matching page instead.
+   */
+  const rows = games;
+  useEffect(() => {
+    if (q === query) return;
+    const id = setTimeout(() => {
+      const qs = new URLSearchParams();
+      if (q.trim()) qs.set("q", q.trim());
+      router.push(`/admin/games${qs.toString() ? `?${qs}` : ""}`);
+    }, 300);
+    return () => clearTimeout(id);
+  }, [q, query, router]);
 
   const remove = (g: G) => {
     if (!confirm(`Remove “${g.name}”? Its ${g.products} product(s) and all seller offers under them will be deleted.`))
@@ -114,6 +130,24 @@ export default function GamesManager({ games, categories }: { games: G[]; catego
             </Tr>
           ))}
         </Table>
+      )}
+
+      {total > perPage && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-[11.5px] muted">
+            Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
+          </span>
+          <div className="flex items-center gap-2">
+            <GamePager to={page - 1} disabled={page <= 1} q={query} label="Previous" />
+            <span className="text-[11.5px] muted">{page} / {Math.ceil(total / perPage)}</span>
+            <GamePager
+              to={page + 1}
+              disabled={page >= Math.ceil(total / perPage)}
+              q={query}
+              label="Next"
+            />
+          </div>
+        </div>
       )}
 
       <AnimatePresence>
@@ -231,5 +265,32 @@ function GameForm({ game, categories, onClose }: { game: G | null; categories: C
         </div>
       </motion.form>
     </motion.div>
+  );
+}
+
+/** Pager link that keeps the current search term. */
+function GamePager({
+  to, disabled, q, label,
+}: {
+  to: number; disabled: boolean; q: string; label: string;
+}) {
+  const qs = new URLSearchParams();
+  if (q) qs.set("q", q);
+  if (to > 1) qs.set("page", String(to));
+  const href = `/admin/games${qs.toString() ? `?${qs}` : ""}`;
+
+  if (disabled)
+    return (
+      <span className="cursor-not-allowed rounded-lg soft px-3 py-1.5 text-[12px] font-semibold opacity-40">
+        {label}
+      </span>
+    );
+  return (
+    <Link
+      href={href}
+      className="rounded-lg soft px-3 py-1.5 text-[12px] font-semibold transition-colors hover:bg-brand-600/10 hover:text-brand-400"
+    >
+      {label}
+    </Link>
   );
 }

@@ -38,6 +38,26 @@ const SORT_KEY: Record<string, string> = {
 };
 const mins = (s: string) => parseInt(s.replace(/\D/g, "")) || 999;
 
+
+/**
+ * First photo the seller uploaded with an offer, if any.
+ *
+ * `offers.images` is a JSON array of data URIs written by the sell wizard. The
+ * buyer-facing offer rows never read it, so a seller could upload photos of the
+ * exact account they were selling and the buyer would never see them. Falls
+ * back to null so the store-initial avatar is used as before.
+ */
+function offerPhoto(o: { images?: string | null }): string | null {
+  if (!o.images) return null;
+  try {
+    const arr = JSON.parse(o.images);
+    const first = Array.isArray(arr) ? arr[0] : null;
+    return typeof first === "string" && first.startsWith("data:image/") ? first : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function ProductView({
   game,
   category,
@@ -394,9 +414,18 @@ export default function ProductView({
                         >
                           <td className="py-3">
                             <div className="flex items-center gap-2.5">
-                              <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-700 text-[9.5px] font-bold text-white">
-                                {o.store_name.slice(0, 2).toUpperCase()}
-                              </span>
+                              {offerPhoto(o) ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img
+                                  src={offerPhoto(o) as string}
+                                  alt=""
+                                  className="h-7 w-7 shrink-0 rounded-md object-cover"
+                                />
+                              ) : (
+                                <span className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-700 text-[9.5px] font-bold text-white">
+                                  {o.store_name.slice(0, 2).toUpperCase()}
+                                </span>
+                              )}
                               <div>
                                 <div className="flex items-center gap-1 font-semibold">
                                   {o.store_name}
@@ -468,9 +497,18 @@ export default function ProductView({
                       className="min-w-0 overflow-hidden rounded-xl border border-[var(--line)] soft p-3"
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-700 text-[10px] font-bold text-white">
-                          {o.store_name.slice(0, 2).toUpperCase()}
-                        </span>
+                        {offerPhoto(o) ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={offerPhoto(o) as string}
+                            alt=""
+                            className="h-8 w-8 shrink-0 rounded-md object-cover"
+                          />
+                        ) : (
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-700 text-[10px] font-bold text-white">
+                            {o.store_name.slice(0, 2).toUpperCase()}
+                          </span>
+                        )}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1 text-[12.5px] font-semibold">
                             <span className="truncate">{o.store_name}</span>

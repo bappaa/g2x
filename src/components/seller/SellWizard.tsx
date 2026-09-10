@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ChevronRight, Search, Info, ChevronDown } from "lucide-react";
+import { ChevronRight, Search, Info, ChevronDown, Plus } from "lucide-react";
 import { AnyLogo } from "@/components/BrandIcon";
 import { useMoney } from "@/components/LocaleProvider";
 import { img } from "@/lib/img";
@@ -300,6 +300,27 @@ export function ProductPicker({
             <div className="py-10 text-center text-[12.5px] muted">No products match that search.</div>
           )}
         </div>
+      </div>
+
+      {/*
+        Sellers are not limited to the admin's catalogue.
+
+        Picking a pre-defined product keeps offers comparable on a shared
+        product page, which is why it is the default. But a seller with, say,
+        "100 UC" that nobody has listed yet would otherwise be stuck — so they
+        can always describe their own offer instead.
+      */}
+      <div className="mt-4 rounded-2xl border border-dashed border-[var(--line)] p-4 text-center">
+        <div className="text-[12.5px] font-semibold">Selling something not listed here?</div>
+        <p className="mx-auto mt-1 max-w-[420px] text-[11.5px] muted">
+          Create your own offer for {gameName} and describe exactly what you are selling.
+        </p>
+        <Link
+          href={`/seller/sell/${category}/${game}/new`}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-brand-500"
+        >
+          <Plus size={14} /> Create my own offer
+        </Link>
       </div>
 
       <div className="mt-5 text-center">

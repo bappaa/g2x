@@ -1,5 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Search, Pencil, Trash2, X, Loader2, Layers, Check, SlidersHorizontal } from "lucide-react";
@@ -31,10 +32,11 @@ type G = { slug: string; name: string };
 type C = { slug: string; name: string };
 
 export default function ProductsManager({
-  rows, games, categories, filters, options,
+  rows, games, categories, filters, options, page = 1, perPage = 50, total = 0,
 }: {
   rows: P[]; games: G[]; categories: C[];
   filters: { game: string; category: string; q: string };
+  page?: number; perPage?: number; total?: number;
   options: Record<string, Opt[]>;
 }) {
   const router = useRouter();
@@ -161,6 +163,26 @@ export default function ProductsManager({
         </Table>
       )}
 
+      {total > perPage && (
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <span className="text-[11.5px] muted">
+            Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
+          </span>
+          <div className="flex items-center gap-2">
+            <PagerLink to={page - 1} disabled={page <= 1} filters={filters} label="Previous" />
+            <span className="text-[11.5px] muted">
+              {page} / {Math.ceil(total / perPage)}
+            </span>
+            <PagerLink
+              to={page + 1}
+              disabled={page >= Math.ceil(total / perPage)}
+              filters={filters}
+              label="Next"
+            />
+          </div>
+        </div>
+      )}
+
       <AnimatePresence>
         {edit && (
           <ProductForm
@@ -174,6 +196,37 @@ export default function ProductsManager({
         {flow && <SellFlowForm p={flow} onClose={() => setFlow(null)} />}
       </AnimatePresence>
     </div>
+  );
+}
+
+/** Pager link that preserves the active game / category / search filters. */
+function PagerLink({
+  to, disabled, filters, label,
+}: {
+  to: number; disabled: boolean;
+  filters: { game: string; category: string; q: string };
+  label: string;
+}) {
+  const qs = new URLSearchParams();
+  if (filters.game) qs.set("game", filters.game);
+  if (filters.category) qs.set("category", filters.category);
+  if (filters.q) qs.set("q", filters.q);
+  if (to > 1) qs.set("page", String(to));
+  const href = `/admin/products${qs.toString() ? `?${qs}` : ""}`;
+
+  if (disabled)
+    return (
+      <span className="cursor-not-allowed rounded-lg soft px-3 py-1.5 text-[12px] font-semibold opacity-40">
+        {label}
+      </span>
+    );
+  return (
+    <Link
+      href={href}
+      className="rounded-lg soft px-3 py-1.5 text-[12px] font-semibold transition-colors hover:bg-brand-600/10 hover:text-brand-400"
+    >
+      {label}
+    </Link>
   );
 }
 

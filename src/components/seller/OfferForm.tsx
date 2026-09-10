@@ -127,6 +127,14 @@ export default function OfferForm({
    * product never offers "Manual".
    */
   const mode = config.fulfilment || "both";
+
+  /**
+   * Gift cards share the credential-vault plumbing but need only a code, not a
+   * login / email / 2FA set. Driving it off the category keeps one component
+   * for both instead of a near-duplicate form.
+   */
+  const isGiftCard = config.slug === "gift-cards";
+  const vaultNoun = isGiftCard ? "Gift Card" : "Account";
   const [auto, setAuto] = useState(mode !== "manual");
   const [instructions, setInstructions] = useState("");
   const [custom, setCustom] = useState<Record<string, string>>({});
@@ -177,8 +185,15 @@ export default function OfferForm({
     // Automatic delivery is instant; only hand-delivery needs a promised time.
     if (!auto && !deliveryTime) return setErr("Guaranteed delivery time is required.");
     if (config.needs_credentials && auto && mode !== "manual") {
-      const bad = accounts.findIndex((a) => !a.login.trim() || !a.password.trim());
-      if (bad >= 0) return setErr(`Account #${bad + 1} needs a login and password.`);
+      const bad = accounts.findIndex((a) =>
+        isGiftCard ? !a.login.trim() : !a.login.trim() || !a.password.trim()
+      );
+      if (bad >= 0)
+        return setErr(
+          isGiftCard
+            ? `Gift Card #${bad + 1} needs a code.`
+            : `Account #${bad + 1} needs a login and password.`
+        );
     }
     for (const f of fields) {
       if (f.required && !String(custom[f.field_key] ?? "").trim())
@@ -428,7 +443,13 @@ export default function OfferForm({
           </>
         )}
 
-        {deliveryMethods.length > 0 && config.show_delivery_method !== 0 && mode !== "manual" && (
+        {/*
+          "How the goods change hands" (in-game trade, mail, auction house…) is
+          a different question from "who types the details in" (automatic vs
+          manual). Currency is manually fulfilled yet still needs this list, so
+          it is driven purely by the admin's `show_delivery_method` switch.
+        */}
+        {deliveryMethods.length > 0 && config.show_delivery_method !== 0 && (
           <div className="mt-3">
             <Label>Delivery method</Label>
             <div className="grid gap-1.5 sm:grid-cols-2">
@@ -487,17 +508,17 @@ export default function OfferForm({
 
       {/* ---------- account credential vault ---------- */}
       {config.needs_credentials === 1 && auto && mode !== "manual" && (
-        <Card title="Account information shared with buyer">
+        <Card title={`${vaultNoun} information shared with buyer`}>
           <div className="space-y-4">
             {accounts.map((a, i) => (
               <div key={i} className="rounded-xl border border-[var(--line)] p-3">
                 <div className="mb-3 flex items-center justify-between rounded-lg bg-brand-600/15 px-3 py-2">
-                  <span className="text-[12.5px] font-bold text-brand-300">Account #{i + 1}</span>
+                  <span className="text-[12.5px] font-bold text-brand-300">{vaultNoun} #{i + 1}</span>
                   {accounts.length > 1 && (
                     <button
                       type="button"
                       onClick={() => setAccounts((p) => p.filter((_, j) => j !== i))}
-                      aria-label="Remove account"
+                      aria-label={`Remove ${vaultNoun.toLowerCase()}`}
                       className="muted transition-colors hover:text-rose-400"
                     >
                       <Trash2 size={14} />
@@ -505,6 +526,30 @@ export default function OfferForm({
                   )}
                 </div>
 
+                {/* A gift card is just a code; an account needs the full set. */}
+                {isGiftCard ? (
+                  <>
+                    <div className="mb-1 text-[11.5px] font-bold">
+                      Gift card code <span className="muted">(Required)</span>
+                    </div>
+                    <input
+                      value={a.login}
+                      onChange={(e) => setAcc(i, "login", e.target.value)}
+                      placeholder="Type the code here…"
+                      className={field}
+                    />
+                    <div className="mb-1 mt-3 text-[11.5px] font-bold">
+                      Redemption URL <span className="muted">(Optional)</span>
+                    </div>
+                    <input
+                      value={a.url}
+                      onChange={(e) => setAcc(i, "url", e.target.value)}
+                      placeholder="Type here…"
+                      className={field}
+                    />
+                  </>
+                ) : (
+                <>
                 <div className="mb-1 text-[11.5px] font-bold">
                   Account details <span className="muted">(Required)</span>
                 </div>
@@ -550,6 +595,8 @@ export default function OfferForm({
                     <input value={a.twoFaPassword} onChange={(e) => setAcc(i, "twoFaPassword", e.target.value)} placeholder="Type here…" className={field} />
                   </div>
                 </div>
+                </>
+                )}
 
                 <div className="mb-1 mt-3 text-[11.5px] font-bold">
                   Additional info <span className="muted">(Optional)</span>
@@ -579,7 +626,7 @@ export default function OfferForm({
             onClick={() => setAccounts((p) => [...p, emptyAccount()])}
             className="mt-3 flex items-center gap-1.5 text-[12px] font-bold text-brand-400 transition-colors hover:text-brand-300"
           >
-            <Plus size={13} /> ADD ADDITIONAL ACCOUNT
+            <Plus size={13} /> ADD ADDITIONAL {vaultNoun.toUpperCase()}
           </button>
 
           <div className="mt-3 flex items-start gap-2 rounded-lg soft px-3 py-2.5">

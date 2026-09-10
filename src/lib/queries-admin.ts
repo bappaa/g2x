@@ -1,5 +1,6 @@
 import "server-only";
 import { all, one } from "./db";
+import { NAME_SORT } from "./homepage";
 
 /* ============================ dashboard ============================ */
 
@@ -62,7 +63,41 @@ export const adminGames = () =>
             (SELECT COUNT(*) FROM game_categories gc WHERE gc.game_slug=g.slug) AS categories,
             (SELECT COUNT(*) FROM products p WHERE p.game_slug=g.slug) AS products,
             (SELECT group_concat(gc.category_slug) FROM game_categories gc WHERE gc.game_slug=g.slug) AS cat_slugs
-       FROM games g ORDER BY g.sort_order, g.name`
+       FROM games g ORDER BY ${NAME_SORT("g.name")}`
+  );
+
+/**
+ * Paginated, searchable game list for the admin table.
+ *
+ * With 169 games (and growing) a single page was both slow to render and
+ * painful to scan. Ordering matches the storefront — numbers first, then A-Z —
+ * so an admin looking for a game finds it in the same place as a visitor would.
+ */
+export const adminGamesPage = (opts: { q?: string; limit?: number; offset?: number }) => {
+  const a: (string | number)[] = [];
+  let where = "1=1";
+  if (opts.q) {
+    where += " AND g.name LIKE ?";
+    a.push(`%${opts.q}%`);
+  }
+  a.push(opts.limit ?? 50, opts.offset ?? 0);
+  return all(
+    `SELECT g.*,
+            (SELECT COUNT(*) FROM game_categories gc WHERE gc.game_slug=g.slug) AS categories,
+            (SELECT COUNT(*) FROM products p WHERE p.game_slug=g.slug) AS products,
+            (SELECT group_concat(gc.category_slug) FROM game_categories gc WHERE gc.game_slug=g.slug) AS cat_slugs
+       FROM games g
+      WHERE ${where}
+      ORDER BY ${NAME_SORT("g.name")}
+      LIMIT ? OFFSET ?`,
+    a
+  );
+};
+
+export const adminGamesCount = (q?: string) =>
+  one<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM games g ${q ? "WHERE g.name LIKE ?" : ""}`,
+    q ? [`%${q}%`] : []
   );
 
 export const adminCategories = () =>
@@ -76,13 +111,15 @@ export const adminCategories = () =>
 export const adminGameCategories = (game: string) =>
   all<{ category_slug: string }>(`SELECT category_slug FROM game_categories WHERE game_slug=?`, [game]);
 
-export const adminProducts = (opts: { game?: string; category?: string; q?: string; limit?: number }) => {
+export const adminProducts = (opts: {
+  game?: string; category?: string; q?: string; limit?: number; offset?: number;
+}) => {
   const w: string[] = ["1=1"];
   const a: unknown[] = [];
   if (opts.game) { w.push("p.game_slug=?"); a.push(opts.game); }
   if (opts.category) { w.push("p.category_slug=?"); a.push(opts.category); }
   if (opts.q) { w.push("p.name LIKE ?"); a.push(`%${opts.q}%`); }
-  a.push(Math.min(opts.limit ?? 100, 500));
+  a.push(Math.min(opts.limit ?? 50, 200), opts.offset ?? 0);
   return all(
     `SELECT p.*, g.name AS game_name, c.name AS category_name,
             (SELECT COUNT(*) FROM offers o WHERE o.product_id=p.id) AS offer_count,
@@ -91,7 +128,21 @@ export const adminProducts = (opts: { game?: string; category?: string; q?: stri
        JOIN games g ON g.slug=p.game_slug
        JOIN categories c ON c.slug=p.category_slug
       WHERE ${w.join(" AND ")}
-      ORDER BY g.sort_order, p.base_price LIMIT ?`,
+      ORDER BY ${NAME_SORT("g.name")}, ${NAME_SORT("p.name")}
+      LIMIT ? OFFSET ?`,
+    a as never
+  );
+};
+
+/** Row count for the same filters — drives the products pager. */
+export const adminProductsCount = (opts: { game?: string; category?: string; q?: string }) => {
+  const w: string[] = ["1=1"];
+  const a: unknown[] = [];
+  if (opts.game) { w.push("p.game_slug=?"); a.push(opts.game); }
+  if (opts.category) { w.push("p.category_slug=?"); a.push(opts.category); }
+  if (opts.q) { w.push("p.name LIKE ?"); a.push(`%${opts.q}%`); }
+  return one<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM products p WHERE ${w.join(" AND ")}`,
     a as never
   );
 };
