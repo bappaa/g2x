@@ -216,19 +216,95 @@ export async function createOfferAction(form: FormData): Promise<R> {
   const status = finalStock <= 0 ? "out_of_stock" : "active";
 
   if (freeForm) {
-    // One-of-a-kind item: it lives in `listings`, which the accounts and
-    // boosting grids read from.
-    await run(
-      `INSERT INTO listings
-              (id,seller_id,game_slug,category_slug,title,description,image,price,stock,
-               delivery_time,status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        nid("lst_"), s.id, gameSlug, categorySlug, title.slice(0, 160),
-        description || null, images[0] ?? null, price, finalStock,
-        deliveryTime, status === "out_of_stock" ? "paused" : "active",
-      ]
-    );
+    /**
+     * Two very different "free-form" cases.
+     *
+     * Accounts and Boosting are genuinely one-of-a-kind, so they live in
+     * `listings` — that is what those category grids read.
+     *
+     * Everything else (Currency, Items, Top Up, Gift Cards, Subscriptions) is
+     * rendered from `products` + `offers`. Writing a listing row for those was
+     * a dead end: the seller's offer saved successfully and then never appeared
+     * anywhere on the site, because those pages never look at `listings`.
+     *
+     * So for a product-backed category the seller's own item becomes a real
+     * product (reusing an identical one if a seller already created it, so the
+     * catalog does not fill with duplicates) and the offer hangs off it. The
+     * result is a normal, comparable product page that the admin can edit.
+     */
+    const LISTING_CATEGORIES = ["accounts", "boosting"];
+
+    if (LISTING_CATEGORIES.includes(categorySlug)) {
+      await run(
+        `INSERT INTO listings
+                (id,seller_id,game_slug,category_slug,title,description,image,price,stock,
+                 delivery_time,status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          nid("lst_"), s.id, gameSlug, categorySlug, title.slice(0, 160),
+          description || null, images[0] ?? null, price, finalStock,
+          deliveryTime, status === "out_of_stock" ? "paused" : "active",
+        ]
+      );
+    } else {
+      // Reuse an existing product with the same name in this game+category.
+      const slug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60) || nid("p");
+
+      let target = await one<{ id: string }>(
+        `SELECT id FROM products
+          WHERE game_slug=? AND category_slug=? AND lower(name)=lower(?) AND status='active'`,
+        [gameSlug, categorySlug, title.slice(0, 160)]
+      );
+
+      if (!target) {
+        const newId = nid("prd_");
+        await run(
+          `INSERT INTO products
+                  (id,slug,game_slug,category_slug,name,image,base_price,region,platform,
+                   delivery_method,delivery_time,status)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?, 'active')`,
+          [
+            newId,
+            `${slug}-${newId.slice(-6)}`,
+            gameSlug,
+            categorySlug,
+            title.slice(0, 160),
+            images[0] ?? "/art/coins.png",
+            price,
+            region || "Global",
+            platform || "All",
+            deliveryMethod || null,
+            deliveryTime,
+          ]
+        );
+        target = { id: newId };
+      }
+
+      // Keep the game visible under this category, or the product is orphaned.
+      await run(
+        `INSERT OR IGNORE INTO game_categories (game_slug, category_slug) VALUES (?,?)`,
+        [gameSlug, categorySlug]
+      );
+
+      await run(
+        `INSERT INTO offers (id,seller_id,product_id,title,description,price,stock,min_qty,
+                delivery_time,delivery_method,login_method,region,platform,instructions,
+                custom_fields,images,volume_discounts,accounts_data,auto_delivery,status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          nid("off_"), s.id, target.id, title.slice(0, 160), description || null,
+          price, finalStock, minQty, deliveryTime,
+          deliveryMethod || null, loginMethod || null, region || null, platform || null,
+          instructions || null, JSON.stringify(custom), JSON.stringify(images),
+          JSON.stringify(volume), accounts.length ? JSON.stringify(accounts) : null,
+          autoDelivery, status,
+        ]
+      );
+    }
   } else {
     const offerId = nid("off_");
     try {
@@ -455,6 +531,22 @@ export async function deliverOrderAction(
     {
       sql: `INSERT INTO order_events (id,order_id,label,actor) VALUES (?,?, 'Delivered', 'seller')`,
       args: [nid("evt_"), item.order_id],
+    },
+    {
+      /**
+       * The buyer's tracker showed "Delivered" and then sat there for the whole
+       * 7-day escrow window, which reads as an unfinished order. Once the goods
+       * are handed over the purchase IS complete from the buyer's side — the
+       * remaining wait is only the seller's payout hold, which is shown
+       * separately. `orders.status` and the escrow timer are untouched.
+       */
+      sql: `INSERT INTO order_events (id,order_id,label,actor)
+            SELECT ?,?, 'Completed', 'system'
+             WHERE NOT EXISTS (
+               SELECT 1 FROM order_items
+                WHERE order_id=? AND status='processing' AND id<>?
+             )`,
+      args: [nid("evt_"), item.order_id, item.order_id, itemId],
     },
   ] as never);
 

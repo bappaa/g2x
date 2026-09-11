@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Check, Gavel, MessageSquare, Loader2, PartyPopper } from "lucide-react";
+import { Check, Gavel, MessageSquare, Loader2, PartyPopper, ShieldAlert } from "lucide-react";
 import Credentials from "@/components/dash/Credentials";
 import { Btn, Tag, Section, inputCls } from "@/components/ui";
 import { statusTone, label } from "@/lib/fmt";
@@ -24,7 +24,7 @@ type Order = {
 type Item = {
   id: string; title: string; subtitle: string; image: string; href: string; seller_id: string;
   store_name: string; unit_price: number; qty: number; line_total: number; status: string;
-  delivery_time: string; credentials: string | null;
+  delivery_time: string; credentials: string | null; kyc_locked?: number;
 };
 type Ev = { id: string; label: string; actor: string; created_at: string };
 
@@ -140,7 +140,30 @@ export default function OrderDetail({
                     <div className="w-[70px] text-right text-[13px] font-bold">{money(it.line_total)}</div>
                   </div>
 
-                  <Credentials id={it.id} json={it.credentials} />
+                  {it.kyc_locked ? (
+                    /* Credentials are stripped server-side until KYC passes —
+                       explain why rather than showing an empty panel. */
+                    <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-3">
+                      <ShieldAlert size={16} className="mt-px shrink-0 text-amber-400" />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[12.5px] font-bold text-amber-300">
+                          Verify your identity to unlock your delivery
+                        </div>
+                        <p className="mt-0.5 text-[11.5px] text-amber-200/90">
+                          Your payment went through and this order is secured. We just need a quick
+                          ID check before releasing the details for orders of this value.
+                        </p>
+                        <Link
+                          href="/dashboard/verification"
+                          className="mt-2 inline-block rounded-lg bg-amber-500 px-3 py-1.5 text-[11.5px] font-bold text-black"
+                        >
+                          Verify now
+                        </Link>
+                      </div>
+                    </div>
+                  ) : (
+                    <Credentials id={it.id} json={it.credentials} />
+                  )}
                 </div>
               ))}
             </div>

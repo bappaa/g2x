@@ -112,7 +112,16 @@ export default function OffersView({
         <Empty
           title="No offers here"
           sub="Create an offer on any catalog product and set your own price, stock and delivery time."
-          action={<Btn onClick={() => setCreating(true)}>Create your first offer</Btn>}
+          action={
+            /* Goes through the guided wizard, same as the header button — the
+               old modal skipped the per-category questions entirely. */
+            <Link
+              href={category ? `/seller/sell/${category}` : "/seller/sell"}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-[12.5px] font-bold text-white transition-all hover:bg-brand-500"
+            >
+              <Plus size={14} /> New offer
+            </Link>
+          }
         />
       ) : (
         <div className="space-y-2.5">

@@ -166,36 +166,27 @@ function DesktopMenu({
 }
 
 /** The full desktop nav row: Home + a dropdown per category. */
+/** Categories kept out of the top nav (still reachable everywhere else). */
+const HIDDEN_IN_NAV = ["subscriptions"];
+
 export function DesktopNav({
   menu,
-  homeHref = "/",
-  homeActive,
 }: {
   menu: MenuCategory[];
-  homeHref?: string;
-  homeActive?: boolean;
 }) {
-  const t = useT();
   const [open, setOpen] = useState<string | null>(null);
 
   return (
     <nav className="ml-1 hidden shrink-0 items-center gap-3.5 xl:flex 2xl:gap-4">
-      <Link
-        href={homeHref}
-        className={`relative whitespace-nowrap py-1.5 text-[13px] font-medium transition-colors hover:text-brand-500 ${
-          homeActive ? "text-brand-500" : ""
-        }`}
-      >
-        {t("nav.home")}
-        {homeActive && (
-          <motion.span
-            layoutId="navline"
-            className="absolute -bottom-1 left-0 h-[2.5px] w-full rounded-full bg-brand-500"
-          />
-        )}
-      </Link>
-
-      {menu.map((c) => (
+      {/*
+        "Home" and "Subscriptions" were dropped from the desktop nav to keep it
+        short enough that the search box always fits. The logo already links
+        home, and Subscriptions is still reachable from the footer, the
+        category tiles and /c/subscriptions.
+      */}
+      {menu
+        .filter((c) => !HIDDEN_IN_NAV.includes(c.slug))
+        .map((c) => (
         <DesktopMenu
           key={c.slug}
           cat={c}
@@ -203,7 +194,7 @@ export function DesktopNav({
           onOpen={() => setOpen(c.slug)}
           onClose={() => setOpen((v) => (v === c.slug ? null : v))}
         />
-      ))}
+        ))}
     </nav>
   );
 }

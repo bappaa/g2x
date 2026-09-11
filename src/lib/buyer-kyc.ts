@@ -137,3 +137,29 @@ export async function requireKycFor(userId: string, amount: number): Promise<Gat
 
   return { ok: false, needsKyc: true, status, threshold, error };
 }
+
+/**
+ * Should this buyer's delivered credentials be withheld?
+ *
+ * True when the buyer-KYC gate is on, the order is at or above the threshold,
+ * and the buyer has not been approved. `pending` still blocks — an unreviewed
+ * submission is not a verified identity.
+ *
+ * Payment is never blocked (that is deliberate, and unchanged); only the
+ * handover of the goods waits for the check.
+ */
+export async function kycBlocksDelivery(userId: string, amount: number): Promise<boolean> {
+  try {
+    if (!(await kycEnabled())) return false;
+    if (amount < (await kycThreshold())) return false;
+
+    const u = await one<{ kyc_status: string | null }>(
+      `SELECT kyc_status FROM users WHERE id=?`,
+      [userId]
+    );
+    return String(u?.kyc_status ?? "") !== "approved";
+  } catch {
+    // Never let a check failure hide a legitimate delivery.
+    return false;
+  }
+}

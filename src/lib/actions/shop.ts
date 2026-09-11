@@ -325,8 +325,22 @@ export async function placeOrderAction(form: {
           WHERE id=?`,
         [`+${hours} hours`, orderId]
       );
+      /**
+       * Log Delivered AND Completed.
+       *
+       * For an automatic order there is nothing left for anyone to do — the
+       * buyer already has the details. Leaving the tracker parked on
+       * "Delivered" for 7 days made a finished purchase look unfinished.
+       * `orders.status` stays `delivered` until the escrow sweep releases the
+       * money (that timer is unchanged and still protects the buyer); this is
+       * purely the customer-facing timeline.
+       */
       await run(
         `INSERT INTO order_events (id,order_id,label,actor) VALUES (?,?, 'Delivered', 'system')`,
+        [nid("evt_"), orderId]
+      );
+      await run(
+        `INSERT INTO order_events (id,order_id,label,actor) VALUES (?,?, 'Completed', 'system')`,
         [nid("evt_"), orderId]
       );
       // Subscriptions still pay out monthly — schedule from the same clock.
@@ -334,6 +348,31 @@ export async function placeOrderAction(form: {
         `SELECT release_at FROM orders WHERE id=?`, [orderId]
       );
       if (o?.release_at) await scheduleSubscriptions(orderId, o.release_at);
+
+      /**
+       * Email the credentials.
+       *
+       * An automatic offer is meant to need nobody: the buyer pays, the details
+       * arrive. Without this the credentials only lived on the order page, so a
+       * buyer who closed the tab never knew the order was already fulfilled.
+       */
+      if (u.email) {
+        const delivered = await all<{ title: string; credentials: string | null }>(
+          `SELECT title, credentials FROM order_items
+            WHERE order_id=? AND credentials IS NOT NULL`,
+          [orderId]
+        );
+        for (const d of delivered) {
+          let creds: { label: string; value: string }[] = [];
+          try {
+            const parsed = JSON.parse(d.credentials ?? "[]");
+            if (Array.isArray(parsed)) creds = parsed;
+          } catch {
+            /* malformed row — send the notice without the table */
+          }
+          await mail.orderAutoDelivered(u.email, { code, title: d.title, creds });
+        }
+      }
     }
   }
 
@@ -1214,19 +1253,6 @@ export async function applySellerAction(form: {
   await notify(u.id, "Seller application received", "Our team reviews applications within 24–48 hours.", "/dashboard/become-seller", "system");
   if (u.email) await mail.sellerApplied(u.email, u.name);
 
-  revalidatePath("/dashboard/become-seller");
-  return { ok: true };
-}
-
-/** demo helper so the client can test the seller panel without an admin */
-export async function selfApproveSellerAction(): Promise<R> {
-  const u = await requireUser();
-  await run(
-    `UPDATE seller_profiles SET status='active', verified=1, approved_at=datetime('now') WHERE user_id=?`,
-    [u.id]
-  );
-  await run(`UPDATE users SET role = CASE WHEN role='admin' THEN role ELSE 'seller' END WHERE id=?`, [u.id]);
-  revalidatePath("/seller");
   revalidatePath("/dashboard/become-seller");
   return { ok: true };
 }

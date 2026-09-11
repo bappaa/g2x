@@ -10,7 +10,6 @@ import {
 import { Btn, Field, inputCls, Tag } from "@/components/ui";
 import { COUNTRIES, idTypesFor, idLabel, countryName } from "@/lib/kyc";
 import { submitVerificationAction } from "@/lib/actions/kyc";
-import { selfApproveSellerAction } from "@/lib/actions/shop";
 
 import LocalTime from "@/components/LocalTime";
 
@@ -98,17 +97,6 @@ export default function BecomeSeller({
                   {idLabel(verification!.id_type)} · Store: {profile?.store_name}
                 </div>
               </div>
-              <button
-                onClick={() =>
-                  start(async () => {
-                    await selfApproveSellerAction();
-                    router.refresh();
-                  })
-                }
-                className="mt-3 text-[11.5px] text-brand-400 hover:underline"
-              >
-                Demo: approve instantly →
-              </button>
             </div>
           </div>
         </div>
@@ -374,7 +362,12 @@ function FileDrop({
         ref={ref}
         type="file"
         name={name}
-        required={required}
+        /*
+         * Deliberately not `required`: the input is hidden behind a styled
+         * drop zone, and a browser will not submit a form containing an
+         * invalid hidden required field — the button just dies silently.
+         * Validated in the submit handler and on the server instead.
+         */
         accept="image/jpeg,image/png,image/webp,application/pdf"
         className="hidden"
         onChange={(e) => pick(e.target.files?.[0] ?? null)}

@@ -44,6 +44,22 @@ export default function BuyerKyc({
   const submit = (fd: FormData) =>
     start(async () => {
       setErr("");
+
+      // Replaces the browser validation that a hidden `required` input cannot
+      // perform — tell the buyer exactly which photo is missing.
+      const missing = (["idPhoto", "facePhoto"] as const).filter((k) => {
+        const f = fd.get(k);
+        return !(f instanceof File) || f.size === 0;
+      });
+      if (missing.length) {
+        const label: Record<string, string> = {
+          idPhoto: "photo of your ID",
+          facePhoto: "photo of your face",
+        };
+        setErr(`Please upload the ${missing.map((m) => label[m]).join(", the ")}.`);
+        return;
+      }
+
       const r = await submitBuyerKycAction(fd);
       if (!r.ok) return setErr(r.error || "Could not submit. Please try again.");
       router.refresh();
@@ -239,7 +255,15 @@ function PhotoInput({
         type="file"
         accept="image/jpeg,image/png,image/webp"
         capture={name === "facePhoto" ? "user" : undefined}
-        required
+        /*
+         * NOT `required`.
+         *
+         * The input is visually hidden (a styled button triggers it), and a
+         * browser refuses to submit a form containing an invalid *hidden*
+         * required field — it cannot scroll to it or show a bubble, so the
+         * Submit button simply did nothing, with no error anywhere. The files
+         * are validated in `submit()` and again on the server instead.
+         */
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];

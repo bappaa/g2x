@@ -709,9 +709,19 @@ export default function OfferForm({
             $ USD
           </span>
         </div>
+        {/*
+          Prices are STORED in USD so every offer stays comparable, but a seller
+          reading the site in INR needs to see what they are actually charging.
+          The live conversion removes the guesswork.
+        */}
+        {priceNum > 0 && (
+          <div className="mt-2 text-[11.5px] font-semibold text-brand-400">
+            Buyers see {money(priceNum)} per {unit}
+          </div>
+        )}
         <Hint>
-          Prices are set in USD and shown to every buyer in their own currency. Competitive prices
-          improve your offer&apos;s ranking in the offer list.
+          Prices are entered in USD and shown to every buyer in their own currency. Competitive
+          prices improve your offer&apos;s ranking in the offer list.
         </Hint>
       </Card>
 

@@ -88,15 +88,29 @@ export async function sendMail(opts: {
    */
   const domain = process.env.MAIL_DOMAIN?.trim();
   const fromEmail = domain ? box.email.replace(/@.+$/, `@${domain}`) : box.email;
-  const payload = {
+  /**
+   * Resend's JSON API is camelCase and rejects unknown keys with a 422.
+   *
+   * We were sending `reply_to` (the older snake_case form), so every message
+   * came back "422 Unprocessable Entity" and silently never left. Tag *values*
+   * are also validated: only ASCII letters, digits, `_` and `-` are allowed, so
+   * a tag like "password-reset" is fine but anything with a slash or space is
+   * not — they are sanitised here rather than trusted.
+   */
+  const payload: Record<string, unknown> = {
     from: `${`${senderName} ${box.name}`.trim().slice(0, 60)} <${fromEmail}>`,
     to: to.map((t) => t.email),
     subject: opts.subject,
     html: opts.html,
     text: opts.text ?? stripHtml(opts.html),
-    reply_to: opts.replyTo || box.email,
-    tags: opts.tags?.map((t) => ({ name: "type", value: t })),
+    replyTo: opts.replyTo || box.email,
   };
+
+  const tags = opts.tags
+    ?.map((t) => String(t).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 60))
+    .filter(Boolean)
+    .map((t) => ({ name: "type", value: t }));
+  if (tags?.length) payload.tags = tags;
 
   // Retry transient failures (network blips, 429 rate limits, 5xx) so a single
   // hiccup never silently loses an order confirmation.
@@ -205,6 +219,15 @@ const table = (rows: [string, string][]) =>
 /* Named, automated emails                                               */
 /* ==================================================================== */
 
+/** Escape user-supplied values before embedding them in the HTML email. */
+function escapeHtml(v: string): string {
+  return String(v)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export const mail = {
   /** Welcome / verify — no-reply@ */
   welcome: (to: string, name: string) =>
@@ -273,6 +296,42 @@ export const mail = {
         intro: `${o.title} has been delivered.`,
         body: "<p>Open your dashboard to reveal the details. Please confirm receipt so the seller can be paid — or open a dispute within 24 hours if something is wrong.</p>",
         cta: { label: "View delivery", href: "/dashboard/orders" },
+      }),
+    }),
+
+  /**
+   * Automatic delivery — notification@
+   *
+   * The whole point of an automatic offer is that nobody has to do anything:
+   * the buyer pays and the details arrive. Previously the credentials only
+   * appeared on the order page, so a buyer who closed the tab had no idea the
+   * order had already been fulfilled.
+   */
+  orderAutoDelivered: (
+    to: string,
+    o: { code: string; title: string; creds: { label: string; value: string }[] }
+  ) =>
+    sendMail({
+      to, from: "notification", tags: ["order", "delivered"],
+      subject: `Your ${o.title} is ready — order ${o.code}`,
+      html: layout({
+        title: "Delivered instantly 🎉",
+        intro: `${o.title} was delivered the moment your payment cleared.`,
+        body:
+          `<table style="width:100%;border-collapse:collapse;margin:16px 0">` +
+          o.creds
+            .map(
+              (c) =>
+                `<tr>` +
+                `<td style="padding:8px 12px;border:1px solid #e6e8ef;background:#f6f7fb;font-size:13px;color:#64748b;white-space:nowrap">${escapeHtml(c.label)}</td>` +
+                `<td style="padding:8px 12px;border:1px solid #e6e8ef;font-size:13px;font-family:ui-monospace,Menlo,monospace"><b>${escapeHtml(c.value)}</b></td>` +
+                `</tr>`
+            )
+            .join("") +
+          `</table>` +
+          `<p><b>Change the password as soon as you sign in.</b> Your buyer protection runs for 7 days — ` +
+          `open a dispute from the order page if anything is wrong.</p>`,
+        cta: { label: "View your order", href: `/dashboard/orders/${o.code}` },
       }),
     }),
 

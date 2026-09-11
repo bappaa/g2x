@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   ShoppingCart,
+  MessageSquare,
   LogIn,
   Bell,
   ChevronDown,
@@ -168,7 +169,7 @@ export default function Header({
             <Logo />
           </Link>
 
-          <DesktopNav menu={navMenu} homeActive={path === "/"} />
+          <DesktopNav menu={navMenu} />
 
           <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             {/*
@@ -179,7 +180,7 @@ export default function Header({
               under the notification / cart icons. A minimum width stops it
               collapsing, and `shrink` lets it give up space gracefully instead.
             */}
-            <div className="relative hidden w-[200px] shrink md:block lg:w-[240px] xl:w-[260px]">
+            <div className="relative hidden w-[150px] shrink md:block lg:w-[190px] xl:w-[220px]">
               <div className="flex h-9 w-full items-center gap-2 rounded-full border border-[var(--line)] px-3.5 soft transition-all focus-within:border-brand-500 focus-within:shadow-[0_0_0_3px_rgba(139,61,255,.14)]">
                 <Search size={14} className="muted" />
                 <input
@@ -290,6 +291,22 @@ export default function Header({
                   )}
                 </AnimatePresence>
               </div>
+            )}
+
+            {/*
+              Messages. Only rendered for a signed-in user — there is no inbox
+              to open otherwise, and a dead icon in the header is worse than no
+              icon. Sellers land on their own thread list.
+            */}
+            {user && (
+              <Link
+                href={user.isSeller && user.sellerStatus === "active" ? "/seller/messages" : "/dashboard/messages"}
+                className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--line)] transition-all hover:border-brand-500 hover:text-brand-500"
+                aria-label="Messages"
+                title="Messages"
+              >
+                <MessageSquare size={15} />
+              </Link>
             )}
 
             <Link

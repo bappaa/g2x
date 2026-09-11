@@ -3,6 +3,7 @@ import { unstable_cache } from "next/cache";
 import { all, one } from "./db";
 import { NAME_SORT } from "./homepage";
 import { ensureSchema } from "./ensure-schema";
+import { kycBlocksDelivery } from "./buyer-kyc";
 
 /* ============================ types ============================ */
 
@@ -263,7 +264,30 @@ export const getOrder = async (code: string, buyerId?: string) => {
     ),
     all(`SELECT * FROM order_events WHERE order_id=? ORDER BY created_at`, [id]),
   ]);
-  return { order, items, events };
+  /**
+   * Withhold delivered credentials until identity checks are satisfied.
+   *
+   * Buyer KYC was *recorded* (the order flags `kyc_due_at`) but never actually
+   * gated anything — an unverified buyer could still read the account details
+   * on a high-value order, which defeats the whole purpose of the check.
+   *
+   * The credentials are stripped server-side, so they never reach the browser
+   * at all. The order and its status stay fully visible; only the secret is
+   * held back, and it appears the moment verification is approved.
+   */
+  const buyerId2 = String((order as Record<string, unknown>).buyer_id ?? "");
+  const total = Number((order as Record<string, unknown>).total ?? 0);
+  const locked = buyerId2 ? await kycBlocksDelivery(buyerId2, total) : false;
+
+  const safeItems = locked
+    ? items.map((it) => ({
+        ...(it as Record<string, unknown>),
+        credentials: null,
+        kyc_locked: 1,
+      }))
+    : items;
+
+  return { order, items: safeItems, events, kycLocked: locked };
 };
 
 export const getWallet = (userId: string) =>
