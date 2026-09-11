@@ -26,7 +26,7 @@ import Logo from "./Logo";
 import TimeAgo from "./TimeAgo";
 import { AnyLogo } from "./BrandIcon";
 import LocaleSwitcher from "./LocaleSwitcher";
-import { useT } from "./LocaleProvider";
+import { useT, useMoney } from "./LocaleProvider";
 import { logoutAction } from "@/lib/actions/auth";
 import { markNotificationsReadAction } from "@/lib/actions/shop";
 import { img } from "@/lib/img";
@@ -170,10 +170,17 @@ export default function Header({
 
           <DesktopNav menu={navMenu} homeActive={path === "/"} />
 
-          <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
-            {/* search — the flexible element; nav + controls keep their width */}
-            <div className="relative hidden min-w-0 flex-1 md:block">
-              <div className="flex h-9 w-full max-w-[260px] items-center gap-2 rounded-full border border-[var(--line)] px-3.5 soft transition-all focus-within:border-brand-500 focus-within:shadow-[0_0_0_3px_rgba(139,61,255,.14)]">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+            {/*
+              Search.
+
+              This was `min-w-0 flex-1` inside an `ml-auto` group, so once the
+              nav grew the flex item shrank to zero width and the input slid
+              under the notification / cart icons. A minimum width stops it
+              collapsing, and `shrink` lets it give up space gracefully instead.
+            */}
+            <div className="relative hidden w-[200px] shrink md:block lg:w-[240px] xl:w-[260px]">
+              <div className="flex h-9 w-full items-center gap-2 rounded-full border border-[var(--line)] px-3.5 soft transition-all focus-within:border-brand-500 focus-within:shadow-[0_0_0_3px_rgba(139,61,255,.14)]">
                 <Search size={14} className="muted" />
                 <input
                   value={q}
@@ -421,6 +428,8 @@ export default function Header({
 }
 
 function UserMenu({ user }: { user: NonNullable<HeaderUser> }) {
+  // The wallet figure was hardcoded to "$" and ignored the selected currency.
+  const money = useMoney();
   const links = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/dashboard/orders", label: "My Orders", icon: Package },
@@ -440,7 +449,7 @@ function UserMenu({ user }: { user: NonNullable<HeaderUser> }) {
         <div className="truncate text-[12.5px] font-semibold">{handle(user)}</div>
         <div className="truncate text-[10.5px] muted">{user.email}</div>
         <div className="mt-1.5 text-[11px]">
-          Wallet <span className="font-bold text-brand-500">${user.balance.toFixed(2)}</span>
+          Wallet <span className="font-bold text-brand-500">{money(user.balance)}</span>
         </div>
       </div>
       <div className="mt-1.5">

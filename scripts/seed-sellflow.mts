@@ -13,6 +13,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 import { createClient } from "@libsql/client";
 import { makeDb } from "./db-url.mjs";
+import { applyPatches } from "../src/lib/schema-patches.mjs";
 
 const db = makeDb(createClient, { quiet: true });
 
@@ -146,6 +147,17 @@ const FIELDS: Record<string, Tpl[]> = {
 };
 
 async function main() {
+  /**
+   * Make sure the columns this script writes actually exist.
+   *
+   * `db:seed` creates the base schema; the per-category sell-flow columns are
+   * additive patches applied later. Running this straight after a seed used to
+   * fail with "no such column: unit_label" purely because of command order.
+   * Self-healing removes that footgun entirely.
+   */
+  const r = await applyPatches(db);
+  if (r.applied) console.log(`[sellflow] schema: ${r.applied} column(s) added`);
+
   console.log("[sellflow] option lists");
   await seedList("delivery_time", DELIVERY_TIMES);
   await seedList("delivery_method", DELIVERY_METHODS);

@@ -18,6 +18,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 import { createClient } from "@libsql/client";
 import { makeDb, resolveDbConfig } from "./db-url.mjs";
+import { applyPatches } from "../src/lib/schema-patches.mjs";
 import { readFileSync } from "node:fs";
 
 const db = makeDb(createClient, { quiet: true });
@@ -46,6 +47,8 @@ function accent(name: string): string {
 }
 
 async function main() {
+  // Self-heal the schema so command order can never break this.
+  await applyPatches(db);
   console.log(`[reseed] target: ${resolveDbConfig().url}`);
 
   // --- collect unique games and the categories each belongs to -------------

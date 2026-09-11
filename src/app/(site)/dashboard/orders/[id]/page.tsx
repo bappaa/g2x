@@ -4,10 +4,14 @@ import { requireUser } from "@/lib/session";
 import { getOrder } from "@/lib/queries";
 import { one } from "@/lib/db";
 import OrderDetail from "@/components/dash/OrderDetail";
+import { sweepEscrowInBackground } from "@/lib/escrow";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page({ params }: { params: { id: string } }) {
+  // Release any escrow that has come due. Without this an order sat on
+  // "Delivered" until someone happened to open a dashboard.
+  sweepEscrowInBackground();
   const u = await requireUser();
   const data = await getOrder(params.id, u.id);
   if (!data) notFound();

@@ -23,6 +23,8 @@ import { mail } from "../mail";
 import { gatewayByCode, feeFor, limitError } from "../gateways";
 import { kycDueFor, markKycDue, kycThreshold } from "../buyer-kyc";
 import { ensureSchema } from "../ensure-schema";
+import { escrowHoldHours } from "../escrow";
+import { scheduleSubscriptions } from "../subscription";
 import { rateLimit } from "../ratelimit";
 import { SPEND_SQL, spendArgs } from "../wallet";
 
@@ -112,6 +114,50 @@ export async function clearCartAction(): Promise<R> {
 
 /* ============================ checkout ============================ */
 
+
+/**
+ * AUTOMATIC DELIVERY
+ * ==================
+ * When a seller chooses "Automatic" they pre-fill the account/gift-card details
+ * up front, and the buyer is supposed to receive them the instant they pay.
+ *
+ * That half was never wired up: checkout stamped every line `processing` and
+ * ignored `offers.accounts_data`, so an automatic offer behaved exactly like a
+ * manual one and the buyer saw nothing. This converts one stored credential set
+ * into the `{label,value}[]` shape the delivered-details panel renders.
+ */
+function credentialsFor(raw: string | null, index: number): string | null {
+  if (!raw) return null;
+  let sets: unknown;
+  try {
+    sets = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(sets) || !sets.length) return null;
+
+  // One set per unit; wrap round if the seller supplied fewer than were bought.
+  const set = sets[index % sets.length] as Record<string, string> | undefined;
+  if (!set) return null;
+
+  const F: [string, string][] = [
+    ["login", "Login / Username"],
+    ["password", "Password"],
+    ["url", "URL"],
+    ["emailLogin", "Email login"],
+    ["emailPassword", "Email password"],
+    ["twoFaLogin", "2FA login"],
+    ["twoFaPassword", "2FA password"],
+    ["extra", "Additional details"],
+  ];
+
+  const out = F
+    .filter(([k]) => String(set[k] ?? "").trim())
+    .map(([k, label]) => ({ label, value: String(set[k]).trim() }));
+
+  return out.length ? JSON.stringify(out) : null;
+}
+
 export async function placeOrderAction(form: {
   paymentMethod: string;
   uid: string;
@@ -160,6 +206,9 @@ export async function placeOrderAction(form: {
   const orderId = nid("ord_");
   const code = "G2X" + Math.floor(100000 + Math.random() * 899999);
 
+  // Set when at least one line was fulfilled instantly.
+  let autoDelivered = false;
+
   const stmts: { sql: string; args: unknown[] }[] = [
     {
       sql: `INSERT INTO orders (id,code,buyer_id,subtotal,fee,total,status,payment_method,
@@ -182,16 +231,28 @@ export async function placeOrderAction(form: {
     const commission = +((line * pct) / 100).toFixed(2);
     const net = +(line - commission).toFixed(2);
 
+    /**
+     * Automatic offers are fulfilled here and now: the seller already supplied
+     * the details, so the line is written as `delivered` with the credentials
+     * attached instead of sitting in `processing` waiting for a human.
+     */
+    const creds = it.auto_delivery ? credentialsFor(it.accounts_data, 0) : null;
+    const autoNow = !!creds;
+    if (autoNow) autoDelivered = true;
+
     stmts.push({
       sql: `INSERT INTO order_items
               (id,order_id,offer_id,listing_id,product_id,seller_id,title,subtitle,image,href,
                unit_price,qty,line_total,commission_pct,commission_amt,seller_net,delivery_time,
-               opt_region,opt_delivery,status)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'processing')`,
+               opt_region,opt_delivery,status,credentials,delivered_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       args: [
         nid("oit_"), orderId, it.offer_id, it.listing_id, it.product_id, it.seller_id,
         it.title, it.sub, it.image, it.href, it.price, it.qty, line, pct, commission, net,
         it.delivery, it.opt_region ?? null, it.opt_delivery ?? null,
+        autoNow ? "delivered" : "processing",
+        creds,
+        autoNow ? new Date().toISOString().slice(0, 19).replace("T", " ") : null,
       ],
     });
 
@@ -242,7 +303,48 @@ export async function placeOrderAction(form: {
 
   await tx(stmts as never);
 
-  await notify(u.id, `Order ${code} confirmed`, "The seller has been notified and is delivering now.", `/dashboard/orders/${code}`);
+  /**
+   * If every line was delivered instantly, the order itself is Delivered —
+   * not "processing" waiting on a seller who has nothing left to do. Stamping
+   * `release_at` here starts the same 7-day escrow clock a manual delivery
+   * gets, so payout timing is identical either way.
+   */
+  if (autoDelivered) {
+    const pending = await one<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM order_items WHERE order_id=? AND status<>'delivered'`,
+      [orderId]
+    );
+    if (Number(pending?.n ?? 0) === 0) {
+      const hours = await escrowHoldHours();
+      await run(
+        `UPDATE orders
+            SET status='delivered',
+                delivered_at=COALESCE(delivered_at, datetime('now')),
+                release_at=COALESCE(release_at, datetime('now', ?)),
+                updated_at=datetime('now')
+          WHERE id=?`,
+        [`+${hours} hours`, orderId]
+      );
+      await run(
+        `INSERT INTO order_events (id,order_id,label,actor) VALUES (?,?, 'Delivered', 'system')`,
+        [nid("evt_"), orderId]
+      );
+      // Subscriptions still pay out monthly — schedule from the same clock.
+      const o = await one<{ release_at: string | null }>(
+        `SELECT release_at FROM orders WHERE id=?`, [orderId]
+      );
+      if (o?.release_at) await scheduleSubscriptions(orderId, o.release_at);
+    }
+  }
+
+  await notify(
+    u.id,
+    `Order ${code} confirmed`,
+    autoDelivered
+      ? "Your details are ready — open the order to view them."
+      : "The seller has been notified and is delivering now.",
+    `/dashboard/orders/${code}`
+  );
   const sellers = Array.from(new Set(items.map((i) => i.seller_id)));
   for (const s of sellers)
     await notify(s, "New order received", `Order ${code} — please deliver as soon as possible.`, `/seller/orders`);

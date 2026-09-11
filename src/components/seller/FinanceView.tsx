@@ -103,6 +103,12 @@ export default function FinanceView({
           <h3 className="text-[14px] font-bold">Request a payout</h3>
           <p className="mt-1 text-[11px] muted">Minimum {money(10)}. Processed within 1–3 business days.</p>
           <div className="mt-3 space-y-3">
+            {/*
+              Payouts settle in USD, but the seller reads the whole site in
+              their chosen currency — showing a bare "Amount (USD)" box next to
+              INR balances is confusing. The input stays USD (that is what is
+              actually transferred) and the converted value is echoed beneath.
+            */}
             <Field label="Amount (USD)">
               <input
                 type="number"
@@ -111,6 +117,11 @@ export default function FinanceView({
                 value={amount}
                 onChange={(e) => setAmount(Number(e.target.value))}
               />
+              {amount > 0 && (
+                <div className="mt-1 text-[11px] muted">
+                  ≈ {money(amount)} at today&apos;s rate · paid out in USD
+                </div>
+              )}
             </Field>
             <Field label="Method">
               <select className={inputCls} value={method} onChange={(e) => setMethod(e.target.value)}>

@@ -197,6 +197,10 @@ export const getCart = (userId: string) =>
     title: string; sub: string; image: string; seller_id: string; store_name: string;
     price: number; qty: number; stock: number; delivery: string; href: string;
     opt_region: string | null; opt_delivery: string | null;
+    /** 1 = the seller pre-filled the details; deliver instantly on payment. */
+    auto_delivery: number;
+    /** JSON array of credential sets the seller supplied up front. */
+    accounts_data: string | null;
   }>(
     `SELECT * FROM (
        SELECT ci.id AS key, ci.offer_id, ci.listing_id, o.product_id,
@@ -205,7 +209,8 @@ export const getCart = (userId: string) =>
               p.image, o.seller_id, sp.store_name, o.price, ci.qty, o.stock,
               o.delivery_time AS delivery,
               '/g/' || p.game_slug || '/' || p.category_slug || '/' || p.slug AS href,
-              ci.opt_region, ci.opt_delivery
+              ci.opt_region, ci.opt_delivery,
+              COALESCE(o.auto_delivery, 0) AS auto_delivery, o.accounts_data
          FROM cart_items ci
          JOIN offers o   ON o.id = ci.offer_id
          JOIN products p ON p.id = o.product_id
@@ -219,7 +224,8 @@ export const getCart = (userId: string) =>
               l.seller_id, sp.store_name, l.price, ci.qty, l.stock,
               COALESCE(l.delivery_time,'5 - 30 min'),
               '/g/' || l.game_slug || '/' || l.category_slug || '/' || l.id,
-              ci.opt_region, ci.opt_delivery
+              ci.opt_region, ci.opt_delivery,
+              0 AS auto_delivery, NULL AS accounts_data
          FROM cart_items ci
          JOIN listings l ON l.id = ci.listing_id
          JOIN games g    ON g.slug = l.game_slug

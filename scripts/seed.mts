@@ -23,6 +23,39 @@ const root = join(__dirname, "..");
 const db = makeDb(createClient);
 
 const seedOnly = process.argv.includes("--schema-only");
+
+/**
+ * Guard against seeding the wrong database.
+ *
+ * `db:seed` is destructive — it recreates the schema and replaces demo data.
+ * Pointed at a populated production database it wipes real orders and users.
+ * That is easy to do by accident when .env.local still holds an old remote URL
+ * from a previous host.
+ *
+ * So: if the target already has real data, stop and make it explicit.
+ */
+{
+  const users = await db
+    .execute("SELECT COUNT(*) AS n FROM users")
+    .then((r) => Number((r.rows[0] as { n: number })?.n ?? 0))
+    .catch(() => 0);
+  const orders = await db
+    .execute("SELECT COUNT(*) AS n FROM orders")
+    .then((r) => Number((r.rows[0] as { n: number })?.n ?? 0))
+    .catch(() => 0);
+
+  if ((users > 0 || orders > 0) && !process.argv.includes("--force")) {
+    console.error(
+      `\n✗ This database already has data (${users} users, ${orders} orders).\n` +
+        "  db:seed rewrites the schema and demo content — it can destroy real records.\n\n" +
+        "  If this is the right database and you mean it:\n" +
+        "    npm run db:seed -- --force\n\n" +
+        "  If it is NOT the right database, check DATABASE_PATH / TURSO_DATABASE_URL\n" +
+        "  in .env.local first.\n"
+    );
+    process.exit(1);
+  }
+}
 const nid = (p = "") => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 

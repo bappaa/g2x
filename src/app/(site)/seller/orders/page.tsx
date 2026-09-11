@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { getSellerOrders } from "@/lib/queries";
 import SellerOrders from "@/components/seller/SellerOrders";
+import { sweepEscrowInBackground } from "@/lib/escrow";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Seller Orders — G2X.GG" };
@@ -9,6 +10,9 @@ export const metadata = { title: "Seller Orders — G2X.GG" };
 const TABS = ["all", "processing", "delivered", "completed", "cancelled", "disputed"];
 
 export default async function Page({ searchParams }: { searchParams: { status?: string } }) {
+  // Release any escrow that has come due. Without this an order sat on
+  // "Delivered" until someone happened to open a dashboard.
+  sweepEscrowInBackground();
   const u = await requireUser();
   const status = searchParams.status ?? "all";
   const orders = await getSellerOrders(u.id, status);

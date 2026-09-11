@@ -62,26 +62,22 @@ Everything else (`AUTH_SECRET`, `NEXT_PUBLIC_APP_URL`, `RESEND_API_KEY`) stays a
 
 ## 3. Build the database
 
-On a **fresh** VPS, run once:
+On a **fresh** VPS, one command does everything in the correct order:
 
 ```bash
-cd /var/www/g2x
+cd ~/g2x          # wherever you cloned it
 npm ci
-npm run db:seed        # schema + admin account
-npm run db:migrate     # indexes and later columns
-npm run db:options     # dropdown values
-npm run db:cms         # homepage content blocks
-npm run db:nav         # header / footer links
-npm run db:gateways    # payment methods
-npm run db:catalog-new # your 169 games
-npm run db:sellflow    # per-category seller forms
+npm run db:setup-vps
 ```
 
-Then verify:
+That runs seed → migrate → ensure → options → cms → nav → gateways → catalog →
+sellflow → check:env, and finishes by printing a health report.
 
-```bash
-npm run check:env
-```
+> **Order used to matter and no longer does.** The per-category sell-flow
+> columns (`unit_label`, `fulfilment`, …) are additive patches applied by
+> `db:ensure`. Running `db:sellflow` before it failed with
+> `no such column: unit_label`. The seeders now apply the patches they depend on
+> themselves, so any order works — but `db:setup-vps` is still the easy path.
 
 It now checks the database **path**, that the directory exists, and that it is
 **writable** — the three things that actually break a VPS deploy.
@@ -181,6 +177,8 @@ npm run db:restore -- g2x-2026-01-05T03-00-00.db --yes
 | `scripts/backup-db.mts` | **New** — consistent snapshots with rotation |
 | `scripts/restore-db.mts` | **New** — guarded restore with verification |
 | `.env.example` | Documents `DATABASE_PATH`; Turso demoted to optional |
+| `src/lib/schema-patches.mjs` | **New** — one shared patch list used by both the app and the CLI |
+| `scripts/seed.mts` | Refuses to wipe a database that already has users/orders |
 
 Turso still works if you ever set both variables again — the remote path is kept, just no
 longer the default.
@@ -214,3 +212,34 @@ SQLite is single-writer. That is completely fine for a marketplace of this size 
 are short and WAL keeps readers unblocked — but if you ever scale to multiple app servers
 they cannot share this file. At that point you would move to Postgres, not back to Turso.
 You are nowhere near that yet.
+
+
+---
+
+## Two bugs this setup exposed
+
+**1. `db:sellflow` failed with `no such column: unit_label`.**
+The Phase 19/20 columns were defined only inside `src/lib/ensure-schema.ts`, which is a
+`server-only` module — the CLI scripts physically could not read that list, so
+`db:migrate` never added those columns and any seeder touching them crashed.
+
+The statements now live in `src/lib/schema-patches.mjs` as plain data, shared by the
+runtime guard *and* every script. On top of that, the seeders self-heal before writing,
+so command order can no longer break a fresh install. Verified against a clean database
+using the exact sequence that failed.
+
+**2. `db:seed` can wipe a live database.**
+In your log it ran against **Turso** before you edited `.env.local` — it recreated the
+schema and replaced the data there. It is destructive by design, and nothing stopped it.
+
+It now refuses to run when the target already has users or orders:
+
+```
+✗ This database already has data (7 users, 0 orders).
+  db:seed rewrites the schema and demo content — it can destroy real records.
+  If this is the right database and you mean it:
+    npm run db:seed -- --force
+```
+
+Since you are abandoning Turso this costs you nothing — but if you had run it against a
+live VPS database with real orders, it would have.

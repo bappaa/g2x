@@ -18,8 +18,12 @@ type OrderRow = {
 import { serverLocale } from "@/lib/locale";
 import LocalTime from "@/components/LocalTime";
 import { img } from "@/lib/img";
+import { sweepEscrowInBackground } from "@/lib/escrow";
 
 export default async function Page({ searchParams }: { searchParams: { status?: string } }) {
+  // Release any escrow that has come due. Without this an order sat on
+  // "Delivered" until someone happened to open a dashboard.
+  sweepEscrowInBackground();
   const { money } = await serverLocale();
   const u = await requireUser();
   const status = searchParams.status ?? "all";

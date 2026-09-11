@@ -15,33 +15,13 @@
  * the runtime guard repairs the schema on the first request.
  */
 import { config } from "dotenv";
-import { readFileSync, existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { resolveDbConfig } from "./db-url.mjs";
+import { PATCHES, isBenignSchemaError } from "../src/lib/schema-patches.mjs";
 import { createClient } from "@libsql/client";
 
 config({ path: ".env.local" });
-
-/** Pull the SQL statements out of `PATCHES` without importing the module. */
-function patches(): string[] {
-  const src = readFileSync("src/lib/ensure-schema.ts", "utf8");
-  const body = src.split("const PATCHES: string[] = [")[1]?.split("\n];")[0] ?? "";
-  const out: string[] = [];
-  let cur = "";
-  for (const line of body.split("\n")) {
-    const t = line.trim();
-    if (!cur && t.startsWith("//")) continue;
-    if (!cur && t.startsWith("`")) cur = t;
-    else if (cur) cur += "\n" + t;
-    if (cur && /`,?$/.test(cur.trim())) {
-      out.push(cur.trim().replace(/^`/, "").replace(/`,?$/, ""));
-      cur = "";
-    }
-  }
-  return out;
-}
-
-const benign = (m: string) => /duplicate column|already exists/i.test(m);
 
 async function main() {
   /**
@@ -68,7 +48,7 @@ async function main() {
   const db = cfg.authToken
     ? createClient({ url: cfg.url, authToken: cfg.authToken })
     : createClient({ url: cfg.url });
-  const list = patches();
+  const list = PATCHES;
   let applied = 0;
   let present = 0;
   let failed = 0;
@@ -79,7 +59,7 @@ async function main() {
       applied++;
     } catch (e) {
       const msg = String((e as Error)?.message ?? "");
-      if (benign(msg)) present++;
+      if (isBenignSchemaError(msg)) present++;
       else {
         failed++;
         console.warn(`[deploy-migrate] skipped: ${sql.slice(0, 60)} — ${msg.slice(0, 120)}`);

@@ -8,6 +8,7 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 import { createClient } from "@libsql/client";
 import { makeDb } from "./db-url.mjs";
+import { applyPatches } from "../src/lib/schema-patches.mjs";
 
 const db = makeDb(createClient, { quiet: true });
 
@@ -18,6 +19,8 @@ const TIMES = [
 ];
 
 async function main() {
+  // Self-heal the schema so command order can never break this.
+  await applyPatches(db);
   let i = 0;
   for (const label of TIMES) {
     const value = label.toLowerCase().replace(/\s+/g, "_");
