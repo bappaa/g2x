@@ -77,7 +77,7 @@ function OrderRow({ o }: { o: OI }) {
             {o.buyer_note && <Info l="Buyer note" v={o.buyer_note} />}
           </div>
 
-          {o.credentials && <Credentials id={o.id} json={o.credentials} />}
+          {o.credentials && <Credentials id={o.id} json={o.credentials} audience="seller" />}
 
           {err && <div className="rounded-lg bg-rose-500/10 px-3 py-2 text-[11.5px] text-rose-400">{err}</div>}
 

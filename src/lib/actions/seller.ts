@@ -235,15 +235,31 @@ export async function createOfferAction(form: FormData): Promise<R> {
     const LISTING_CATEGORIES = ["accounts", "boosting"];
 
     if (LISTING_CATEGORIES.includes(categorySlug)) {
+      /**
+       * Carry the automatic-delivery payload.
+       *
+       * `listings` previously stored only the basics, so an account sold as
+       * "Automatic" lost its pre-filled credentials and behaved as manual —
+       * while subscriptions (which use `offers`) worked. Both tables now hold
+       * the same delivery fields.
+       */
       await run(
         `INSERT INTO listings
                 (id,seller_id,game_slug,category_slug,title,description,image,price,stock,
-                 delivery_time,status)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+                 delivery_time,status,auto_delivery,accounts_data,images,delivery_method,
+                 instructions,min_qty,custom_fields)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           nid("lst_"), s.id, gameSlug, categorySlug, title.slice(0, 160),
           description || null, images[0] ?? null, price, finalStock,
           deliveryTime, status === "out_of_stock" ? "paused" : "active",
+          autoDelivery,
+          accounts.length ? JSON.stringify(accounts) : null,
+          JSON.stringify(images),
+          deliveryMethod || null,
+          instructions || null,
+          minQty,
+          JSON.stringify(custom),
         ]
       );
     } else {

@@ -226,7 +226,7 @@ export const getCart = (userId: string) =>
               COALESCE(l.delivery_time,'5 - 30 min'),
               '/g/' || l.game_slug || '/' || l.category_slug || '/' || l.id,
               ci.opt_region, ci.opt_delivery,
-              0 AS auto_delivery, NULL AS accounts_data
+              COALESCE(l.auto_delivery, 0) AS auto_delivery, l.accounts_data
          FROM cart_items ci
          JOIN listings l ON l.id = ci.listing_id
          JOIN games g    ON g.slug = l.game_slug
@@ -408,6 +408,17 @@ export const getSellerStats = async (sellerId: string) => {
  * made the offers page (and the "New offer" button on it) feel slow. Capping
  * the page keeps the payload flat no matter how large the store grows.
  */
+/**
+ * Everything a seller has listed — `offers` AND `listings`.
+ *
+ * Accounts and Boosting are one-of-a-kind items stored in `listings`, while
+ * every other category is an `offer` against a shared product. "My Offers"
+ * only ever queried `offers`, so a seller who listed an account saw an empty
+ * page and reasonably assumed the listing had failed.
+ *
+ * The two are unioned into one shape here. `kind` tells the UI which table a
+ * row came from, since editing and deleting differ between them.
+ */
 export const getSellerOffers = (
   sellerId: string,
   status?: string,
@@ -415,40 +426,64 @@ export const getSellerOffers = (
   limit = 30,
   offset = 0
 ) => {
-  const args: (string | number)[] = [sellerId];
-  let sql = `SELECT o.*, p.name AS product_name, p.image, p.game_slug, p.category_slug, p.slug AS product_slug,
-            g.name AS game_name, c.name AS category_name,
-            (SELECT MIN(o2.price) FROM offers o2
-              WHERE o2.product_id=o.product_id AND o2.status='active' AND o2.stock>0) AS market_min
-       FROM offers o
-       JOIN products p ON p.id=o.product_id
-       JOIN games g ON g.slug=p.game_slug
-       JOIN categories c ON c.slug=p.category_slug
-      WHERE o.seller_id=?`;
-  if (status && status !== "all") {
-    sql += ` AND o.status=?`;
-    args.push(status);
-  }
-  // Drives the "My Offers" category drawer in the seller sidebar.
-  if (category) {
-    sql += ` AND p.category_slug=?`;
-    args.push(category);
-  }
-  sql += ` ORDER BY o.updated_at DESC LIMIT ? OFFSET ?`;
+  const args: (string | number)[] = [];
+
+  let offersSql = `
+    SELECT o.id, 'offer' AS kind, o.product_id, o.title AS own_title, o.price, o.old_price,
+           o.stock, o.status, o.featured, o.sold_count, o.updated_at,
+           o.delivery_time, o.custom_fields,
+           p.name AS product_name, p.image, p.game_slug, p.category_slug,
+           p.slug AS product_slug, g.name AS game_name, c.name AS category_name,
+           (SELECT MIN(o2.price) FROM offers o2
+             WHERE o2.product_id=o.product_id AND o2.status='active' AND o2.stock>0) AS market_min
+      FROM offers o
+      JOIN products p ON p.id=o.product_id
+      JOIN games g ON g.slug=p.game_slug
+      JOIN categories c ON c.slug=p.category_slug
+     WHERE o.seller_id=?`;
+  args.push(sellerId);
+  if (status && status !== "all") { offersSql += ` AND o.status=?`; args.push(status); }
+  if (category) { offersSql += ` AND p.category_slug=?`; args.push(category); }
+
+  let listingsSql = `
+    SELECT l.id, 'listing' AS kind, NULL AS product_id, l.title AS own_title, l.price, NULL AS old_price,
+           l.stock, l.status, 0 AS featured, 0 AS sold_count, l.created_at AS updated_at,
+           l.delivery_time, l.custom_fields,
+           l.title AS product_name, l.image, l.game_slug, l.category_slug,
+           NULL AS product_slug, g.name AS game_name, c.name AS category_name,
+           NULL AS market_min
+      FROM listings l
+      JOIN games g ON g.slug=l.game_slug
+      JOIN categories c ON c.slug=l.category_slug
+     WHERE l.seller_id=?`;
+  args.push(sellerId);
+  if (status && status !== "all") { listingsSql += ` AND l.status=?`; args.push(status); }
+  if (category) { listingsSql += ` AND l.category_slug=?`; args.push(category); }
+
+  const sql = `${offersSql} UNION ALL ${listingsSql}
+     ORDER BY updated_at DESC LIMIT ? OFFSET ?`;
   args.push(limit, offset);
   return all(sql, args);
 };
 
-/** Total offers matching the same filters — drives the pager. */
-export const countSellerOffers = (sellerId: string, status?: string, category?: string) => {
-  const args: (string | number)[] = [sellerId];
-  let sql = `SELECT COUNT(*) AS n FROM offers o
-               JOIN products p ON p.id=o.product_id
-              WHERE o.seller_id=?`;
-  if (status && status !== "all") { sql += ` AND o.status=?`; args.push(status); }
-  if (category) { sql += ` AND p.category_slug=?`; args.push(category); }
-  return one<{ n: number }>(sql, args);
+/** Total rows matching the same filters — drives the pager. */
+export const countSellerOffers = async (sellerId: string, status?: string, category?: string) => {
+  const mk = (table: "offers" | "listings") => {
+    const a: (string | number)[] = [sellerId];
+    let sql =
+      table === "offers"
+        ? `SELECT COUNT(*) AS n FROM offers o JOIN products p ON p.id=o.product_id WHERE o.seller_id=?`
+        : `SELECT COUNT(*) AS n FROM listings l WHERE l.seller_id=?`;
+    const alias = table === "offers" ? "o" : "l";
+    const catCol = table === "offers" ? "p.category_slug" : "l.category_slug";
+    if (status && status !== "all") { sql += ` AND ${alias}.status=?`; a.push(status); }
+    if (category) { sql += ` AND ${catCol}=?`; a.push(category); }
+    return one<{ n: number }>(sql, a);
+  };
+  const [a, b] = await Promise.all([mk("offers"), mk("listings")]);
+  return { n: Number(a?.n ?? 0) + Number(b?.n ?? 0) };
 };
+
 
 export const getSellerOffer = (id: string, sellerId: string) =>
   one(

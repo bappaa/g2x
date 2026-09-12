@@ -37,6 +37,7 @@ export default async function Page() {
       country={row?.country ?? ""}
       provider={row?.provider ?? "email"}
       joined={row?.created_at ?? ""}
+      avatar={u.avatar}
     />
     </div>
   );

@@ -201,10 +201,51 @@ export async function updateProfileAction(formData: FormData): Promise<ActionRes
   const country = String(formData.get("country") ?? "").trim();
   if (name.length < 2) return { ok: false, error: "Name is too short." };
 
-  await run(
-    `UPDATE users SET name=?, phone=?, country=?, updated_at=datetime('now') WHERE id=?`,
-    [name, phone || null, country || null, u.id]
-  );
+  /**
+   * Profile photo.
+   *
+   * Stored as a data URI on the user row rather than on disk: the app has to
+   * run unchanged on a host with no writable filesystem, and an avatar is
+   * small enough that the row cost is irrelevant. 1 MB keeps the payload sane
+   * — the client downscales before uploading, so this is only a backstop.
+   */
+  const avatarFile = formData.get("avatarFile");
+  let avatar: string | null = null;
+
+  if (avatarFile instanceof File && avatarFile.size > 0) {
+    if (avatarFile.size > 1024 * 1024)
+      return { ok: false, error: "Profile photo must be 1 MB or smaller." };
+
+    const type = (avatarFile.type || "").toLowerCase();
+    if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(type))
+      return { ok: false, error: "Profile photo must be a PNG, JPEG or WEBP image." };
+
+    const buf = Buffer.from(await avatarFile.arrayBuffer());
+    avatar = `data:${type};base64,${buf.toString("base64")}`;
+  }
+
+  // An explicit "remove" wins over everything else.
+  const clearAvatar = String(formData.get("removeAvatar") ?? "") === "1";
+
+  if (clearAvatar) {
+    await run(
+      `UPDATE users SET name=?, phone=?, country=?, avatar=NULL, updated_at=datetime('now') WHERE id=?`,
+      [name, phone || null, country || null, u.id]
+    );
+  } else if (avatar) {
+    await run(
+      `UPDATE users SET name=?, phone=?, country=?, avatar=?, updated_at=datetime('now') WHERE id=?`,
+      [name, phone || null, country || null, avatar, u.id]
+    );
+  } else {
+    await run(
+      `UPDATE users SET name=?, phone=?, country=?, updated_at=datetime('now') WHERE id=?`,
+      [name, phone || null, country || null, u.id]
+    );
+  }
+
+  // The avatar shows in the header on every page, so refresh the whole shell.
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 

@@ -19,7 +19,20 @@ import { parseCreds, copyText, credsToText } from "@/lib/creds";
  * Free-text notes (the seller's "additional details") are rendered as a block
  * instead of a one-line row, because they are usually several sentences.
  */
-export default function Credentials({ id, json }: { id: string; json: string | null }) {
+export default function Credentials({
+  id,
+  json,
+  /**
+   * The "change the password, keep this order open" advice is written for the
+   * buyer. On the seller's own order page it read as an instruction to change
+   * the password of an account they had just sold, which is exactly wrong.
+   */
+  audience = "buyer",
+}: {
+  id: string;
+  json: string | null;
+  audience?: "buyer" | "seller";
+}) {
   const [show, setShow] = useState(false);
   const [copied, setCopied] = useState("");
 
@@ -115,13 +128,15 @@ export default function Credentials({ id, json }: { id: string; json: string | n
           </div>
         ))}
 
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-brand-500/30 bg-brand-600/10 px-3 py-2.5">
-          <Info size={13} className="mt-px shrink-0 text-brand-400" />
-          <span className="text-[11px] leading-relaxed text-brand-200/90">
-            Change the email and password as soon as you log in. Keep this order open until you have
-            secured the account — you can raise a dispute from here if anything is wrong.
-          </span>
-        </div>
+        {audience === "buyer" && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-brand-500/30 bg-brand-600/10 px-3 py-2.5">
+            <Info size={13} className="mt-px shrink-0 text-brand-400" />
+            <span className="text-[11px] leading-relaxed text-brand-200/90">
+              Change the email and password as soon as you log in. Keep this order open until you
+              have secured the account — you can raise a dispute from here if anything is wrong.
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

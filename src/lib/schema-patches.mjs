@@ -119,6 +119,22 @@ export const PATCHES = [
   `ALTER TABLE categories ADD COLUMN show_region INTEGER NOT NULL DEFAULT 1`,
   `ALTER TABLE categories ADD COLUMN show_platform INTEGER NOT NULL DEFAULT 1`,
   `ALTER TABLE categories ADD COLUMN show_login_method INTEGER NOT NULL DEFAULT 1`,
+
+  // --- Phase 25: automatic delivery for one-of-a-kind listings ------------
+  // Accounts and Boosting live in `listings`, which had no way to carry the
+  // seller's pre-filled credentials — so an account sold as "Automatic" was
+  // silently handled as manual while subscriptions (which use `offers`) worked.
+  `ALTER TABLE listings ADD COLUMN auto_delivery INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE listings ADD COLUMN accounts_data TEXT`,
+  `ALTER TABLE listings ADD COLUMN images TEXT`,
+  `ALTER TABLE listings ADD COLUMN delivery_method TEXT`,
+  `ALTER TABLE listings ADD COLUMN instructions TEXT`,
+  `ALTER TABLE listings ADD COLUMN min_qty INTEGER NOT NULL DEFAULT 1`,
+  `ALTER TABLE listings ADD COLUMN custom_fields TEXT`,
+
+  // --- Phase 25: user avatars ---------------------------------------------
+  // Stored as a data URI so it works on any host with no writable disk.
+  `ALTER TABLE users ADD COLUMN avatar TEXT`,
 ];
 
 /** Errors that mean "already applied" — expected on every run after the first. */

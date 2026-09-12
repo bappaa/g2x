@@ -16,7 +16,6 @@ import {
   MessageSquare,
   LogIn,
   Bell,
-  ChevronDown,
   User as UserIcon,
   Package,
   Wallet,
@@ -336,28 +335,31 @@ export default function Header({
 
             {user ? (
               <div className="relative">
+                {/*
+                  Avatar only. The username made the header crowded and pushed
+                  the search box around; the handle is still the first thing in
+                  the dropdown, so nothing is lost.
+                */}
                 <button
                   onClick={() => setMenu((m) => !m)}
-                  className="flex h-9 shrink-0 items-center gap-2 rounded-lg border border-[var(--line)] pl-1.5 pr-2.5 transition-all hover:border-brand-500"
+                  aria-label="Account menu"
+                  title={handle(user)}
+                  className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-[var(--line)] transition-all hover:border-brand-500"
                 >
                   {user.avatar ? (
                     <Image
                       src={img(user.avatar)}
                       alt=""
-                      width={24}
-                      height={24}
-                      className="h-6 w-6 rounded-full object-cover"
+                      width={36}
+                      height={36}
+                      className="h-full w-full rounded-full object-cover"
                       unoptimized
                     />
                   ) : (
-                    <span className="grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-700 text-[10px] font-bold text-white">
+                    <span className="grid h-full w-full place-items-center rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-700 text-[11px] font-bold text-white">
                       {handleInitial(user)}
                     </span>
                   )}
-                  <span className="hidden max-w-[110px] truncate text-[12.5px] font-medium sm:block">
-                    {handle(user)}
-                  </span>
-                  <ChevronDown size={13} className="muted" />
                 </button>
                 <AnimatePresence>{menu && <UserMenu user={user} />}</AnimatePresence>
               </div>
