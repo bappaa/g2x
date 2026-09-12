@@ -15,6 +15,16 @@ const nextConfig = {
     // user stares at a spinner. 30s for prefetched shells / 3min for visited
     // pages makes back/forward and re-visits feel instant.
     staleTimes: { dynamic: 30, static: 180 },
+    /**
+     * Server action payload limit.
+     *
+     * Defaults to 1 MB. The offer form accepts up to 6 photos at 2 MB each and
+     * base64 inflates them by ~33%, so a listing with photos blew straight past
+     * it: the request died with 413 before reaching the action, and the client
+     * then read `r.ok` off an undefined response — the white "Application
+     * error" page. Credential vaults and chat attachments ride the same path.
+     */
+    serverActions: { bodySizeLimit: "12mb" },
   },
   compiler: {
     // Strip console.* in production, keep errors/warnings.

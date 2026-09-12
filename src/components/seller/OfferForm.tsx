@@ -82,6 +82,47 @@ const field =
  * vault and hides volume discounts, and adding a new requirement is an admin
  * action rather than a code change.
  */
+
+/**
+ * Shrink an offer photo in the browser before it is uploaded.
+ *
+ * A phone photo is several megabytes, and base64 adds another third on top.
+ * Six of them comfortably exceeded the server-action body limit, which failed
+ * the whole submit with a 413 — the seller lost everything they had typed.
+ *
+ * 1280px on the long edge is plenty for a listing thumbnail and keeps each
+ * image around 100-200 KB. Falls back to the original file if the browser
+ * cannot decode it; the server still validates either way.
+ */
+async function downscale(file: File, max = 1280, quality = 0.82): Promise<string> {
+  const asDataUrl = () =>
+    new Promise<string>((res) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result));
+      r.readAsDataURL(file);
+    });
+
+  // GIFs are usually animated; re-encoding would freeze them.
+  if (file.type === "image/gif") return asDataUrl();
+
+  try {
+    const bmp = await createImageBitmap(file);
+    const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * scale);
+    const h = Math.round(bmp.height * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return asDataUrl();
+    ctx.drawImage(bmp, 0, 0, w, h);
+    return canvas.toDataURL("image/webp", quality);
+  } catch {
+    return asDataUrl();
+  }
+}
+
 export default function OfferForm({
   config, product, game, fields, regions, platforms, deliveryMethods, deliveryTimes, loginMethods,
 }: {
@@ -163,14 +204,7 @@ export default function OfferForm({
         setErr(`${f.name} must be PNG, JPEG, WEBP or GIF.`);
         continue;
       }
-      next.push({
-        name: f.name,
-        data: await new Promise<string>((res) => {
-          const r = new FileReader();
-          r.onload = () => res(String(r.result));
-          r.readAsDataURL(f);
-        }),
-      });
+      next.push({ name: f.name, data: await downscale(f) });
     }
     setImages((p) => [...p, ...next].slice(0, 6));
   };
@@ -233,9 +267,19 @@ export default function OfferForm({
         if (config.needs_credentials) fd.set("accounts", JSON.stringify(accounts));
         Object.entries(custom).forEach(([k, v]) => fd.set("cf_" + k, v));
 
-        const r = await createOfferAction(fd);
-        if (!r.ok) {
-          setErr(r.error || "Could not create the offer.");
+        /**
+         * A rejected request (413, gateway timeout, dropped connection) makes
+         * the action resolve to `undefined`, and reading `.ok` off that threw —
+         * which React turned into a blank "Application error" page and lost
+         * everything the seller had typed. Treat any non-result as a failure
+         * and keep the form on screen.
+         */
+        const r = await createOfferAction(fd).catch(() => null);
+        if (!r || !r.ok) {
+          setErr(
+            r?.error ||
+              "Could not create the offer — the upload may be too large. Try fewer or smaller photos."
+          );
           return;
         }
         router.push(`/seller/offers?cat=${config.slug}`);

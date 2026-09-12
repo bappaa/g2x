@@ -10,6 +10,7 @@ import { Heart } from "lucide-react";
 
 import { toggleWishAction } from "@/lib/actions/shop";
 import { img } from "@/lib/img";
+import { gameArt } from "@/lib/gameart";
 
 export type CardProduct = {
   id: string;
@@ -89,7 +90,10 @@ export default function ProductCard({
       >
         <div className="relative h-[74px] w-[74px] overflow-hidden rounded-xl">
           <Image
-            src={img(p.image)}
+            /* Bulk-created products inherit the game logo, which is empty for
+               generated tiles — fall back to the same art the game uses so the
+               grid never shows a blank square. */
+            src={p.image ? img(p.image) : gameArt(p.game_slug ?? p.slug, p.name)}
             alt={p.name}
             fill
             sizes="90px"

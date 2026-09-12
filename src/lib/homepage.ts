@@ -91,7 +91,7 @@ export const popularTiles = unstable_cache(
          FROM games g
          JOIN game_categories gc ON gc.game_slug = g.slug
         WHERE gc.category_slug = ? AND g.status = 'active'
-        ORDER BY g.sort_order, g.name
+        ORDER BY ${NAME_SORT("g.name")}
         LIMIT ?`,
       [categorySlug, limit]
     );

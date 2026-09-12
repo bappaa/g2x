@@ -324,6 +324,113 @@ export async function saveProductSellFlowAction(form: FormData): Promise<R> {
   return { ok: true };
 }
 
+/**
+ * BULK-ADD PRODUCTS ACROSS MANY GAMES
+ * ===================================
+ * Currency and Top Up need the same denominations for dozens of games ("1000
+ * Robux", "5000 Gold", …). Adding those one at a time through the product form
+ * is hours of clicking, and the client asked to do a whole category in one go.
+ *
+ * Each product inherits the GAME'S logo unless the admin supplies a specific
+ * image, so a freshly seeded catalog looks finished immediately: the game icon
+ * shows on the category page and again on the product tile.
+ *
+ * Idempotent — a product that already exists for that game+name is skipped, so
+ * the form is safe to re-run after adding more games.
+ */
+export async function bulkAddProductsAction(form: FormData): Promise<R> {
+  const a = await requireAdmin("catalog");
+
+  const category = String(form.get("category") ?? "").trim();
+  const gameSlugs = String(form.get("games") ?? "")
+    .split(",")
+    .map((g) => g.trim())
+    .filter(Boolean);
+
+  // One denomination per line: "Name | price"  (price optional)
+  const lines = String(form.get("items") ?? "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  if (!category) return { ok: false, error: "Choose a category." };
+  if (!gameSlugs.length) return { ok: false, error: "Select at least one game." };
+  if (!lines.length) return { ok: false, error: "Add at least one product line." };
+  if (gameSlugs.length * lines.length > 2000)
+    return { ok: false, error: "That is over 2,000 products in one run. Split it up." };
+
+  const region = String(form.get("region") ?? "Global").trim() || "Global";
+  const platform = String(form.get("platform") ?? "All").trim() || "All";
+  const deliveryTime = String(form.get("deliveryTime") ?? "Instant").trim() || "Instant";
+  const deliveryMethod = String(form.get("deliveryMethod") ?? "").trim();
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const gameSlug of gameSlugs) {
+    const game = await one<{ slug: string; logo: string | null }>(
+      `SELECT slug, logo FROM games WHERE slug=? AND status='active'`,
+      [gameSlug]
+    );
+    if (!game) continue;
+
+    for (const line of lines) {
+      const [rawName, rawPrice] = line.split("|").map((x) => x?.trim() ?? "");
+      const name = rawName;
+      if (!name) continue;
+      const price = Number(rawPrice);
+      const basePrice = Number.isFinite(price) && price > 0 ? price : 0.99;
+
+      const exists = await one(
+        `SELECT id FROM products
+          WHERE game_slug=? AND category_slug=? AND lower(name)=lower(?)`,
+        [gameSlug, category, name]
+      );
+      if (exists) {
+        skipped++;
+        continue;
+      }
+
+      const id = nid("prd_");
+      const slug =
+        `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48)}-${id.slice(-5)}`;
+
+      await run(
+        `INSERT INTO products
+                (id,slug,game_slug,category_slug,name,image,base_price,region,platform,
+                 delivery_method,delivery_time,status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?, 'active')`,
+        [
+          id, slug, gameSlug, category, name,
+          // Inherit the game artwork so nothing renders as a blank tile.
+          game.logo || "",
+          basePrice, region, platform, deliveryMethod || null, deliveryTime,
+        ]
+      );
+
+      // Without this the game never appears under the category.
+      await run(
+        `INSERT OR IGNORE INTO game_categories (game_slug, category_slug) VALUES (?,?)`,
+        [gameSlug, category]
+      );
+      created++;
+    }
+  }
+
+  await audit(a.id, "product.bulk", `${category}: +${created}`);
+  bustCatalog();
+  revalidatePath("/admin/products");
+  revalidatePath(`/c/${category}`);
+  revalidatePath("/seller/sell", "layout");
+
+  return {
+    ok: true,
+    error: `Created ${created} product${created === 1 ? "" : "s"}${
+      skipped ? ` · ${skipped} already existed` : ""
+    }.`,
+  };
+}
+
 export async function saveProductAction(form: FormData): Promise<R> {
   const a = await requireAdmin("catalog");
   const id = String(form.get("id") ?? "").trim();

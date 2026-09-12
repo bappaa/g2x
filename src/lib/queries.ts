@@ -35,7 +35,9 @@ export type DbListing = {
 /* ============================ catalog ============================ */
 
 export const getGames = () =>
-  all<DbGame>(`SELECT * FROM games WHERE status='active' ORDER BY sort_order`);
+  // Alphabetical (digits first) so the sidebar matches the category index and
+  // the nav menu. `sort_order` is insertion order, which looked random.
+  all<DbGame>(`SELECT * FROM games WHERE status='active' ORDER BY ${NAME_SORT("name")}`);
 
 export const getCategories = () =>
   all<DbCategory>(`SELECT * FROM categories ORDER BY sort_order, name`);
@@ -58,7 +60,7 @@ export const getGamesForCategory = (category: string) =>
   all<DbGame>(
     `SELECT g.* FROM games g
        JOIN game_categories gc ON gc.game_slug=g.slug
-      WHERE gc.category_slug=? AND g.status='active' ORDER BY g.sort_order`,
+      WHERE gc.category_slug=? AND g.status='active' ORDER BY ${NAME_SORT("g.name")}`,
     [category]
   );
 
@@ -615,7 +617,7 @@ export const getSellableProducts = () =>
        JOIN games g ON g.slug=p.game_slug
        JOIN categories c ON c.slug=p.category_slug
       WHERE p.status='active'
-      ORDER BY g.sort_order, c.sort_order, p.base_price`
+      ORDER BY ${NAME_SORT("g.name")}, c.sort_order, p.base_price`
   );
 
 export const getPublicSeller = (slug: string) =>
@@ -641,7 +643,7 @@ export const getCatalogForSeller = () =>
        JOIN games g ON g.slug=p.game_slug
        JOIN categories c ON c.slug=p.category_slug
       WHERE p.status='active'
-      ORDER BY g.sort_order, c.sort_order, p.base_price`
+      ORDER BY ${NAME_SORT("g.name")}, c.sort_order, p.base_price`
   );
 
 export const getAllFieldTemplates = () =>

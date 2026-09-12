@@ -14,7 +14,8 @@ export const getSearchIndex = unstable_cache(
   async (): Promise<SearchItem[]> => {
     const [games, products] = await Promise.all([
       all<{ name: string; slug: string; logo: string }>(
-        `SELECT name, slug, logo FROM games WHERE status='active' ORDER BY sort_order`
+        `SELECT name, slug, logo FROM games WHERE status='active'
+          ORDER BY CASE WHEN substr(name,1,1) GLOB '[0-9]' THEN 0 ELSE 1 END, lower(name)`
       ),
       all<{ name: string; slug: string; game_slug: string; category_slug: string; image: string }>(
         `SELECT name, slug, game_slug, category_slug, image FROM products
@@ -38,7 +39,8 @@ export const getSearchIndex = unstable_cache(
 export const getNavGames = unstable_cache(
   async () =>
     all<{ slug: string; name: string; logo: string }>(
-      `SELECT slug, name, logo FROM games WHERE status='active' ORDER BY sort_order LIMIT 24`
+      `SELECT slug, name, logo FROM games WHERE status='active'
+        ORDER BY CASE WHEN substr(name,1,1) GLOB '[0-9]' THEN 0 ELSE 1 END, lower(name) LIMIT 24`
     ),
   ["nav-games"],
   { tags: ["catalog"], revalidate: 300 }

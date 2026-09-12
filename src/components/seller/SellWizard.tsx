@@ -208,7 +208,7 @@ export function GamePicker({
 
       <p className="mt-4 text-center text-[12px] muted">
         Can&apos;t find the game you want to sell?{" "}
-        <Link href="/dashboard/support" className="text-brand-400 hover:underline">
+        <Link href="/support" className="text-brand-400 hover:underline">
           Contact our support
         </Link>{" "}
         to suggest a game.

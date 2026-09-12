@@ -106,11 +106,27 @@ export async function sendMail(opts: {
     replyTo: opts.replyTo || box.email,
   };
 
-  const tags = opts.tags
-    ?.map((t) => String(t).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 60))
-    .filter(Boolean)
-    .map((t) => ({ name: "type", value: t }));
-  if (tags?.length) payload.tags = tags;
+  /**
+   * Resend requires tag NAMES to be unique within a message.
+   *
+   * Every tag was being sent as `name: "type"`, so a call like
+   * `tags: ["order", "delivered"]` produced two `type` entries and the whole
+   * message was rejected with
+   * `422 validation_error: The \`type\` tag is duplicated.`
+   *
+   * The first tag stays `type` (so existing Resend filters keep working) and
+   * any extras get their own indexed name.
+   */
+  const clean = (opts.tags ?? [])
+    .map((t) => String(t).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 60))
+    .filter(Boolean);
+
+  const seen = new Set<string>();
+  const tags = clean
+    .filter((t) => (seen.has(t) ? false : (seen.add(t), true)))
+    .map((t, i) => ({ name: i === 0 ? "type" : `type_${i}`, value: t }));
+
+  if (tags.length) payload.tags = tags;
 
   // Retry transient failures (network blips, 429 rate limits, 5xx) so a single
   // hiccup never silently loses an order confirmation.

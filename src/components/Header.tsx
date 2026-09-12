@@ -299,7 +299,9 @@ export default function Header({
             */}
             {user && (
               <Link
-                href={user.isSeller && user.sellerStatus === "active" ? "/seller/messages" : "/dashboard/messages"}
+                /* There is one inbox at /dashboard/messages — the seller panel
+                   has no separate route, and linking to one 404'd. */
+                href="/dashboard/messages"
                 className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--line)] transition-all hover:border-brand-500 hover:text-brand-500"
                 aria-label="Messages"
                 title="Messages"
