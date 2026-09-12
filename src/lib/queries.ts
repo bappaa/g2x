@@ -259,8 +259,18 @@ export const getOrder = async (code: string, buyerId?: string) => {
   const id = String((order as Record<string, unknown>).id);
   const [items, events] = await Promise.all([
     all(
-      `SELECT oi.*, sp.store_name FROM order_items oi
+      /**
+       * `category_slug` drives the delivery panel's wording. Without it every
+       * delivery said "Account Delivered" — wrong for a top-up, an item or a
+       * boost. Resolved from the product or the listing, whichever backs the
+       * line.
+       */
+      `SELECT oi.*, sp.store_name,
+              COALESCE(p.category_slug, l.category_slug) AS category_slug
+         FROM order_items oi
          LEFT JOIN seller_profiles sp ON sp.user_id=oi.seller_id
+         LEFT JOIN products p ON p.id=oi.product_id
+         LEFT JOIN listings l ON l.id=oi.listing_id
         WHERE oi.order_id=?`,
       [id]
     ),
@@ -517,10 +527,13 @@ export const getSellerOrders = (sellerId: string, status?: string) =>
   all(
     `SELECT oi.*, o.code, o.created_at, o.delivery_uid, o.buyer_note, o.payment_method,
             COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_name,
-            COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_email, o.buyer_id
+            COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_email, o.buyer_id,
+            COALESCE(p.category_slug, l.category_slug) AS category_slug
        FROM order_items oi
        JOIN orders o ON o.id=oi.order_id
        JOIN users u ON u.id=o.buyer_id
+       LEFT JOIN products p ON p.id=oi.product_id
+       LEFT JOIN listings l ON l.id=oi.listing_id
       WHERE oi.seller_id=? ${status && status !== "all" ? "AND oi.status=?" : ""}
       ORDER BY o.created_at DESC`,
     status && status !== "all" ? [sellerId, status] : [sellerId]

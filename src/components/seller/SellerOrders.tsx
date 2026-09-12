@@ -20,6 +20,7 @@ type OI = {
   buyer_name: string; buyer_email: string; buyer_id: string; delivery_time: string;
   opt_region?: string | null; opt_delivery?: string | null;
   credentials: string | null;
+  category_slug?: string | null;
 };
 
 export default function SellerOrders({ orders }: { orders: OI[] }) {
@@ -77,7 +78,7 @@ function OrderRow({ o }: { o: OI }) {
             {o.buyer_note && <Info l="Buyer note" v={o.buyer_note} />}
           </div>
 
-          {o.credentials && <Credentials id={o.id} json={o.credentials} audience="seller" />}
+          {o.credentials && <Credentials id={o.id} json={o.credentials} category={o.category_slug} audience="seller" />}
 
           {err && <div className="rounded-lg bg-rose-500/10 px-3 py-2 text-[11.5px] text-rose-400">{err}</div>}
 

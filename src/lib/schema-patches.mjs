@@ -135,6 +135,24 @@ export const PATCHES = [
   // --- Phase 25: user avatars ---------------------------------------------
   // Stored as a data URI so it works on any host with no writable disk.
   `ALTER TABLE users ADD COLUMN avatar TEXT`,
+
+  // --- Phase 27: email verification (OTP) ---------------------------------
+  // Anyone could sign up with an address they did not control. Existing
+  // accounts are grandfathered in as verified so nobody is locked out.
+  `ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0`,
+  `UPDATE users SET email_verified = 1 WHERE email_verified = 0`,
+  `CREATE TABLE IF NOT EXISTS email_otps (
+     id TEXT PRIMARY KEY,
+     user_id TEXT NOT NULL,
+     email TEXT NOT NULL,
+     code_hash TEXT NOT NULL,
+     purpose TEXT NOT NULL DEFAULT 'verify',
+     attempts INTEGER NOT NULL DEFAULT 0,
+     expires_at TEXT NOT NULL,
+     consumed_at TEXT,
+     created_at TEXT DEFAULT (datetime('now'))
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_otp_user ON email_otps(user_id, purpose)`,
 ];
 
 /** Errors that mean "already applied" — expected on every run after the first. */

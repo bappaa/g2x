@@ -19,9 +19,22 @@ import { parseCreds, copyText, credsToText } from "@/lib/creds";
  * Free-text notes (the seller's "additional details") are rendered as a block
  * instead of a one-line row, because they are usually several sentences.
  */
+/** Human wording per category — a top-up is not an "account". */
+const NOUN: Record<string, string> = {
+  accounts: "Account",
+  "top-up": "Top-up",
+  currency: "Currency",
+  items: "Item",
+  boosting: "Boost",
+  subscriptions: "Subscription",
+  "gift-cards": "Gift card",
+};
+
 export default function Credentials({
   id,
   json,
+  /** Drives the heading and whether the security advice is worth showing. */
+  category,
   /**
    * The "change the password, keep this order open" advice is written for the
    * buyer. On the seller's own order page it read as an instruction to change
@@ -31,8 +44,16 @@ export default function Credentials({
 }: {
   id: string;
   json: string | null;
+  category?: string | null;
   audience?: "buyer" | "seller";
 }) {
+  const noun = NOUN[String(category ?? "")] ?? "Order";
+  /**
+   * The "change your password / secure the account" advice only makes sense
+   * when the buyer actually receives an account. For a top-up or currency the
+   * goods land in-game and there is nothing to secure, so the notice is noise.
+   */
+  const isAccountLike = ["accounts", "subscriptions"].includes(String(category ?? ""));
   const [show, setShow] = useState(false);
   const [copied, setCopied] = useState("");
 
@@ -56,7 +77,7 @@ export default function Credentials({
       <div className="flex items-center gap-2.5 border-b border-emerald-500/25 bg-emerald-500/10 px-3.5 py-3">
         <CheckCircle2 size={17} className="shrink-0 text-emerald-400" />
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-black text-emerald-400">Account Delivered</div>
+          <div className="text-[13px] font-black text-emerald-400">{noun} Delivered</div>
           <div className="text-[11px] muted">Your order has been completed successfully.</div>
         </div>
         <span className="shrink-0 rounded-md bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
@@ -67,7 +88,7 @@ export default function Credentials({
       <div className="p-3.5">
         <div className="mb-2.5 flex items-center gap-2">
           <Package size={14} className="shrink-0 text-brand-400" />
-          <span className="text-[12.5px] font-bold">Account Information</span>
+          <span className="text-[12.5px] font-bold">{noun} Details</span>
 
           <button
             type="button"
@@ -99,16 +120,20 @@ export default function Credentials({
             const key = id + "_" + i;
             return (
               <div key={key} className="flex items-center gap-2">
-                <span className="w-[92px] shrink-0 text-[11.5px] font-semibold capitalize muted sm:w-[120px]">
-                  {c.label}
-                </span>
+                {/* An unlabelled value (a bare code) gets the full width
+                    instead of an empty column. */}
+                {c.label && (
+                  <span className="w-[92px] shrink-0 text-[11.5px] font-semibold capitalize muted sm:w-[120px]">
+                    {c.label}
+                  </span>
+                )}
                 <code className="min-w-0 flex-1 truncate rounded-lg border border-[var(--line)] px-3 py-2 font-mono text-[12px] soft">
                   {show ? c.value : "•".repeat(Math.min(18, c.value.length))}
                 </code>
                 <button
                   type="button"
                   onClick={() => copy(c.value, key)}
-                  title={`Copy ${c.label}`}
+                  title={c.label ? `Copy ${c.label}` : "Copy"}
                   className="flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-2.5 py-2 text-[11.5px] font-bold text-white transition-colors hover:bg-brand-500"
                 >
                   {copied === key ? <Check size={12} /> : <Copy size={12} />}
@@ -121,14 +146,16 @@ export default function Credentials({
 
         {notes.map((c, i) => (
           <div key={"n" + i} className="mt-3">
-            <div className="mb-1 text-[11.5px] font-semibold capitalize muted">{c.label}</div>
+            {c.label && (
+              <div className="mb-1 text-[11.5px] font-semibold capitalize muted">{c.label}</div>
+            )}
             <div className="whitespace-pre-wrap rounded-lg border border-[var(--line)] px-3 py-2.5 text-[12px] leading-relaxed soft">
               {show ? c.value : "•".repeat(40)}
             </div>
           </div>
         ))}
 
-        {audience === "buyer" && (
+        {audience === "buyer" && isAccountLike && (
           <div className="mt-3 flex items-start gap-2 rounded-lg border border-brand-500/30 bg-brand-600/10 px-3 py-2.5">
             <Info size={13} className="mt-px shrink-0 text-brand-400" />
             <span className="text-[11px] leading-relaxed text-brand-200/90">

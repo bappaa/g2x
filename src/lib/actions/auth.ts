@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { sendOtp, verifyOtp, isEmailVerified } from "../otp";
 import { redirect } from "next/navigation";
 import { one, run, nid, tx } from "../db";
 import { createSession, destroySession, getSessionUser } from "../session";
@@ -108,9 +109,42 @@ export async function registerAction(
   await welcome(id, name);
   await mail.welcome(email, name);
 
+  /**
+   * Email verification.
+   *
+   * The session is created immediately — the visitor is signed in, just not
+   * verified yet. That keeps the flow simple (no half-registered limbo state)
+   * while `/verify-email` gates the account until the code is entered.
+   */
+  await sendOtp(id, email, "verify");
+
   const { ip, ua } = clientMeta();
   await createSession(id, ip ?? undefined, ua ?? undefined);
-  return { ok: true, redirect: safeNext(next) };
+  return { ok: true, redirect: `/verify-email?next=${encodeURIComponent(safeNext(next))}` };
+}
+
+/**
+ * Confirm the 6-digit code from the signup email.
+ */
+export async function verifyEmailAction(code: string): Promise<ActionResult> {
+  const u = await getSessionUser();
+  if (!u) return { ok: false, error: "Not signed in." };
+
+  const r = await verifyOtp(u.id, code, "verify");
+  if (!r.ok) return { ok: false, error: r.error };
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/** Send another code (rate-limited inside `sendOtp`). */
+export async function resendOtpAction(): Promise<ActionResult> {
+  const u = await getSessionUser();
+  if (!u) return { ok: false, error: "Not signed in." };
+  if (await isEmailVerified(u.id)) return { ok: true };
+
+  const r = await sendOtp(u.id, u.email, "verify");
+  return r.ok ? { ok: true } : { ok: false, error: r.error };
 }
 
 export async function loginAction(

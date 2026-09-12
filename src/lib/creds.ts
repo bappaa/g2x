@@ -17,8 +17,9 @@ export function parseCreds(json: string | null | undefined): Cred[] {
   try {
     data = typeof json === "string" ? JSON.parse(json) : json;
   } catch {
-    // Not JSON at all — treat the whole string as one delivered code.
-    return String(json).trim() ? [{ label: "Code", value: String(json).trim() }] : [];
+    // Not JSON at all — one bare delivered value. No label: "Code" was filler
+    // that showed up inside the box for top-ups and currency.
+    return String(json).trim() ? [{ label: "", value: String(json).trim() }] : [];
   }
 
   if (Array.isArray(data)) {
@@ -31,7 +32,7 @@ export function parseCreds(json: string | null | undefined): Cred[] {
             value: stringify(r.value ?? r.val ?? r.code ?? ""),
           };
         }
-        return { label: "Code", value: stringify(row) };
+        return { label: "", value: stringify(row) };
       })
       .filter((c) => c.value !== "");
   }
@@ -43,7 +44,7 @@ export function parseCreds(json: string | null | undefined): Cred[] {
   }
 
   const s = stringify(data);
-  return s ? [{ label: "Code", value: s }] : [];
+  return s ? [{ label: "", value: s }] : [];
 }
 
 function stringify(v: unknown): string {

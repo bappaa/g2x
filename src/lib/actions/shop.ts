@@ -23,6 +23,7 @@ import { mail } from "../mail";
 import { gatewayByCode, feeFor, limitError } from "../gateways";
 import { kycDueFor, markKycDue, kycThreshold } from "../buyer-kyc";
 import { ensureSchema } from "../ensure-schema";
+import { isEmailVerified } from "../otp";
 import { escrowHoldHours } from "../escrow";
 import { scheduleSubscriptions } from "../subscription";
 import { rateLimit } from "../ratelimit";
@@ -49,21 +50,34 @@ export async function addToCartAction(input: {
 
   const qty = Math.max(1, Math.min(99, input.qty ?? 1));
 
+  /**
+   * A seller must not buy their own stock.
+   *
+   * Nothing stopped it, and it is not harmless: the money round-trips through
+   * escrow and the 2% checkout fee, the offer's `sold_count` inflates, and the
+   * order feeds the "trending"/sales ranking — so a seller could quietly
+   * promote their own listings. Blocked at the cart AND again at checkout,
+   * because an item can sit in a cart from before the seller owned it.
+   */
+  const SELF_BUY = "This is your own listing — you can't buy it.";
+
   if (input.offerId) {
-    const o = await one<{ stock: number; status: string }>(
-      `SELECT stock, status FROM offers WHERE id=?`,
+    const o = await one<{ stock: number; status: string; seller_id: string }>(
+      `SELECT stock, status, seller_id FROM offers WHERE id=?`,
       [input.offerId]
     );
     if (!o || o.status !== "active") return { ok: false, error: "This offer is no longer available." };
+    if (o.seller_id === u.id) return { ok: false, error: SELF_BUY };
     if (o.stock < qty) return { ok: false, error: "Not enough stock left for this offer." };
   }
   if (input.listingId) {
-    const l = await one<{ stock: number; status: string }>(
-      `SELECT stock, status FROM listings WHERE id=?`,
+    const l = await one<{ stock: number; status: string; seller_id: string }>(
+      `SELECT stock, status, seller_id FROM listings WHERE id=?`,
       [input.listingId]
     );
     if (!l || l.status !== "active" || l.stock < 1)
       return { ok: false, error: "This listing is no longer available." };
+    if (l.seller_id === u.id) return { ok: false, error: SELF_BUY };
   }
 
   const existing = await one<{ id: string; qty: number }>(
@@ -164,6 +178,16 @@ export async function placeOrderAction(form: {
   note?: string;
 }): Promise<R> {
   const u = await requireUser();
+  /**
+   * Block checkout until the email is confirmed.
+   *
+   * Order confirmations and delivered credentials go to that inbox, so an
+   * unverified address means the buyer may never receive what they paid for.
+   * Browsing and adding to the cart stay open — only money is gated.
+   */
+  if (!(await isEmailVerified(u.id)))
+    return { ok: false, error: "VERIFY_EMAIL" };
+
   const items = await getCart(u.id);
   if (!items.length) return { ok: false, error: "Your cart is empty." };
   if (!form.uid?.trim())
@@ -173,6 +197,9 @@ export async function placeOrderAction(form: {
   for (const it of items) {
     if (it.qty > it.stock)
       return { ok: false, error: `"${it.title}" only has ${it.stock} left in stock.` };
+    // Second line of defence: the cart may predate the seller owning the item.
+    if (it.seller_id === u.id)
+      return { ok: false, error: `"${it.title}" is your own listing — remove it to continue.` };
   }
 
   const subtotal = +items.reduce((t, i) => t + i.price * i.qty, 0).toFixed(2);

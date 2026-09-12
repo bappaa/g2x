@@ -24,7 +24,7 @@ type Order = {
 type Item = {
   id: string; title: string; subtitle: string; image: string; href: string; seller_id: string;
   store_name: string; unit_price: number; qty: number; line_total: number; status: string;
-  delivery_time: string; credentials: string | null; kyc_locked?: number;
+  delivery_time: string; credentials: string | null; kyc_locked?: number; category_slug?: string | null;
 };
 type Ev = { id: string; label: string; actor: string; created_at: string };
 
@@ -162,7 +162,7 @@ export default function OrderDetail({
                       </div>
                     </div>
                   ) : (
-                    <Credentials id={it.id} json={it.credentials} />
+                    <Credentials id={it.id} json={it.credentials} category={it.category_slug} />
                   )}
                 </div>
               ))}

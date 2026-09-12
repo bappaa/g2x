@@ -83,10 +83,15 @@ export default function CheckoutView({
     setKycBlocked(false);
     start(async () => {
       try {
-        const r = await placeOrderAction({ paymentMethod: method, uid, note });
-        if (!r.ok) {
-          setKycBlocked(!!r.needsKyc);
-          setErr(r.error || "Payment failed. Please try again.");
+        const r = await placeOrderAction({ paymentMethod: method, uid, note }).catch(() => null);
+        if (!r || !r.ok) {
+          // Unverified email — send them to confirm it, then straight back here.
+          if (r?.error === "VERIFY_EMAIL") {
+            router.push("/verify-email?next=%2Fcheckout");
+            return;
+          }
+          setKycBlocked(!!r?.needsKyc);
+          setErr(r?.error || "Payment failed. Please try again.");
           return;
         }
         /**
