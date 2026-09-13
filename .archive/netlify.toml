@@ -1,0 +1,28 @@
+# Netlify build configuration for G2X.GG (Next.js 14 App Router).
+#
+# The official Next.js Runtime turns every server component, server action and
+# route handler into a Netlify Function automatically — no extra config needed.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # Next 14 needs Node 18.17+. Pin 20 so Netlify never picks an older default.
+  NODE_VERSION = "20"
+  # Skip Husky/other prepare hooks that assume a git checkout with dev deps.
+  HUSKY = "0"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Uploaded media is content-addressed by row id, so it can be cached hard.
+[[headers]]
+  for = "/api/media/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/art/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

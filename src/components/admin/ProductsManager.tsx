@@ -415,11 +415,10 @@ function ProductForm({
         </Field>
 
         <ImagePicker
-          label="Product image * (currency/top-up/item photo)"
+          label="Product image"
           urlName="image"
           fileName="imageFile"
           defaultUrl={p?.image ?? ""}
-          hint={p ? "This image shows on game page categories. For currency, upload currency icon (e.g., V-Bucks image)." : "REQUIRED: This shows on game page categories. Upload specific image - e.g., for 1000 V-Bucks, upload V-Bucks icon. Homepage shows game logo, this shows item photo."}
         />
 
         <div className="grid gap-3 sm:grid-cols-2">

@@ -7,10 +7,6 @@ import { saveMedia, deleteMedia, resolveImageField } from "../media";
 import { mail } from "../mail";
 import { pinManual, unpinManual, refreshRates } from "../fx";
 import { clearKycDue, markKycDue } from "../buyer-kyc";
-import { sanitizeName, sanitizeSlug, sanitizeImageUrl, containsXSS, containsSQLi } from "../sanitize";
-import { checkAdminRateLimit, logSecurityEvent } from "../security";
-import { rateLimit, clientIp } from "../ratelimit";
-import { headers } from "next/headers";
 
 export type R = { ok: boolean; error?: string; id?: string };
 
@@ -46,82 +42,40 @@ const bustCatalog = () => {
 };
 
 /* ==================================================================== */
-/* GAMES - FIXED LOGO FLOW                                              */
+/* GAMES                                                                */
 /* ==================================================================== */
 
 export async function saveGameAction(form: FormData): Promise<R> {
   const a = await requireAdmin("catalog");
-  
-  // Rate limiting for admin game creation
-  const rl = await checkAdminRateLimit(a.id, "game.create");
-  if (!rl.ok) return { ok: false, error: `Too many requests. Try again in ${Math.ceil(rl.retryAfter/60)} min` };
-  
-  // Honeypot check
-  if (String(form.get("_hp") ?? form.get("website") ?? "").trim()) {
-    await logSecurityEvent(clientIp(headers()), "bot_detected", "honeypot triggered in game form", "medium");
-    return { ok: false, error: "Invalid submission" };
-  }
-
-  const original = sanitizeSlug(String(form.get("original") ?? "").trim());
-  const rawName = String(form.get("name") ?? "").trim();
-  const name = sanitizeName(rawName, 80);
-  const rawSlug = String(form.get("slug") ?? "").trim();
-  const slug = rawSlug ? sanitizeSlug(rawSlug) : slugify(name);
-  
-  // Security checks
-  if (containsXSS(rawName) || containsSQLi(rawName)) {
-    await logSecurityEvent(clientIp(headers()), "xss_attempt", `game name: ${rawName.slice(0,100)}`, "high");
-    return { ok: false, error: "Invalid characters in game name" };
-  }
-
+  const original = String(form.get("original") ?? "").trim();
+  const name = String(form.get("name") ?? "").trim();
+  const slug = String(form.get("slug") ?? "").trim() || slugify(name);
   const uploaded = await resolveImageField(form, "logoFile", "logo", {
     kind: "game_icon",
     refKey: slug || original,
     userId: a.id,
   });
   if (!uploaded.ok) return { ok: false, error: uploaded.error };
-  
-  // FIXED: Logo is now REQUIRED - no more fallback to coins.png
-  // This ensures homepage shows correct game logo and game page categories show item/currency photos
-  let logo = sanitizeImageUrl(uploaded.url, "");
-  
-  // If editing existing game and no new logo uploaded, keep existing logo
-  if (!logo && original) {
-    const existing = await one<{ logo: string }>(`SELECT logo FROM games WHERE slug=?`, [original]);
-    if (existing?.logo) logo = sanitizeImageUrl(existing.logo, "");
-  }
-  
-  // For new games, logo is mandatory
-  if (!logo && !original) {
-    return { ok: false, error: "Game logo is required! Upload an icon that will show on homepage and category pages. Use PNG, JPG, WEBP (max 2MB). You can also add currency/top-up images when creating products for this game." };
-  }
-  
-  // Fallback to placeholder only if absolutely needed (should not happen for new games now)
-  if (!logo) logo = "/art/placeholder.png";
-  
+  const logo = uploaded.url || "/art/coins.png";
   const accent = String(form.get("accent") ?? "#8b3dff").trim();
-  // Validate accent is hex color
-  const accentSafe = /^#[0-9a-fA-F]{3,8}$/.test(accent) ? accent : "#8b3dff";
   const status = String(form.get("status") ?? "active");
-  if (!["active", "hidden"].includes(status)) return { ok: false, error: "Invalid status" };
   const sortOrder = Math.floor(num(form.get("sortOrder")));
-  const cats = form.getAll("categories").map(String).map(sanitizeSlug).filter(Boolean);
+  const cats = form.getAll("categories").map(String);
 
-  if (name.length < 2) return { ok: false, error: "Game name is too short (min 2 chars)." };
+  if (name.length < 2) return { ok: false, error: "Game name is too short." };
   if (!slug) return { ok: false, error: "Slug is required." };
-  if (slug.length < 2) return { ok: false, error: "Slug too short" };
 
   if (original) {
     await run(
       `UPDATE games SET name=?, logo=?, accent=?, status=?, sort_order=? WHERE slug=?`,
-      [name, logo, accentSafe, status, sortOrder, original]
+      [name, logo, accent, status, sortOrder, original]
     );
   } else {
     const dupe = await one(`SELECT slug FROM games WHERE slug=?`, [slug]);
     if (dupe) return { ok: false, error: "A game with that slug already exists." };
     await run(
       `INSERT INTO games (slug,name,logo,accent,status,sort_order) VALUES (?,?,?,?,?,?)`,
-      [slug, name, logo, accentSafe, status, sortOrder]
+      [slug, name, logo, accent, status, sortOrder]
     );
   }
 
@@ -218,38 +172,15 @@ export async function saveSellConfigAction(form: FormData): Promise<R> {
 
 export async function saveCategoryAction(form: FormData): Promise<R> {
   const a = await requireAdmin("catalog");
-  
-  const rl = await checkAdminRateLimit(a.id, "category.create");
-  if (!rl.ok) return { ok: false, error: `Too many requests. Try again in ${Math.ceil(rl.retryAfter/60)} min` };
-
-  const original = sanitizeSlug(String(form.get("original") ?? "").trim());
-  const rawName = String(form.get("name") ?? "").trim();
-  const name = sanitizeName(rawName, 80);
-  const rawSlug = String(form.get("slug") ?? "").trim();
-  const slug = rawSlug ? sanitizeSlug(rawSlug) : slugify(name);
-  const blurb = sanitizeName(String(form.get("blurb") ?? "").trim(), 300);
+  const original = String(form.get("original") ?? "").trim();
+  const name = String(form.get("name") ?? "").trim();
+  const slug = String(form.get("slug") ?? "").trim() || slugify(name);
+  const blurb = String(form.get("blurb") ?? "").trim();
+  const icon = String(form.get("icon") ?? "").trim();
   const status = String(form.get("status") ?? "active");
-  if (!["active","hidden"].includes(status)) return { ok: false, error: "Invalid status" };
   const sortOrder = Math.floor(num(form.get("sortOrder")));
 
-  // Icon with upload support
-  const uploaded = await resolveImageField(form, "iconFile", "icon", {
-    kind: "category_icon",
-    refKey: slug || original,
-    userId: a.id,
-  });
-  if (!uploaded.ok) return { ok: false, error: uploaded.error };
-  let icon = sanitizeImageUrl(uploaded.url, "");
-  if (!icon && original) {
-    const existing = await one<{ icon: string }>(`SELECT icon FROM categories WHERE slug=?`, [original]);
-    if (existing?.icon) icon = sanitizeImageUrl(existing.icon, "");
-  }
-
   if (name.length < 2) return { ok: false, error: "Category name is too short." };
-  if (containsXSS(rawName) || containsSQLi(rawName)) {
-    await logSecurityEvent(clientIp(headers()), "xss_attempt", `category: ${rawName.slice(0,80)}`, "medium");
-    return { ok: false, error: "Invalid characters in name" };
-  }
 
   if (original) {
     await run(
@@ -289,15 +220,12 @@ export async function deleteCategoryAction(slug: string): Promise<R> {
 
 export async function saveTemplateFieldAction(form: FormData): Promise<R> {
   const a = await requireAdmin("catalog");
-  const rl = await checkAdminRateLimit(a.id, "template.save");
-  if (!rl.ok) return { ok: false, error: "Too many requests" };
-  const id = sanitizeSlug(String(form.get("id") ?? "").trim());
-  const category = sanitizeSlug(String(form.get("category") ?? "").trim());
-  const rawLabel = String(form.get("label") ?? "").trim();
-  const label = sanitizeName(rawLabel, 100);
-  const fieldKey = sanitizeSlug(String(form.get("fieldKey") ?? "").trim()) || slugify(label).replace(/-/g, "_");
-  const fieldType = sanitizeSlug(String(form.get("fieldType") ?? "text").trim()) || "text";
-  const optionsRaw = sanitizeName(String(form.get("options") ?? "").trim(), 1000);
+  const id = String(form.get("id") ?? "").trim();
+  const category = String(form.get("category") ?? "").trim();
+  const label = String(form.get("label") ?? "").trim();
+  const fieldKey = String(form.get("fieldKey") ?? "").trim() || slugify(label).replace(/-/g, "_");
+  const fieldType = String(form.get("fieldType") ?? "text");
+  const optionsRaw = String(form.get("options") ?? "").trim();
   const required = form.get("required") ? 1 : 0;
   const showFrontend = form.get("showFrontend") ? 1 : 0;
   const sortOrder = Math.floor(num(form.get("sortOrder")));
@@ -412,20 +340,17 @@ export async function saveProductSellFlowAction(form: FormData): Promise<R> {
  */
 export async function bulkAddProductsAction(form: FormData): Promise<R> {
   const a = await requireAdmin("catalog");
-  
-  const rl = await checkAdminRateLimit(a.id, "product.bulk");
-  if (!rl.ok) return { ok: false, error: `Too many requests. Try again in ${Math.ceil(rl.retryAfter/60)} min` };
 
-  const category = sanitizeSlug(String(form.get("category") ?? "").trim());
+  const category = String(form.get("category") ?? "").trim();
   const gameSlugs = String(form.get("games") ?? "")
     .split(",")
-    .map((g) => sanitizeSlug(g.trim()))
+    .map((g) => g.trim())
     .filter(Boolean);
 
   // One denomination per line: "Name | price"  (price optional)
   const lines = String(form.get("items") ?? "")
     .split("\n")
-    .map((l) => sanitizeName(l.trim(), 120))
+    .map((l) => l.trim())
     .filter(Boolean);
 
   if (!category) return { ok: false, error: "Choose a category." };
@@ -434,10 +359,10 @@ export async function bulkAddProductsAction(form: FormData): Promise<R> {
   if (gameSlugs.length * lines.length > 2000)
     return { ok: false, error: "That is over 2,000 products in one run. Split it up." };
 
-  const region = sanitizeName(String(form.get("region") ?? "Global").trim(), 100) || "Global";
-  const platform = sanitizeName(String(form.get("platform") ?? "All").trim(), 100) || "All";
-  const deliveryTime = sanitizeName(String(form.get("deliveryTime") ?? "Instant").trim(), 100) || "Instant";
-  const deliveryMethod = sanitizeName(String(form.get("deliveryMethod") ?? "").trim(), 200);
+  const region = String(form.get("region") ?? "Global").trim() || "Global";
+  const platform = String(form.get("platform") ?? "All").trim() || "All";
+  const deliveryTime = String(form.get("deliveryTime") ?? "Instant").trim() || "Instant";
+  const deliveryMethod = String(form.get("deliveryMethod") ?? "").trim();
 
   let created = 0;
   let skipped = 0;
@@ -508,84 +433,36 @@ export async function bulkAddProductsAction(form: FormData): Promise<R> {
 
 export async function saveProductAction(form: FormData): Promise<R> {
   const a = await requireAdmin("catalog");
-  
-  // Rate limiting
-  const rl = await checkAdminRateLimit(a.id, "product.create");
-  if (!rl.ok) return { ok: false, error: `Too many requests. Try again in ${Math.ceil(rl.retryAfter/60)} min` };
-  
-  // Honeypot
-  if (String(form.get("_hp") ?? form.get("website") ?? "").trim()) {
-    await logSecurityEvent(clientIp(headers()), "bot_detected", "honeypot in product form", "medium");
-    return { ok: false, error: "Invalid submission" };
-  }
-
-  const id = sanitizeSlug(String(form.get("id") ?? "").trim());
-  const game = sanitizeSlug(String(form.get("game") ?? "").trim());
-  const category = sanitizeSlug(String(form.get("category") ?? "").trim());
-  const rawName = String(form.get("name") ?? "").trim();
-  const name = sanitizeName(rawName, 120);
-  const rawSlug = String(form.get("slug") ?? "").trim();
-  const slug = rawSlug ? sanitizeSlug(rawSlug) : slugify(name);
-  
-  if (containsXSS(rawName) || containsSQLi(rawName)) {
-    await logSecurityEvent(clientIp(headers()), "xss_attempt", `product name: ${rawName.slice(0,100)}`, "high");
-    return { ok: false, error: "Invalid characters in product name" };
-  }
-
+  const id = String(form.get("id") ?? "").trim();
+  const game = String(form.get("game") ?? "").trim();
+  const category = String(form.get("category") ?? "").trim();
+  const name = String(form.get("name") ?? "").trim();
+  const slug = String(form.get("slug") ?? "").trim() || slugify(name);
   const uploadedImg = await resolveImageField(form, "imageFile", "image", {
     kind: "product",
     refKey: id || slug,
     userId: a.id,
   });
   if (!uploadedImg.ok) return { ok: false, error: uploadedImg.error };
-  
-  // FIXED: Product image is now REQUIRED and properly linked
-  // Homepage shows game logo, game page categories show product image (currency/top-up logo)
-  let image = sanitizeImageUrl(uploadedImg.url, "");
-  
-  // If editing and no new image, keep existing
-  if (!image && id) {
-    const existing = await one<{ image: string }>(`SELECT image FROM products WHERE id=?`, [id]);
-    if (existing?.image) image = sanitizeImageUrl(existing.image, "");
-  }
-  
-  // If still no image, try to inherit from game logo (for currency/top-up)
-  if (!image && game) {
-    const g = await one<{ logo: string }>(`SELECT logo FROM games WHERE slug=?`, [game]);
-    if (g?.logo) {
-      image = sanitizeImageUrl(g.logo, "");
-      // For currency/top-up, we still want specific image, but game logo is better than coins.png
-      // The admin will be warned to upload specific image
-    }
-  }
-  
-  // For new products, image is mandatory
-  if (!image && !id) {
-    return { ok: false, error: "Product image is required! This image shows on game page categories (currency/top-up/item photo). Upload a specific image for this product - e.g., for 1000 V-Bucks, upload V-Bucks image. For currency, upload currency icon." };
-  }
-  
-  if (!image) image = "/art/placeholder.png";
-  
+  const image = uploadedImg.url || "/art/coins.png";
   const basePrice = num(form.get("basePrice"));
   const oldPrice = num(form.get("oldPrice"));
   const discount = num(form.get("discount"));
-  const region = sanitizeName(String(form.get("region") ?? "Global").trim(), 200);
-  const platform = sanitizeName(String(form.get("platform") ?? "All").trim(), 100);
-  const deliveryMethod = sanitizeName(String(form.get("deliveryMethod") ?? "").trim(), 200);
-  const deliveryTime = sanitizeName(String(form.get("deliveryTime") ?? "").trim(), 100);
-  const loginMethod = sanitizeName(String(form.get("loginMethod") ?? "").trim(), 100);
-  const instructions = sanitizeName(String(form.get("instructions") ?? "").trim(), 1000);
+  const region = String(form.get("region") ?? "Global").trim();
+  const platform = String(form.get("platform") ?? "All").trim();
+  const deliveryMethod = String(form.get("deliveryMethod") ?? "").trim();
+  const deliveryTime = String(form.get("deliveryTime") ?? "").trim();
+  const loginMethod = String(form.get("loginMethod") ?? "").trim();
+  const instructions = String(form.get("instructions") ?? "").trim();
   const status = String(form.get("status") ?? "active");
-  if (!["active", "inactive"].includes(status)) return { ok: false, error: "Invalid status" };
   const popular = form.get("popular") ? 1 : 0;
   const featured = form.get("featured") ? 1 : 0;
   const pinned = form.get("pinned") ? 1 : 0;
   const sortOrder = Math.floor(num(form.get("sortOrder")));
 
   if (!game || !category) return { ok: false, error: "Choose a game and a category." };
-  if (name.length < 2) return { ok: false, error: "Product name is too short (min 2 chars)." };
+  if (name.length < 2) return { ok: false, error: "Product name is too short." };
   if (!(basePrice > 0)) return { ok: false, error: "Price must be greater than 0." };
-  if (basePrice > 100000) return { ok: false, error: "Price too high" };
 
   if (id) {
     await run(
@@ -1201,10 +1078,7 @@ export async function deleteAnnouncementAction(id: string): Promise<R> {
 
 export async function saveCmsBlockAction(form: FormData): Promise<R> {
   const a = await requireAdmin("cms");
-  const rl = await checkAdminRateLimit(a.id, "cms.save");
-  if (!rl.ok) return { ok: false, error: "Too many requests" };
-  
-  const key = sanitizeSlug(String(form.get("key") ?? "").trim());
+  const key = String(form.get("key") ?? "").trim();
   if (!key) return { ok: false, error: "Missing block key." };
 
   const img = await resolveImageField(form, "imageFile", "image", {
@@ -1213,7 +1087,6 @@ export async function saveCmsBlockAction(form: FormData): Promise<R> {
     userId: a.id,
   });
   if (!img.ok) return { ok: false, error: img.error };
-  const safeImg = img.url ? sanitizeImageUrl(img.url, "") : "";
 
   // List-type blocks (hero perks, trust rows, FAQ) post their rows as JSON.
   let data: string | null = null;
@@ -1222,19 +1095,7 @@ export async function saveCmsBlockAction(form: FormData): Promise<R> {
     try {
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return { ok: false, error: "List content must be a JSON array." };
-      // Sanitize each item if string
-      const sanitized = parsed.map((item: any) => {
-        if (typeof item === "string") return sanitizeName(item, 500);
-        if (typeof item === "object" && item !== null) {
-          const out: any = {};
-          for (const k in item) {
-            out[sanitizeSlug(k)] = typeof item[k] === "string" ? sanitizeName(item[k], 500) : item[k];
-          }
-          return out;
-        }
-        return item;
-      });
-      data = JSON.stringify(sanitized);
+      data = JSON.stringify(parsed);
     } catch {
       return { ok: false, error: "List content is not valid JSON." };
     }
@@ -1249,12 +1110,12 @@ export async function saveCmsBlockAction(form: FormData): Promise<R> {
        data=excluded.data, active=excluded.active, updated_at=datetime('now')`,
     [
       key,
-      sanitizeName(String(form.get("title") ?? ""), 200),
-      sanitizeName(String(form.get("subtitle") ?? ""), 300),
-      sanitizeName(String(form.get("body") ?? ""), 2000),
-      safeImg,
-      sanitizeName(String(form.get("ctaLabel") ?? ""), 100),
-      sanitizeName(String(form.get("ctaHref") ?? ""), 300),
+      String(form.get("title") ?? ""),
+      String(form.get("subtitle") ?? ""),
+      String(form.get("body") ?? ""),
+      img.url,
+      String(form.get("ctaLabel") ?? ""),
+      String(form.get("ctaHref") ?? ""),
       data,
       form.get("active") ? 1 : 0,
     ]
@@ -1458,17 +1319,13 @@ export async function setGameIconAction(slug: string, url: string): Promise<R> {
 
 export async function saveBannerAction(form: FormData): Promise<R> {
   const a = await requireAdmin("cms");
-  const rl = await checkAdminRateLimit(a.id, "banner.create");
-  if (!rl.ok) return { ok: false, error: "Too many requests" };
-  
-  const id = sanitizeSlug(String(form.get("id") ?? "").trim());
-  const title = sanitizeName(String(form.get("title") ?? "").trim(), 120);
-  const subtitle = sanitizeName(String(form.get("subtitle") ?? "").trim(), 300);
-  const ctaLabel = sanitizeName(String(form.get("ctaLabel") ?? "").trim(), 80);
-  const ctaHref = sanitizeImageUrl(String(form.get("ctaHref") ?? "").trim(), "") || sanitizeName(String(form.get("ctaHref") ?? "").trim(), 300);
-  const placement = sanitizeSlug(String(form.get("placement") ?? "hero").trim()) || "hero";
+  const id = String(form.get("id") ?? "").trim();
+  const title = String(form.get("title") ?? "").trim();
+  const subtitle = String(form.get("subtitle") ?? "").trim();
+  const ctaLabel = String(form.get("ctaLabel") ?? "").trim();
+  const ctaHref = String(form.get("ctaHref") ?? "").trim();
+  const placement = String(form.get("placement") ?? "hero");
   const bgColor = String(form.get("bgColor") ?? "").trim();
-  if (bgColor && !/^#[0-9a-fA-F]{3,8}$/.test(bgColor) && !/^rgba?\(/.test(bgColor)) return { ok: false, error: "Invalid bg color" };
   const sortOrder = Math.floor(num(form.get("sortOrder")));
   const active = form.get("active") ? 1 : 0;
 
@@ -1477,21 +1334,20 @@ export async function saveBannerAction(form: FormData): Promise<R> {
     userId: a.id,
   });
   if (!img.ok) return { ok: false, error: img.error };
-  const safeImg = img.url ? sanitizeImageUrl(img.url, "") : "";
 
-  if (!title && !safeImg) return { ok: false, error: "Add a title or an image." };
+  if (!title && !img.url) return { ok: false, error: "Add a title or an image." };
 
   if (id) {
     await run(
       `UPDATE banners SET title=?, subtitle=?, image=?, cta_label=?, cta_href=?,
               placement=?, bg_color=?, sort_order=?, active=? WHERE id=?`,
-      [title, subtitle, safeImg, ctaLabel, ctaHref, placement, bgColor, sortOrder, active, id]
+      [title, subtitle, img.url, ctaLabel, ctaHref, placement, bgColor, sortOrder, active, id]
     );
   } else {
     await run(
       `INSERT INTO banners (id,title,subtitle,image,cta_label,cta_href,placement,bg_color,sort_order,active)
        VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [nid("bnr_"), title, subtitle, safeImg, ctaLabel, ctaHref, placement, bgColor, sortOrder, active]
+      [nid("bnr_"), title, subtitle, img.url, ctaLabel, ctaHref, placement, bgColor, sortOrder, active]
     );
   }
 

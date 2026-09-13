@@ -7,11 +7,11 @@ import { Plus, Pencil, Trash2, X, Loader2, ExternalLink, SlidersHorizontal } fro
 import { Btn, Tag, Field, inputCls } from "@/components/ui";
 import { Table, Tr, Td, Toolbar, IconAction } from "@/components/admin/ui";
 import { saveCategoryAction, deleteCategoryAction, saveSellConfigAction } from "@/lib/actions/admin";
-import ImagePicker from "@/components/admin/ImagePicker";
 
 type C = {
   slug: string; name: string; blurb: string | null; icon: string | null;
   status: string; sort_order: number; kind: string | null; games: number; products: number;
+  // Sell-wizard configuration (Phase 19).
   unit_label?: string | null;
   needs_title?: number; needs_images?: number; needs_credentials?: number;
   needs_quantity?: number; allow_volume_discount?: number;
@@ -49,13 +49,8 @@ export default function CategoriesManager({ rows }: { rows: C[] }) {
         {rows.map((c) => (
           <Tr key={c.slug}>
             <Td>
-              <div className="flex items-center gap-2">
-                {c.icon && <img src={c.icon} alt="" className="h-6 w-6 rounded object-cover" />}
-                <div>
-                  <div className="font-semibold">{c.name}</div>
-                  {c.blurb && <div className="line-clamp-1 text-[10.5px] muted">{c.blurb}</div>}
-                </div>
-              </div>
+              <div className="font-semibold">{c.name}</div>
+              {c.blurb && <div className="line-clamp-1 text-[10.5px] muted">{c.blurb}</div>}
             </Td>
             <Td className="muted">{c.slug}</Td>
             <Td className="muted">{c.games}</Td>
@@ -117,7 +112,7 @@ function CatForm({ cat, onClose }: { cat: C | null; onClose: () => void }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 10, scale: 0.98 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[520px] space-y-3 rounded-2xl panel p-5"
+        className="w-full max-w-[500px] space-y-3 rounded-2xl panel p-5"
       >
         <div className="flex items-center">
           <h2 className="text-[15px] font-black">{cat ? "Edit category" : "Add a category"}</h2>
@@ -141,9 +136,6 @@ function CatForm({ cat, onClose }: { cat: C | null; onClose: () => void }) {
         <Field label="Short description">
           <textarea name="blurb" rows={2} defaultValue={cat?.blurb ?? ""} className={inputCls} />
         </Field>
-
-        <ImagePicker label="Category Icon" urlName="icon" fileName="iconFile" defaultUrl={cat?.icon ?? ""} square hint="Icon for this category (e.g., Top Up, Currency). Shows on category listings. PNG/WEBP max 2MB" />
-
         <Field label="Status">
           <select name="status" defaultValue={cat?.status ?? "active"} className={inputCls}>
             <option value="active">Live on site</option>
@@ -163,6 +155,13 @@ function CatForm({ cat, onClose }: { cat: C | null; onClose: () => void }) {
   );
 }
 
+/**
+ * Per-category sell-wizard configuration.
+ *
+ * Everything here changes what a seller is asked for when they create an offer
+ * in this category — no deployment needed. Field-level requirements (extra
+ * dropdowns, text boxes) live in Admin -> Field Templates.
+ */
 function SellConfigForm({ cat, onClose }: { cat: C; onClose: () => void }) {
   const router = useRouter();
   const [busy, start] = useTransition();

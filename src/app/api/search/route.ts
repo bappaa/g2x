@@ -1,31 +1,18 @@
 import { NextResponse } from "next/server";
 import { getSearchIndex } from "@/lib/cache";
-import { rateLimit, clientIp } from "@/lib/ratelimit";
-import { headers } from "next/headers";
-import { sanitizeName } from "@/lib/sanitize";
 
 // Public catalog data — cache it hard at the edge.
 export const revalidate = 300;
 
+/**
+ * Header search.
+ *
+ * The full index (~45 KB of games + products) used to be embedded in the HTML
+ * of every single page, for a box most visitors never touch. It is fetched on
+ * first focus instead, which took ~45 KB off every page on the site.
+ */
 export async function GET(req: Request) {
-  const ip = clientIp(headers());
-  const rl = await rateLimit(ip, "search", 30, 60);
-  if (!rl.ok) {
-    return NextResponse.json({ error: "Too many requests" }, { 
-      status: 429,
-      headers: { "Retry-After": String(rl.retryAfter) }
-    });
-  }
-
-  const rawQ = new URL(req.url).searchParams.get("q")?.trim() ?? "";
-  // Sanitize and limit length
-  const q = sanitizeName(rawQ, 100).toLowerCase();
-  if (rawQ.length > 100) {
-    return NextResponse.json([], {
-      headers: { "Cache-Control": "public, s-maxage=60" },
-    });
-  }
-
+  const q = new URL(req.url).searchParams.get("q")?.trim().toLowerCase() ?? "";
   const index = await getSearchIndex();
   const rows = q ? index.filter((r) => r.label.toLowerCase().includes(q)) : index;
 

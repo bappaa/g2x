@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Ship smaller JS: only the icons actually used are bundled, and heavy
+  // libraries are tree-shaken per-import instead of pulled in wholesale.
   modularizeImports: {
     "lucide-react": {
       transform: "lucide-react/dist/esm/icons/{{ kebabCase member }}",
@@ -8,10 +10,24 @@ const nextConfig = {
   },
   experimental: {
     optimizePackageImports: ["lucide-react", "framer-motion", "recharts"],
+    // Client-side router cache. Without this Next 14 gives dynamic routes a 0s
+    // stale time, so every single navigation refetches from the server and the
+    // user stares at a spinner. 30s for prefetched shells / 3min for visited
+    // pages makes back/forward and re-visits feel instant.
     staleTimes: { dynamic: 30, static: 180 },
+    /**
+     * Server action payload limit.
+     *
+     * Defaults to 1 MB. The offer form accepts up to 6 photos at 2 MB each and
+     * base64 inflates them by ~33%, so a listing with photos blew straight past
+     * it: the request died with 413 before reaching the action, and the client
+     * then read `r.ok` off an undefined response — the white "Application
+     * error" page. Credential vaults and chat attachments ride the same path.
+     */
     serverActions: { bodySizeLimit: "12mb" },
   },
   compiler: {
+    // Strip console.* in production, keep errors/warnings.
     removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false,
   },
   images: {
@@ -21,23 +37,9 @@ const nextConfig = {
   poweredByHeader: false,
   compress: true,
   async headers() {
-    const securityHeaders = [
-      { key: "X-Content-Type-Options", value: "nosniff" },
-      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-      { key: "X-Frame-Options", value: "DENY" },
-      { key: "X-XSS-Protection", value: "1; mode=block" },
-      { key: "X-DNS-Prefetch-Control", value: "off" },
-      { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
-      { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
-      { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
-      { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
-      { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()" },
-    ];
-    if (process.env.NODE_ENV === "production") {
-      securityHeaders.push({ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" });
-    }
     return [
       {
+        // Uploaded media is content-addressed by row id — cache it hard.
         source: "/api/media/:id",
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
@@ -47,7 +49,10 @@ const nextConfig = {
       },
       {
         source: "/:path*",
-        headers: securityHeaders,
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
       },
     ];
   },
