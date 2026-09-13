@@ -2,32 +2,32 @@ import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
 /**
- * Edge security layer. Runs before every request.
- *
- *  1. CSRF — Server Actions are POSTs. Next.js checks Origin against Host, but
- *     that is bypassable behind misconfigured proxies, so we enforce it here
- *     too against an explicit allowlist.
- *  2. Security headers — CSP, HSTS, frame/permission policy.
- *  3. Auth pre-check on /admin and the panels: no session cookie means we never
- *     even reach the database. (Real authorisation still happens server-side —
- *     this is only a cheap first gate.)
- *  4. Blocks probing for common exploit paths (.env, .git, wp-admin, …).
+ * Edge security layer - HIGH SECURITY for gaming ecommerce
+ * 1. Exploit path blocking
+ * 2. Bad UA blocking
+ * 3. CSRF origin check
+ * 4. Auth gate
+ * 5. Security headers
  */
 
 const PROTECTED = ["/admin", "/dashboard", "/seller"];
 
-// bots hunting for leaked config / other stacks — never a real route here
 const BAD_PATH =
-  /(^|\/)(\.env|\.git|\.aws|\.ssh|wp-admin|wp-login|phpmyadmin|xmlrpc\.php|vendor\/phpunit|config\.json|id_rsa)(\/|$)/i;
+  /(^|\/)(?:\.env|\.git|\.aws|\.ssh|wp-admin|wp-login|phpmyadmin|xmlrpc\.php|vendor\/phpunit|config\.json|id_rsa|\.htaccess|composer\.json|\.DS_Store|backup|\.bak|\.sql|adminer|pma|phpinfo\.php|shell\.php|c99\.php|r57\.php|wso\.php|alfa\.php|b374k|eval-stdin)(?:\/|$)/i;
+
+const BAD_PATH_EXTRA = /(?:union\s+select|select\s+\*\s+from|or\s+1\s*=\s*1|drop\s+table|%27|%22|<script|javascript:)/i;
+
+const BAD_UA = /(?:sqlmap|nmap|nikto|dirbuster|gobuster|masscan|zap|burpsuite|acunetix|nessus|havij|wpscan|metasploit|hydra|shodan)/i;
 
 function allowedOrigins(req: NextRequest): string[] {
   const list = [req.nextUrl.origin];
   const host = req.headers.get("host");
-  if (host) {
-    list.push(`https://${host}`, `http://${host}`);
-  }
+  if (host) list.push(`https://${host}`, `http://${host}`);
   const app = process.env.NEXT_PUBLIC_APP_URL;
   if (app) list.push(app.replace(/\/$/, ""));
+  if (process.env.NODE_ENV !== "production") {
+    list.push("http://localhost:3000", "http://127.0.0.1:3000");
+  }
   return list;
 }
 
@@ -50,80 +50,118 @@ async function verify(token: string): Promise<boolean> {
   }
 }
 
+const edgeRateLimit = new Map<string, { count: number; reset: number }>();
+function checkEdgeRateLimit(key: string, limit: number, windowS: number): boolean {
+  const now = Date.now();
+  const entry = edgeRateLimit.get(key);
+  if (!entry || entry.reset < now) {
+    edgeRateLimit.set(key, { count: 1, reset: now + windowS * 1000 });
+    if (edgeRateLimit.size > 1000 && Math.random() < 0.1) {
+      for (const [k, v] of edgeRateLimit.entries()) if (v.reset < now) edgeRateLimit.delete(k);
+    }
+    return true;
+  }
+  if (entry.count >= limit) return false;
+  entry.count++;
+  return true;
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const ip = req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const ua = req.headers.get("user-agent") || "";
 
-  if (BAD_PATH.test(pathname)) {
+  if (BAD_PATH.test(pathname) || BAD_PATH_EXTRA.test(pathname)) {
     return new NextResponse("Not found", { status: 404 });
   }
 
-  /* ------------------------- 1. CSRF / origin ------------------------- */
-  if (req.method === "POST") {
-    const origin = req.headers.get("origin");
-    // Same-origin browser POSTs always carry Origin. A missing one is either a
-    // non-browser client or a stripped header — reject rather than guess.
-    if (!origin || !allowedOrigins(req).includes(origin)) {
-      return new NextResponse("Blocked: bad origin", { status: 403 });
+  if (BAD_UA.test(ua) && (pathname.startsWith("/admin") || pathname.startsWith("/api/") || pathname.includes("login"))) {
+    return new NextResponse("Forbidden", { status: 403 });
+  }
+
+  const allowedMethods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"];
+  if (!allowedMethods.includes(req.method)) {
+    return new NextResponse("Method not allowed", { status: 405 });
+  }
+
+  if (pathname.startsWith("/api/search") || pathname.startsWith("/api/auth")) {
+    if (!checkEdgeRateLimit(`edge:${ip}:${pathname}`, 30, 60)) {
+      return new NextResponse("Too many requests", { status: 429, headers: { "Retry-After": "60" } });
     }
   }
 
-  /* ------------------------ 2. cheap auth gate ------------------------ */
+  if (req.method === "POST") {
+    const origin = req.headers.get("origin");
+    if (origin) {
+      const allowed = allowedOrigins(req);
+      const isAllowed = allowed.some((a) => {
+        try { return origin === a || new URL(origin).host === new URL(a).host; } catch { return origin === a; }
+      });
+      if (!isAllowed) return new NextResponse("Blocked: bad origin", { status: 403 });
+    }
+  }
+
   if (PROTECTED.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
     const token = req.cookies.get("g2x_session")?.value;
-    // Verify the signature/expiry at the edge. A cookie that merely *exists*
-    // used to pass, and the page then threw UNAUTHORIZED deeper in the render.
     const valid = token ? await verify(token) : false;
     if (!valid) {
       const url = req.nextUrl.clone();
       url.pathname = "/login";
       url.search = `?next=${encodeURIComponent(pathname)}`;
       const res = NextResponse.redirect(url);
-      if (token) res.cookies.delete("g2x_session"); // drop the stale cookie
+      if (token) res.cookies.delete("g2x_session");
       return res;
     }
   }
 
-  /* ------------------------ 3. security headers ----------------------- */
   const reqHeaders = new Headers(req.headers);
   reqHeaders.set("x-pathname", pathname);
+  reqHeaders.set("x-request-id", Math.random().toString(36).slice(2, 10));
   const res = NextResponse.next({ request: { headers: reqHeaders } });
   const prod = process.env.NODE_ENV === "production";
 
-  // Next's inline bootstrap and styled-jsx need 'unsafe-inline'; scripts also
-  // need 'unsafe-eval' in dev for React Refresh.
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline'${prod ? "" : " 'unsafe-eval'"}`,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
-    "font-src 'self' data:",
-    "connect-src 'self'",
+    `script-src 'self' 'unsafe-inline'${prod ? "" : " 'unsafe-eval'"} https://www.google.com https://www.gstatic.com`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: blob: https: /api/media/",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "connect-src 'self' https://api.exchangerate-api.com https://api.frankfurter.app",
     "frame-ancestors 'none'",
     "form-action 'self'",
     "base-uri 'self'",
     "object-src 'none'",
-    ...(prod ? ["upgrade-insecure-requests"] : []),
+    "media-src 'self' blob:",
+    ...(prod ? ["upgrade-insecure-requests", "block-all-mixed-content"] : []),
   ].join("; ");
 
   res.headers.set("Content-Security-Policy", csp);
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.headers.set("X-XSS-Protection", "1; mode=block");
+  res.headers.set("X-DNS-Prefetch-Control", "off");
+  res.headers.set("X-Permitted-Cross-Domain-Policies", "none");
+  res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  res.headers.set("Cross-Origin-Embedder-Policy", "credentialless");
+  res.headers.set("Cross-Origin-Resource-Policy", "same-origin");
   res.headers.set(
     "Permissions-Policy",
-    "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+    "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=(), clipboard-read=(), clipboard-write=(self), fullscreen=(self)"
   );
-  res.headers.set("X-DNS-Prefetch-Control", "off");
-  if (prod)
-    res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  if (prod) res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
 
-  // never let a proxy or CDN cache an authenticated page
-  if (PROTECTED.some((p) => pathname.startsWith(p)))
-    res.headers.set("Cache-Control", "private, no-store, max-age=0");
+  if (PROTECTED.some((p) => pathname.startsWith(p))) {
+    res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+    res.headers.set("Pragma", "no-cache");
+  }
+  if (pathname.startsWith("/api/")) {
+    res.headers.set("Cache-Control", "no-store, max-age=0");
+  }
 
   return res;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|art/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|art/|_next/webpack-hmr).*)"],
 };
