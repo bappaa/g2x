@@ -11,6 +11,7 @@ import { sanitizeName, sanitizeSlug, sanitizeImageUrl, containsXSS, containsSQLi
 import { checkAdminRateLimit, logSecurityEvent } from "../security";
 import { clientIp } from "../ratelimit";
 import { headers } from "next/headers";
+import { EARN_SQL } from "../wallet";
 
 export type R = { ok: boolean; error?: string; id?: string };
 
@@ -948,11 +949,17 @@ export async function resolveDisputeAction(form: {
       }
     );
   } else {
-    // seller wins — release escrow to available
+    // seller wins — release escrow to available + shared wallet (spendable & withdrawable)
     stmts.push({
       sql: `UPDATE seller_profiles SET pending_bal = MAX(0, pending_bal - ?),
                    available_bal = available_bal + ? WHERE user_id=?`,
       args: [Number(d.amount), Number(d.amount), d.seller_id],
+    });
+    stmts.push({ sql: EARN_SQL, args: [Number(d.amount), Number(d.amount), d.seller_id] });
+    stmts.push({
+      sql: `INSERT INTO transactions (id,user_id,type,amount,reference,order_id)
+            VALUES (?,?, 'payout', ?, ?, ?)`,
+      args: [nid("txn_"), d.seller_id, Number(d.amount), `Dispute ${form.code} resolved — funds released`, d.order_id],
     });
   }
 
@@ -1085,6 +1092,7 @@ export async function reviewWithdrawalAction(
     await tx([
       { sql: `UPDATE withdrawals SET status='rejected', admin_note=?, processed_at=datetime('now') WHERE id=?`, args: [note, id] },
       { sql: `UPDATE seller_profiles SET available_bal = available_bal + ? WHERE user_id=?`, args: [w.amount, w.seller_id] },
+      { sql: EARN_SQL, args: [w.amount, w.amount, w.seller_id] },
       {
         sql: `INSERT INTO transactions (id,user_id,type,amount,reference)
               VALUES (?,?, 'refund', ?, 'Withdrawal rejected — funds returned')`,

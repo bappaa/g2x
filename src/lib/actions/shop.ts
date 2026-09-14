@@ -27,7 +27,7 @@ import { isEmailVerified } from "../otp";
 import { escrowHoldHours } from "../escrow";
 import { scheduleSubscriptions } from "../subscription";
 import { rateLimit } from "../ratelimit";
-import { SPEND_SQL, spendArgs } from "../wallet";
+import { SPEND_SQL, spendArgs, EARN_SQL, earnArgs } from "../wallet";
 
 async function notify(userId: string, title: string, body: string, href: string, kind = "order") {
   await run(
@@ -313,6 +313,24 @@ export async function placeOrderAction(form: {
     }));
 
   if (gw.code === "wallet") {
+    // For sellers, spending withdrawable earnings should also reduce available_bal
+    // to keep finance panel accurate. Site credit is spent first.
+    try {
+      const { getWallet } = await import("../wallet");
+      const w = await getWallet(u.id);
+      const siteCredit = Math.max(0, w.balance - w.withdrawable);
+      const spendFromWithdrawable = Math.max(0, total - siteCredit);
+      if (spendFromWithdrawable > 0) {
+        const hasSeller = await one(`SELECT user_id FROM seller_profiles WHERE user_id=?`, [u.id]);
+        if (hasSeller) {
+          stmts.push({
+            sql: `UPDATE seller_profiles SET available_bal = MAX(0, available_bal - ?) WHERE user_id=?`,
+            args: [spendFromWithdrawable, u.id],
+          });
+        }
+      }
+    } catch {}
+
     stmts.push({
       // Spends the non-withdrawable site credit first, so the seller's
       // cashable earnings are preserved for as long as possible.
@@ -501,7 +519,7 @@ export async function confirmReceiptAction(code: string): Promise<R> {
     },
   ];
 
-  // release escrow: pending -> available
+  // release escrow: pending -> available + shared wallet
   for (const it of items) {
     stmts.push({
       sql: `UPDATE seller_profiles
@@ -512,6 +530,7 @@ export async function confirmReceiptAction(code: string): Promise<R> {
              WHERE user_id=?`,
       args: [it.seller_net, it.seller_net, it.seller_net, it.seller_id],
     });
+    stmts.push({ sql: EARN_SQL, args: earnArgs(it.seller_net, it.seller_id) });
     stmts.push({
       sql: `INSERT INTO transactions (id,user_id,type,amount,reference,order_id)
             VALUES (?,?, 'sale', ?, ?, ?)`,

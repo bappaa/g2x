@@ -2,6 +2,7 @@ import { requireUser } from "@/lib/session";
 import { getSellerProfile, getWithdrawals, getSellerStats } from "@/lib/queries";
 import { all } from "@/lib/db";
 import FinanceView from "@/components/seller/FinanceView";
+import { repairSellerWallet } from "@/lib/wallet";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Finance & Payouts — G2X.GG" };
@@ -10,6 +11,8 @@ type Prof = { available_bal: number; pending_bal: number; payout_method: string 
 
 export default async function Page() {
   const u = await requireUser();
+  // Auto-repair any out-of-sync wallet from old bug (available_bal > withdrawable)
+  await repairSellerWallet(u.id).catch(() => null);
   const [prof, wds, stats, txns] = await Promise.all([
     getSellerProfile(u.id) as Promise<Prof>,
     getWithdrawals(u.id),

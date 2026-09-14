@@ -44,26 +44,27 @@ export default async function Page({ params }: { params: { id: string } }) {
   const offer = await one<OfferDbRow>(
     `SELECT o.*, p.name as product_name, p.image as product_image, p.game_slug, p.category_slug, p.slug as product_slug, g.name as game_name, g.logo as game_logo
      FROM offers o
-     JOIN products p ON p.id=o.product_id
-     JOIN games g ON g.slug=p.game_slug
+     LEFT JOIN products p ON p.id=o.product_id
+     LEFT JOIN games g ON g.slug=p.game_slug
      WHERE o.id=? AND o.seller_id=?`,
     [params.id, s.id]
   );
   if (!offer) notFound();
 
-  const cfg = await getSellConfig(offer.category_slug);
+  const categorySlug = offer.category_slug || "currency";
+  const cfg = await getSellConfig(categorySlug);
   if (!cfg) notFound();
 
   const product = {
-    id: offer.product_id,
-    name: offer.product_name,
-    image: offer.product_image,
+    id: offer.product_id || "",
+    name: offer.product_name || offer.title || "Product",
+    image: offer.product_image || "/art/coins.png",
     base_price: 0,
   };
 
-  const gameRow = await one<{ name: string; logo: string }>(
-    `SELECT name, logo FROM games WHERE slug=?`, [offer.game_slug]
-  );
+  const gameRow = offer.game_slug
+    ? await one<{ name: string; logo: string }>(`SELECT name, logo FROM games WHERE slug=?`, [offer.game_slug])
+    : null;
 
   const sell = mergeSellConfig(cfg, { category_slug: offer.category_slug } as unknown as Record<string, unknown>);
 

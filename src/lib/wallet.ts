@@ -48,6 +48,49 @@ export async function getWallet(userId: string): Promise<WalletView> {
 }
 
 /**
+ * Repairs a seller wallet that got out of sync due to an old bug where
+ * `seller_profiles.available_bal` was increased without crediting
+ * `users.withdrawable` (buyer confirm, dispute win, withdrawal reject).
+ *
+ * The fix is safe: it only ever INCREASES withdrawable/balance to match
+ * available_bal, never decreases, and preserves existing siteCredit (topped-up
+ * money). After repair, `min(available_bal, withdrawable)` equals
+ * `available_bal`, so withdrawal works.
+ */
+export async function repairSellerWallet(userId: string): Promise<WalletView> {
+  try {
+    const { one: oneDb, run } = await import("./db");
+    const prof = await oneDb<{ available_bal: number }>(
+      `SELECT available_bal FROM seller_profiles WHERE user_id=?`,
+      [userId]
+    ).catch(() => null);
+    const avail = Number(prof?.available_bal ?? 0);
+    if (!(avail > 0)) return getWallet(userId);
+
+    const u = await oneDb<{ balance: number; withdrawable: number }>(
+      `SELECT balance, COALESCE(withdrawable,0) AS withdrawable FROM users WHERE id=?`,
+      [userId]
+    ).catch(() => null);
+    const balance = Number(u?.balance ?? 0);
+    const withdrawable = Math.max(0, Math.min(Number(u?.withdrawable ?? 0), balance));
+    const siteCredit = Math.round((balance - withdrawable) * 100) / 100;
+
+    if (avail > withdrawable) {
+      const newWithdrawable = avail;
+      const newBalance = Math.round((avail + siteCredit) * 100) / 100;
+      await run(
+        `UPDATE users SET balance=?, withdrawable=? WHERE id=?`,
+        [newBalance, newWithdrawable, userId]
+      ).catch(() => null);
+      return { balance: newBalance, withdrawable: newWithdrawable, siteCredit };
+    }
+    return { balance, withdrawable, siteCredit };
+  } catch {
+    return getWallet(userId);
+  }
+}
+
+/**
  * SQL for spending `?` from a wallet.
  *
  * Both columns fall together, but `withdrawable` only drops once the

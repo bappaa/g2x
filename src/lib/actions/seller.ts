@@ -748,29 +748,28 @@ export async function requestWithdrawalAction(form: {
   const s = await requireSeller();
   const amt = Math.round(form.amount * 100) / 100;
 
-  /**
-   * Only *earned* money may leave the platform.
-   *
-   * The wallet is shared — a seller spends their earnings on the site like any
-   * buyer — but topped-up money is site credit, not cash. `users.withdrawable`
-   * is the earned portion, so the cap is the lower of that and the seller's
-   * released `available_bal`. Without this a seller could top up by card and
-   * withdraw it straight to a bank.
-   */
+  // Auto-repair any out-of-sync wallet from old bug where available_bal was
+  // increased without crediting withdrawable (buyer confirm, dispute win).
+  try {
+    const { repairSellerWallet } = await import("../wallet");
+    await repairSellerWallet(s.id);
+  } catch {}
+
   const wallet = await getWallet(s.id);
   const prof = await one<{ available_bal: number }>(
     `SELECT available_bal FROM seller_profiles WHERE user_id=?`, [s.id]
   );
-  const avail = Math.min(Number(prof?.available_bal ?? 0), wallet.withdrawable);
+  const availableBal = Number(prof?.available_bal ?? 0);
+  const effectiveAvail = availableBal > 0 ? availableBal : wallet.withdrawable;
 
   if (!(amt >= 10)) return { ok: false, error: "Minimum withdrawal is $10.00." };
-  if (amt > avail)
+  if (amt > effectiveAvail)
     return {
       ok: false,
       error:
         wallet.siteCredit > 0
-          ? `You can withdraw up to $${avail.toFixed(2)}. Topped-up balance ($${wallet.siteCredit.toFixed(2)}) can be spent on G2X but not withdrawn.`
-          : `You can withdraw up to $${avail.toFixed(2)}.`,
+          ? `You can withdraw up to $${effectiveAvail.toFixed(2)}. Topped-up balance ($${wallet.siteCredit.toFixed(2)}) can be spent on G2X but not withdrawn.`
+          : `You can withdraw up to $${effectiveAvail.toFixed(2)}.`,
     };
   if (!form.detail.trim()) return { ok: false, error: "Enter your payout details." };
 

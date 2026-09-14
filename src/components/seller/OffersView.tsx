@@ -13,25 +13,38 @@ import { img } from "@/lib/img";
 import { useMoney } from "@/components/LocaleProvider";
 import {
   offerStatusAction, offerStockAction, deleteOfferAction,
+  listingStatusAction, deleteListingAction,
 } from "@/lib/actions/seller";
 
 type Offer = {
-  id: string; product_id: string; product_name: string; product_slug?: string; game_slug?: string;
-  image: string; game_name: string;
-  category_name: string; category_slug: string; price: number; old_price: number | null;
-  stock: number; delivery_time: string; delivery_method: string | null; login_method: string | null;
-  region: string | null; platform: string | null; instructions: string | null;
-  status: string; featured: number; sold_count: number; market_min: number | null;
+  id: string;
+  kind: "offer" | "listing";
+  product_id: string | null;
+  product_name: string;
+  product_slug: string | null;
+  game_slug: string;
+  image: string;
+  game_name: string;
+  category_name: string;
+  category_slug: string;
+  price: number;
+  old_price: number | null;
+  stock: number;
+  delivery_time: string;
+  delivery_method: string | null;
+  login_method: string | null;
+  region: string | null;
+  platform: string | null;
+  instructions: string | null;
+  status: string;
+  featured: number;
+  sold_count: number;
+  market_min: number | null;
   custom_fields: string | null;
+  own_title?: string | null;
 };
 
 const TABS = ["all", "active", "paused", "out_of_stock", "draft"];
-
-type FieldTemplate = {
-  id: string;
-  label: string;
-  field_key: string;
-};
 
 export default function OffersView({
   offers, status, category = "", page = 1, perPage = 30, total = 0,
@@ -39,7 +52,6 @@ export default function OffersView({
   offers: Offer[]; status: string;
   page?: number; perPage?: number; total?: number;
   category?: string;
-  fields?: FieldTemplate[];
 }) {
   const money = useMoney();
   const router = useRouter();
@@ -60,14 +72,16 @@ export default function OffersView({
       router.refresh();
     });
 
-  type OfferWithSlugs = Offer & { game_slug?: string; product_slug?: string };
   const copyLink = async (o: Offer) => {
-    // Product page with offer id so buyer can find and buy this specific offer
-    const oo = o as OfferWithSlugs;
-    const game = oo.game_slug || "game";
-    const cat = o.category_slug || "category";
-    const slug = oo.product_slug || o.product_id;
-    const url = `${window.location.origin}/g/${game}/${cat}/${slug}?offer=${o.id}`;
+    let url = "";
+    if (o.kind === "listing") {
+      // listing detail page: /g/[game]/[category]/[id]
+      url = `${window.location.origin}/g/${o.game_slug}/${o.category_slug}/${o.id}`;
+    } else {
+      // offer: product page with offer id highlighted
+      const slug = o.product_slug || o.product_id || o.id;
+      url = `${window.location.origin}/g/${o.game_slug}/${o.category_slug}/${slug}?offer=${o.id}`;
+    }
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(o.id);
@@ -75,6 +89,22 @@ export default function OffersView({
     } catch {
       prompt("Copy this link:", url);
     }
+  };
+
+  const editHref = (o: Offer) => {
+    if (o.kind === "listing") return `/seller/listings/${o.id}/edit`;
+    return `/seller/offers/${o.id}/edit`;
+  };
+
+  const handleStatus = (o: Offer) => {
+    const next = o.status === "active" ? "paused" : "active";
+    if (o.kind === "listing") return listingStatusAction(o.id, next);
+    return offerStatusAction(o.id, next);
+  };
+
+  const handleDelete = (o: Offer) => {
+    if (o.kind === "listing") return deleteListingAction(o.id);
+    return deleteOfferAction(o.id);
   };
 
   return (
@@ -141,6 +171,7 @@ export default function OffersView({
         <div className="space-y-2.5">
           {rows.map((o) => {
             const beat = o.market_min != null && o.price <= o.market_min;
+            const isListing = o.kind === "listing";
             return (
               <motion.div key={o.id} layout className="rounded-2xl panel p-4">
                 <div className="flex flex-wrap items-center gap-3">
@@ -150,13 +181,13 @@ export default function OffersView({
                   <div className="min-w-[170px] flex-1">
                     <div className="line-clamp-1 text-[13px] font-bold">{o.product_name}</div>
                     <div className="text-[11px] muted">
-                      {o.game_name} · {o.category_name} · {o.sold_count} sold
+                      {o.game_name} · {o.category_name} · {isListing ? `${o.stock} in stock` : `${o.sold_count} sold`} {isListing && <span className="ml-1 rounded bg-amber-500/20 px-1 py-0.5 text-[9px] font-bold text-amber-400">LISTING</span>}
                     </div>
                   </div>
 
                   <div className="text-right">
                     <div className="text-[15px] font-black text-brand-500">{money(o.price)}</div>
-                    {o.market_min != null && (
+                    {o.market_min != null && !isListing && (
                       <div className={`flex items-center justify-end gap-1 text-[10.5px] ${beat ? "text-emerald-400" : "text-amber-400"}`}>
                         {beat ? <TrendingDown size={10} /> : <TrendingUp size={10} />}
                         market {money(o.market_min)}
@@ -164,44 +195,46 @@ export default function OffersView({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] muted">Stock</span>
-                    <input
-                      type="number"
-                      defaultValue={o.stock}
-                      onBlur={(e) => {
-                        const v = Number(e.target.value);
-                        if (v !== o.stock) act(() => offerStockAction(o.id, v));
-                      }}
-                      className="w-[64px] rounded-lg border border-[var(--line)] soft px-2 py-1 text-[12px] outline-none focus:border-brand-500"
-                    />
-                  </div>
+                  {!isListing ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] muted">Stock</span>
+                      <input
+                        type="number"
+                        defaultValue={o.stock}
+                        onBlur={(e) => {
+                          const v = Number(e.target.value);
+                          if (v !== o.stock) act(() => offerStockAction(o.id, v));
+                        }}
+                        className="w-[64px] rounded-lg border border-[var(--line)] soft px-2 py-1 text-[12px] outline-none focus:border-brand-500"
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-[11px] muted">{o.stock} stock</div>
+                  )}
 
                   <Tag tone={statusTone(o.status)}>{label(o.status)}</Tag>
 
                   <div className="flex items-center gap-1">
                     <IconBtn
                       title={o.status === "active" ? "Pause" : "Activate"}
-                      onClick={() => act(() => offerStatusAction(o.id, o.status === "active" ? "paused" : "active"))}
+                      onClick={() => act(() => handleStatus(o))}
                     >
                       {o.status === "active" ? <Pause size={13} /> : <Play size={13} />}
                     </IconBtn>
-                    {/* Edit now goes to full page like image-1 */}
                     <Link
-                      href={`/seller/offers/${o.id}/edit`}
+                      href={editHref(o)}
                       title="Edit"
                       className="grid h-8 w-8 place-items-center rounded-lg soft transition-colors hover:bg-brand-500/15 hover:text-brand-400"
                     >
                       <Pencil size={13} />
                     </Link>
-                    {/* Link replaces duplicate */}
                     <IconBtn
                       title={copiedId === o.id ? "Copied!" : "Copy product link"}
                       onClick={() => copyLink(o)}
                     >
                       {copiedId === o.id ? <Check size={13} className="text-emerald-400" /> : <Link2 size={13} />}
                     </IconBtn>
-                    <IconBtn title="Delete" danger onClick={() => act(() => deleteOfferAction(o.id))}>
+                    <IconBtn title="Delete" danger onClick={() => act(() => handleDelete(o))}>
                       <Trash2 size={13} />
                     </IconBtn>
                   </div>
