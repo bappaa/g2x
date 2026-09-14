@@ -71,7 +71,10 @@ function OrderRow({ o }: { o: OI }) {
           <div className="grid gap-2 sm:grid-cols-2">
             <Info l="Buyer" v={o.buyer_name} icon={User} />
             <Info l="Delivery UID" v={o.delivery_uid} />
-            <Info l="Order ID" v={o.code} />
+            <div className="rounded-lg soft px-3 py-2 flex items-center justify-between gap-2">
+              <div><div className="text-[10.5px] muted">Order ID</div><div className="text-[12px] font-medium">{o.code}</div></div>
+              <button onClick={() => navigator.clipboard.writeText(o.code)} className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10.5px] font-bold text-white hover:bg-brand-500">Copy</button>
+            </div>
             <Info l="Quantity" v={`${o.qty} × ${money(o.unit_price)}`} />
             {o.opt_region && <Info l="Game server" v={o.opt_region} />}
             {o.opt_delivery && <Info l="Delivery method" v={o.opt_delivery} />}

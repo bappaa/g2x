@@ -190,6 +190,21 @@ export default function BecomeSeller({
                   />
                 </Field>
               </div>
+              <div className="sm:col-span-2">
+                <div className="mb-2 text-[12px] font-bold">Contact links (optional)</div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Field label="WhatsApp">
+                    <input name="whatsapp" className={inputCls} placeholder="+91..." />
+                  </Field>
+                  <Field label="Telegram">
+                    <input name="telegram" className={inputCls} placeholder="@username or link" />
+                  </Field>
+                  <Field label="Discord">
+                    <input name="discord" className={inputCls} placeholder="username#1234 or invite" />
+                  </Field>
+                </div>
+                <div className="mt-1 text-[10.5px] muted">Optional — helps buyers contact you faster. Shown on your store profile.</div>
+              </div>
             </div>
             <Btn
               type="button"

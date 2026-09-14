@@ -114,6 +114,9 @@ CREATE TABLE IF NOT EXISTS seller_profiles (
   pending_bal    REAL NOT NULL DEFAULT 0,
   payout_method  TEXT,
   payout_detail  TEXT,
+  whatsapp       TEXT,
+  telegram       TEXT,
+  discord        TEXT,
   applied_at     TEXT NOT NULL DEFAULT (datetime('now')),
   approved_at    TEXT
 );

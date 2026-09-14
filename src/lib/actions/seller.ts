@@ -837,6 +837,9 @@ export async function saveStoreAction(form: FormData): Promise<R> {
   const description = String(form.get("description") ?? "").trim();
   const payoutMethod = String(form.get("payoutMethod") ?? "").trim();
   const payoutDetail = String(form.get("payoutDetail") ?? "").trim();
+  const whatsapp = String(form.get("whatsapp") ?? "").trim();
+  const telegram = String(form.get("telegram") ?? "").trim();
+  const discord = String(form.get("discord") ?? "").trim();
 
   if (storeName.length < 3) return { ok: false, error: "Store name must be at least 3 characters." };
   const slug = storeName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -881,9 +884,10 @@ export async function saveStoreAction(form: FormData): Promise<R> {
 
   await run(
     `UPDATE seller_profiles SET store_name=?, slug=?, description=?, logo=?, banner=?,
-            payout_method=?, payout_detail=? WHERE user_id=?`,
+            payout_method=?, payout_detail=?, whatsapp=?, telegram=?, discord=? WHERE user_id=?`,
     [storeName, slug, description, finalLogo, finalBanner,
-     payoutMethod || null, payoutDetail || null, s.id]
+     payoutMethod || null, payoutDetail || null,
+     whatsapp || null, telegram || null, discord || null, s.id]
   );
 
   // Merge username with store slug (username = store slug with _ instead of -)
@@ -905,19 +909,23 @@ export async function saveStoreAction(form: FormData): Promise<R> {
 
 export async function sellerMessageBuyerAction(buyerId: string, orderId?: string): Promise<R> {
   const s = await requireSeller();
-  // Separate threads per order so buyer/seller don't get confused
+  // Try exact order match first, then reuse same chat for same buyer+seller to avoid duplicate chats for same product
   if (orderId) {
-    const existing = await one<{ id: string }>(
+    const exact = await one<{ id: string }>(
       `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? AND order_id=? ORDER BY updated_at DESC LIMIT 1`,
       [buyerId, s.id, orderId]
     );
-    if (existing) return { ok: true, id: existing.id };
-  } else {
-    const existing = await one<{ id: string }>(
-      `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? ORDER BY updated_at DESC LIMIT 1`,
-      [buyerId, s.id]
-    );
-    if (existing) return { ok: true, id: existing.id };
+    if (exact) return { ok: true, id: exact.id };
+  }
+  const existing = await one<{ id: string }>(
+    `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? ORDER BY updated_at DESC LIMIT 1`,
+    [buyerId, s.id]
+  );
+  if (existing) {
+    if (orderId) {
+      try { await run(`UPDATE threads SET order_id=COALESCE(order_id, ?) WHERE id=?`, [orderId, existing.id]); } catch {}
+    }
+    return { ok: true, id: existing.id };
   }
   const id = nid("thr_");
   await run(`INSERT INTO threads (id,buyer_id,seller_id,order_id) VALUES (?,?,?,?)`, [
@@ -937,19 +945,28 @@ export async function sellerOrderMessageAction(input: {
   if (text.length < 1) return { ok: false, error: "Message is empty." };
   if (text.length > 2000) return { ok: false, error: "Message too long (max 2000)." };
 
-  // Find or create thread for this specific order
+  // Find or create thread: exact order first, then reuse same chat for same buyer+seller to avoid duplicate chats for same product
   let threadId: string;
-  const existing = await one<{ id: string }>(
+  const exact = await one<{ id: string }>(
     `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? AND order_id=? LIMIT 1`,
     [input.buyerId, s.id, input.orderId]
   );
-  if (existing) {
-    threadId = existing.id;
+  if (exact) {
+    threadId = exact.id;
   } else {
-    threadId = nid("thr_");
-    await run(`INSERT INTO threads (id,buyer_id,seller_id,order_id) VALUES (?,?,?,?)`, [
-      threadId, input.buyerId, s.id, input.orderId,
-    ]);
+    const fallback = await one<{ id: string }>(
+      `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? ORDER BY updated_at DESC LIMIT 1`,
+      [input.buyerId, s.id]
+    );
+    if (fallback) {
+      threadId = fallback.id;
+      try { await run(`UPDATE threads SET order_id=COALESCE(order_id, ?) WHERE id=?`, [input.orderId, threadId]); } catch {}
+    } else {
+      threadId = nid("thr_");
+      await run(`INSERT INTO threads (id,buyer_id,seller_id,order_id) VALUES (?,?,?,?)`, [
+        threadId, input.buyerId, s.id, input.orderId,
+      ]);
+    }
   }
 
   await run(

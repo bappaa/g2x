@@ -156,6 +156,11 @@ export const PATCHES = [
 
   // --- Phase 27 fix: Google users are already verified by Google ---
   `UPDATE users SET email_verified=1 WHERE provider='google' AND email_verified=0`,
+
+  // --- Phase 28: seller contact links (optional whatsapp/telegram/discord) ---
+  `ALTER TABLE seller_profiles ADD COLUMN whatsapp TEXT`,
+  `ALTER TABLE seller_profiles ADD COLUMN telegram TEXT`,
+  `ALTER TABLE seller_profiles ADD COLUMN discord TEXT`,
 ];
 
 /** Errors that mean "already applied" — expected on every run after the first. */

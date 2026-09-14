@@ -74,40 +74,53 @@ export default function ListingDetail({
             <h1 className="mt-4 text-[19px] font-black sm:text-[24px] tracking-tight">{listing.title}</h1>
             <div className="mt-2 flex flex-wrap gap-2">
               <Tag>{game.name}</Tag>
-              {isAccount && listing.level ? <Tag tone="slate">Level {listing.level}</Tag> : null}
-              {isAccount && listing.outfits ? <Tag tone="slate">{listing.outfits} Outfits</Tag> : null}
               <Tag tone="green">{listing.verified ? "Verified Seller" : "Active Seller"}</Tag>
             </div>
 
-            <p className="mt-4 text-[12.5px] leading-relaxed muted">{listing.description}</p>
+            {listing.description && (
+              <p className="mt-4 text-[12.5px] leading-relaxed muted">{listing.description}</p>
+            )}
           </div>
 
           <div className="rounded-2xl panel p-4 sm:p-5">
-            <h3 className="mb-3 text-[14px] font-bold">What&apos;s included</h3>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {(isAccount
-                ? [
-                    "Original email + password",
-                    "Full recovery access",
-                    `${listing.outfits ?? 0} outfits & skins`,
-                    "No ban history",
-                    "Warranty on access",
-                    "Instant credential delivery",
-                  ]
-                : [
-                    "Hand-played by pro boosters (no cheats)",
-                    "Offline / appear-invisible mode",
-                    "Live progress tracking",
-                    "Priority chat with your booster",
-                    "Full account safety guarantee",
-                    "Money back if not completed",
-                  ]
-              ).map((t) => (
-                <div key={t} className="flex items-center gap-2 text-[12.5px]">
-                  <Check size={13} className="text-emerald-400" /> {t}
+            <h3 className="mb-3 text-[14px] font-bold">Details</h3>
+            {(() => {
+              let custom: Record<string, string> = {};
+              try {
+                const raw = listing.custom_fields;
+                if (raw) custom = typeof raw === "string" ? JSON.parse(raw) : (raw as unknown as Record<string, string>);
+              } catch {}
+              const entries = Object.entries(custom).filter(([, v]) => String(v).trim());
+              if (entries.length) {
+                return (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {entries.map(([k, v]) => (
+                      <div key={k} className="flex items-center gap-2 text-[12.5px]">
+                        <Check size={13} className="text-emerald-400" /> <span className="font-semibold">{k}:</span> {String(v)}
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+              return (
+                <div className="space-y-2 text-[12.5px] muted">
+                  <div className="flex items-center gap-2"><Check size={13} className="text-emerald-400" /> Verified account from {listing.store_name}</div>
+                  <div className="flex items-center gap-2"><Check size={13} className="text-emerald-400" /> Instant delivery after payment</div>
+                  <div className="flex items-center gap-2"><Check size={13} className="text-emerald-400" /> Buyer protection included</div>
+                  {isAccount ? (
+                    <>
+                      <div className="flex items-center gap-2"><Check size={13} className="text-emerald-400" /> Full access provided</div>
+                      <div className="flex items-center gap-2"><Check size={13} className="text-emerald-400" /> Warranty on access</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2"><Check size={13} className="text-emerald-400" /> Hand-played by pro boosters</div>
+                      <div className="flex items-center gap-2"><Check size={13} className="text-emerald-400" /> Safe & secure service</div>
+                    </>
+                  )}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </div>
         </div>
 

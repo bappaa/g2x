@@ -16,6 +16,7 @@ export type CartRow = {
   price: number; qty: number; stock: number; delivery: string; href: string;
   /** Buyer's picks on the product page (region / server and delivery method). */
   opt_region?: string | null; opt_delivery?: string | null;
+  category_slug?: string | null;
 };
 
 export default function CartView({ items }: { items: CartRow[] }) {

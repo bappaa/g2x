@@ -8,6 +8,7 @@ import { saveStoreAction } from "@/lib/actions/seller";
 type Prof = {
   store_name: string; slug: string; description: string | null; logo: string | null;
   banner: string | null; payout_method: string | null; payout_detail: string | null;
+  whatsapp: string | null; telegram: string | null; discord: string | null;
   level: string; rating: number; total_orders: number; verified: number;
 };
 
@@ -216,6 +217,18 @@ export default function StoreSettings({ profile }: { profile: Prof }) {
           <Field label="About your store">
             <textarea name="description" rows={3} defaultValue={profile.description ?? ""} className={inputCls} placeholder="Instant delivery, trusted seller..." />
           </Field>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="WhatsApp (optional)">
+              <input name="whatsapp" defaultValue={profile.whatsapp ?? ""} className={inputCls} placeholder="+91..." />
+            </Field>
+            <Field label="Telegram (optional)">
+              <input name="telegram" defaultValue={profile.telegram ?? ""} className={inputCls} placeholder="@username or link" />
+            </Field>
+            <Field label="Discord (optional)">
+              <input name="discord" defaultValue={profile.discord ?? ""} className={inputCls} placeholder="username#1234 or invite" />
+            </Field>
+          </div>
 
           {err && <div className="text-[11.5px] text-rose-400">{err}</div>}
           {msg && (

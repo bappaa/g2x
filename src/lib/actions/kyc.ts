@@ -32,6 +32,9 @@ export async function submitVerificationAction(form: FormData): Promise<R> {
   const storeName = String(form.get("storeName") ?? "").trim();
   const primaryCat = String(form.get("primaryCat") ?? "").trim();
   const description = String(form.get("description") ?? "").trim();
+  const whatsapp = String(form.get("whatsapp") ?? "").trim();
+  const telegram = String(form.get("telegram") ?? "").trim();
+  const discord = String(form.get("discord") ?? "").trim();
 
   /* ---------------------------- validation ---------------------------- */
   if (fullName.length < 3) return { ok: false, error: "Enter your full legal name as printed on the ID." };
@@ -116,13 +119,14 @@ export async function submitVerificationAction(form: FormData): Promise<R> {
   }
 
   await run(
-    `INSERT INTO seller_profiles (user_id,store_name,slug,description,primary_cat,status)
-     VALUES (?,?,?,?,?, 'pending')
+    `INSERT INTO seller_profiles (user_id,store_name,slug,description,primary_cat,whatsapp,telegram,discord,status)
+     VALUES (?,?,?,?,?,?,?,?,'pending')
      ON CONFLICT(user_id) DO UPDATE SET
        store_name=excluded.store_name, slug=excluded.slug,
        description=excluded.description, primary_cat=excluded.primary_cat,
+       whatsapp=excluded.whatsapp, telegram=excluded.telegram, discord=excluded.discord,
        status='pending'`,
-    [u.id, storeName, slug, description, primaryCat]
+    [u.id, storeName, slug, description, primaryCat, whatsapp || null, telegram || null, discord || null]
   );
   // Merge username with store name
   try {

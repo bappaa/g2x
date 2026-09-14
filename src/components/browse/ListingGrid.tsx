@@ -126,9 +126,6 @@ export default function ListingGrid({
               </div>
               <div className="p-3">
                 <div className="text-[12.5px] font-bold">{a.title}</div>
-                <div className="mt-0.5 text-[11px] muted">
-                  Level {a.level} | {a.outfits} Outfits
-                </div>
                 <div className="mt-2 flex items-center justify-between">
                   <span className="text-[15px] font-black text-brand-500">{money(a.price)}</span>
                   <span className="flex items-center gap-1 text-[10.5px] muted">

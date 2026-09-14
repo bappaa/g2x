@@ -45,7 +45,7 @@ export default function CheckoutView({
   const chosen = items.map((i) => i.opt_delivery).filter(Boolean) as string[];
   const deliveryKind = chosen.length ? chosen[0] : "";
   const k = deliveryKind.toLowerCase();
-  const idField = k.includes("uid")
+  const baseField = k.includes("uid")
     ? { label: "In-game UID", placeholder: "e.g. 51234987", hint: "Your numeric in-game user ID." }
     : k.includes("login")
     ? { label: "Login ID / Email", placeholder: "e.g. player@mail.com", hint: "The account login the seller will use." }
@@ -54,6 +54,12 @@ export default function CheckoutView({
     : k.includes("friend")
     ? { label: "In-game name / Friend ID", placeholder: "e.g. PlayerOne#1234", hint: "So the seller can add you in-game." }
     : { label: "In-game UID / Login ID", placeholder: "e.g. 51234987 or player@mail.com", hint: "" };
+
+  // Category-aware delivery: accounts, gift-cards, subscriptions do NOT need in-game ID
+  const cats = items.map((i) => (i.category_slug || "").toLowerCase());
+  const needsGameId = cats.some((c) => ["currency", "top-up", "topup", "items", "boosting"].includes(c));
+  const isAccountOnly = cats.length > 0 && cats.every((c) => ["accounts", "gift-cards", "giftcards", "subscriptions", "subscription"].includes(c));
+  const idField = baseField;
 
   /** Distinct region + method pairs, echoed back so the buyer can confirm. */
   const optSummary = Array.from(
@@ -116,9 +122,15 @@ export default function CheckoutView({
       <div className="space-y-4">
         <section className="rounded-2xl panel p-4 sm:p-5">
           <h3 className="text-[14px] font-bold">1. {tr("co.delivery")}</h3>
-          <p className="mt-1 text-[11.5px] muted">
-            The seller uses this to deliver your order. Double-check it — wrong IDs cause delays.
-          </p>
+          {isAccountOnly ? (
+            <p className="mt-1 text-[11.5px] muted">
+              Account credentials will be delivered automatically after payment. No game ID needed — the seller fulfills via secure delivery.
+            </p>
+          ) : (
+            <p className="mt-1 text-[11.5px] muted">
+              The seller uses this to deliver your order. Double-check it — wrong IDs cause delays.
+            </p>
+          )}
           {optSummary.length > 0 && (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               {optSummary.map((o) => (
@@ -132,17 +144,19 @@ export default function CheckoutView({
             </div>
           )}
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Field label={idField.label}>
-              <input
-                className={inputCls}
-                value={uid}
-                onChange={(e) => setUid(e.target.value)}
-                placeholder={idField.placeholder}
-              />
-              {idField.hint && (
-                <span className="mt-1 block text-[10.5px] muted">{idField.hint}</span>
-              )}
-            </Field>
+            {needsGameId && (
+              <Field label={idField.label}>
+                <input
+                  className={inputCls}
+                  value={uid}
+                  onChange={(e) => setUid(e.target.value)}
+                  placeholder={idField.placeholder}
+                />
+                {idField.hint && (
+                  <span className="mt-1 block text-[10.5px] muted">{idField.hint}</span>
+                )}
+              </Field>
+            )}
             <Field label="Email (receipt)">
               <input className={inputCls} value={email} readOnly />
             </Field>
@@ -153,7 +167,7 @@ export default function CheckoutView({
               className={inputCls}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Server / region, preferred delivery window…"
+              placeholder={isAccountOnly ? "Any special request for the seller…" : "Server / region, preferred delivery window…"}
             />
           </Field>
         </section>

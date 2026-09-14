@@ -194,6 +194,7 @@ export default function MessagesView({
    * with a back button. `activeId` decides which one is visible. From `md` up
    * both panes show side by side as usual.
    */
+  const basePath = isSeller ? "/seller/messages" : "/dashboard/messages";
   const showListOnMobile = !activeId;
 
   return (
@@ -207,7 +208,7 @@ export default function MessagesView({
       <div className="flex shrink-0 items-center gap-2">
         {activeId && (
           <button
-            onClick={() => router.push("/dashboard/messages")}
+            onClick={() => router.push(basePath)}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--line)] md:hidden"
             aria-label="Back to conversations"
           >
@@ -229,7 +230,7 @@ export default function MessagesView({
           {threads.map((t) => (
             <button
               key={t.id}
-              onClick={() => router.push(`/dashboard/messages?t=${t.id}`)}
+              onClick={() => router.push(`${basePath}?t=${t.id}`)}
               className={`flex w-full items-center gap-2.5 border-b border-[var(--line)] p-3 text-left transition-colors last:border-0 ${
                 t.id === activeId ? "bg-brand-600/10" : "hover:bg-brand-600/[.05]"
               }`}

@@ -1256,11 +1256,26 @@ export async function resolveDisputeInChatAction(threadId: string): Promise<R> {
 
 export async function startThreadAction(sellerId: string, orderId?: string): Promise<R> {
   const u = await requireUser();
+  // First try exact order match to keep per-order context when possible
+  if (orderId) {
+    const exact = await one<{ id: string }>(
+      `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? AND order_id=?`,
+      [u.id, sellerId, orderId]
+    );
+    if (exact) return { ok: true, id: exact.id };
+  }
+  // Reuse same chat for same buyer+seller pair (same product flow) — prevents new chat per order for same product
   const existing = await one<{ id: string }>(
-    `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? AND COALESCE(order_id,'')=?`,
-    [u.id, sellerId, orderId ?? ""]
+    `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? ORDER BY updated_at DESC LIMIT 1`,
+    [u.id, sellerId]
   );
-  if (existing) return { ok: true, id: existing.id };
+  if (existing) {
+    // If this thread has no order_id yet and we have one, attach it for order context
+    if (orderId) {
+      try { await run(`UPDATE threads SET order_id=COALESCE(order_id, ?) WHERE id=?`, [orderId, existing.id]); } catch {}
+    }
+    return { ok: true, id: existing.id };
+  }
   const id = nid("thr_");
   await run(`INSERT INTO threads (id,buyer_id,seller_id,order_id) VALUES (?,?,?,?)`, [
     id, u.id, sellerId, orderId ?? null,

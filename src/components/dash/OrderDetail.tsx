@@ -15,7 +15,7 @@ import LocalTime from "@/components/LocalTime";
 import { img } from "@/lib/img";
 
 type Order = {
-  code: string; subtotal: number; fee: number; total: number; status: string;
+  id: string; code: string; subtotal: number; fee: number; total: number; status: string;
   payment_status: string; payment_method: string; delivery_uid: string;
   buyer_note: string | null; created_at: string;
   /** When escrow auto-releases to the seller (stamped at delivery). */
@@ -87,6 +87,7 @@ export default function OrderDetail({
 
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-[18px] font-black sm:text-[22px] tracking-tight">Order {order.code}</h1>
+        <button onClick={() => navigator.clipboard.writeText(order.code)} className="rounded-lg soft px-2 py-1 text-[11px] font-semibold hover:text-brand-400" title="Copy order ID">Copy ID</button>
         <Tag tone={statusTone(order.status)}>{label(order.status)}</Tag>
         <Tag tone={order.payment_status === "paid" ? "green" : "amber"}>
           {label(order.payment_status)}
@@ -245,7 +246,7 @@ export default function OrderDetail({
               disabled={pending}
               onClick={() =>
                 start(async () => {
-                  const r = await startThreadAction(items[0]?.seller_id, order.code);
+                  const r = await startThreadAction(items[0]?.seller_id, order.id);
                   if (r.ok) router.push(`/dashboard/messages?t=${r.id}`);
                   else setErr(r.error || "Could not open chat.");
                 })
@@ -258,7 +259,7 @@ export default function OrderDetail({
             <div className="mt-3 rounded-xl soft p-3">
               <div className="mb-2 text-[12px] font-semibold">Message seller — Order {order.code}</div>
               <div className="mb-2 text-[11px] muted">For manual delivery, chat directly here. Separate thread per order.</div>
-              <MessageBox orderCode={order.code} sellerId={items[0]?.seller_id} />
+              <MessageBox orderId={order.id} orderCode={order.code} sellerId={items[0]?.seller_id} />
             </div>
 
             {!showDispute ? (
@@ -321,7 +322,7 @@ export default function OrderDetail({
   );
 }
 
-function MessageBox({ orderCode, sellerId }: { orderCode: string; sellerId: string }) {
+function MessageBox({ orderId, orderCode, sellerId }: { orderId: string; orderCode: string; sellerId: string }) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
@@ -344,7 +345,7 @@ function MessageBox({ orderCode, sellerId }: { orderCode: string; sellerId: stri
           onClick={() =>
             start(async () => {
               setErr("");
-              const thr = await startThreadAction(sellerId, orderCode);
+              const thr = await startThreadAction(sellerId, orderId);
               if (!thr.ok || !thr.id) return setErr(thr.error || "Could not open chat.");
               const r = await sendMessageAction(thr.id, `[Order ${orderCode}] ${text.trim()}`);
               if (!r.ok) return setErr(r.error || "Could not send.");
@@ -359,7 +360,7 @@ function MessageBox({ orderCode, sellerId }: { orderCode: string; sellerId: stri
         <Btn
           variant="ghost"
           onClick={async () => {
-            const thr = await startThreadAction(sellerId, orderCode);
+            const thr = await startThreadAction(sellerId, orderId);
             if (thr.ok && thr.id) router.push(`/dashboard/messages?t=${thr.id}`);
             else router.push("/dashboard/messages");
           }}

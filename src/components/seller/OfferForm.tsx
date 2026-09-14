@@ -611,20 +611,6 @@ export default function OfferForm({
                 </div>
 
                 <div className="mb-1 mt-3 text-[11.5px] font-bold">
-                  Email details <span className="muted">(Optional)</span>
-                </div>
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <div>
-                    <Label>Login</Label>
-                    <input value={a.emailLogin} onChange={(e) => setAcc(i, "emailLogin", e.target.value)} placeholder="Type here…" className={field} />
-                  </div>
-                  <div>
-                    <Label>Password</Label>
-                    <input value={a.emailPassword} onChange={(e) => setAcc(i, "emailPassword", e.target.value)} placeholder="Type here…" className={field} />
-                  </div>
-                </div>
-
-                <div className="mb-1 mt-3 text-[11.5px] font-bold">
                   2FA details <span className="muted">(Optional)</span>
                 </div>
                 <div className="grid gap-2.5 sm:grid-cols-2">
