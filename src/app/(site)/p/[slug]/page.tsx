@@ -87,7 +87,7 @@ const pages: Record<string, { title: string; body: string[] }> = {
     body: [
       "Buyer pricing is shown transparently at checkout including any applicable service fees.",
       "Seller earnings are calculated automatically after each completed sale and shown in your Finance dashboard.",
-      "Withdrawals to UPI, PayPal and bank transfer are free above the minimum payout threshold.",
+      "Withdrawals to PayPal, bank transfer, Wise and crypto are free above the minimum payout threshold.",
     ],
   },
   "contact": {

@@ -125,7 +125,7 @@ export default function FinanceView({
             </Field>
             <Field label="Method">
               <select className={inputCls} value={method} onChange={(e) => setMethod(e.target.value)}>
-                {["Bank Transfer", "PayPal", "UPI", "Crypto (USDT)"].map((m) => (
+                {["Bank Transfer", "PayPal", "Crypto (USDT)", "Wise"].map((m) => (
                   <option key={m}>{m}</option>
                 ))}
               </select>
@@ -135,7 +135,7 @@ export default function FinanceView({
                 className={inputCls}
                 value={detail}
                 onChange={(e) => setDetail(e.target.value)}
-                placeholder="Account number / UPI ID / wallet"
+                placeholder="Bank account / PayPal email / Crypto address"
               />
             </Field>
             {err && <div className="text-[11.5px] text-rose-400">{err}</div>}

@@ -185,7 +185,7 @@ function Form({ g, count, onClose }: { g: G | null; count: number; onClose: () =
           </Field>
         </div>
 
-        <Field label="Logo" hint="Brand icon name: visa, upi, paypal, mastercard…">
+        <Field label="Logo" hint="Brand icon name: visa, mastercard, paypal, applepay…">
           <input name="logo" defaultValue={g?.logo} className={inputCls} placeholder="visa" />
         </Field>
 

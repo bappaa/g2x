@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import LocaleSwitcher from "./LocaleSwitcher";
 import Logo from "./Logo";
-import { BrandIcon, UpiMark } from "./BrandIcon";
+import { BrandIcon } from "./BrandIcon";
 import { CategoryIcon } from "./CategoryIcon";
 import { useT } from "./LocaleProvider";
 
@@ -117,9 +117,6 @@ export default function Footer({
                 <BrandIcon name={p} size={17} />
               </span>
             ))}
-            <span className="grid h-7 w-11 place-items-center rounded-md border border-[var(--line)] soft transition-transform hover:scale-110">
-              <UpiMark />
-            </span>
           </div>
           {/* real language + currency switcher, same state as the header */}
           <div className="order-2 md:order-3">

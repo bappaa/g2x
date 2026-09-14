@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, Star, BadgeCheck, Upload, X } from "lucide-react";
+import { Check, Loader2, Star, BadgeCheck, Upload, X, AtSign } from "lucide-react";
 import { Btn, Field, Section, Tag, inputCls } from "@/components/ui";
 import { saveStoreAction } from "@/lib/actions/seller";
 
@@ -12,7 +12,21 @@ type Prof = {
   level: string; rating: number; total_orders: number; verified: number;
 };
 
-export default function StoreSettings({ profile }: { profile: Prof }) {
+export default function StoreSettings({
+  profile,
+  username,
+  changesUsed,
+  freeChanges,
+  fee,
+  balance,
+}: {
+  profile: Prof;
+  username: string;
+  changesUsed: number;
+  freeChanges: number;
+  fee: number;
+  balance: number;
+}) {
   const router = useRouter();
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -98,19 +112,48 @@ export default function StoreSettings({ profile }: { profile: Prof }) {
           className="space-y-4"
         >
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Store name" hint="This becomes your username.">
+            <Field label="Store name" hint={`This becomes your username @${username}. Linked with buyer panel.`}>
               <input name="storeName" defaultValue={profile.store_name} className={inputCls} required />
             </Field>
             <Field label="Payout method">
               <select name="payoutMethod" defaultValue={profile.payout_method ?? "Bank Transfer"} className={inputCls}>
-                {["Bank Transfer", "PayPal", "UPI", "Crypto (USDT)"].map((m) => (
+                {["Bank Transfer", "PayPal", "Crypto (USDT)", "Wise"].map((m) => (
                   <option key={m}>{m}</option>
                 ))}
               </select>
             </Field>
             <Field label="Payout details">
-              <input name="payoutDetail" defaultValue={profile.payout_detail ?? ""} className={inputCls} placeholder="Account / UPI / wallet" />
+              <input name="payoutDetail" defaultValue={profile.payout_detail ?? ""} className={inputCls} placeholder="Bank account / PayPal email / Crypto address" />
             </Field>
+          </div>
+
+          {/* Username change info - linked with buyer panel, 2 free then fee */}
+          <div className="flex items-start gap-2 rounded-xl soft px-3 py-3 text-[11.5px]">
+            <AtSign size={14} className="mt-0.5 shrink-0 text-brand-400" />
+            <div className="muted">
+              <div className="font-semibold text-white">Username: @{username}</div>
+              <div className="mt-1">
+                {(() => {
+                  const remaining = Math.max(0, freeChanges - changesUsed);
+                  if (remaining > 0) {
+                    return (
+                      <>
+                        You have <b className="text-white">{remaining}</b> free store name change{remaining === 1 ? "" : "s"} left.
+                        This is linked with your buyer panel username — same limit. {fee > 0 && <>After that each change costs ${fee.toFixed(2)}.</>}
+                      </>
+                    );
+                  }
+                  return fee > 0 ? (
+                    <>
+                      You have used your {freeChanges} free changes (linked with buyer panel).
+                      Each further store name change costs <b className="text-white">${fee.toFixed(2)}</b>, taken from your wallet (balance ${balance.toFixed(2)}).
+                    </>
+                  ) : (
+                    <>You have used your {freeChanges} free changes, but renames are currently free.</>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
 
           {/* Logo upload - replaces URL input */}
@@ -220,13 +263,13 @@ export default function StoreSettings({ profile }: { profile: Prof }) {
 
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="WhatsApp (optional)">
-              <input name="whatsapp" defaultValue={profile.whatsapp ?? ""} className={inputCls} placeholder="+91..." />
+              <input name="whatsapp" defaultValue={profile.whatsapp ?? ""} className={inputCls} placeholder="+1 234 567 890" />
             </Field>
             <Field label="Telegram (optional)">
-              <input name="telegram" defaultValue={profile.telegram ?? ""} className={inputCls} placeholder="@username or link" />
+              <input name="telegram" defaultValue={profile.telegram ?? ""} className={inputCls} placeholder="@username or t.me/link" />
             </Field>
             <Field label="Discord (optional)">
-              <input name="discord" defaultValue={profile.discord ?? ""} className={inputCls} placeholder="username#1234 or invite" />
+              <input name="discord" defaultValue={profile.discord ?? ""} className={inputCls} placeholder="username or discord.gg/invite" />
             </Field>
           </div>
 

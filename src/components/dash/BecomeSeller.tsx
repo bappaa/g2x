@@ -194,13 +194,13 @@ export default function BecomeSeller({
                 <div className="mb-2 text-[12px] font-bold">Contact links (optional)</div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <Field label="WhatsApp">
-                    <input name="whatsapp" className={inputCls} placeholder="+91..." />
+                    <input name="whatsapp" className={inputCls} placeholder="+1 234 567 890" />
                   </Field>
                   <Field label="Telegram">
-                    <input name="telegram" className={inputCls} placeholder="@username or link" />
+                    <input name="telegram" className={inputCls} placeholder="@username or t.me/link" />
                   </Field>
                   <Field label="Discord">
-                    <input name="discord" className={inputCls} placeholder="username#1234 or invite" />
+                    <input name="discord" className={inputCls} placeholder="username or discord.gg/invite" />
                   </Field>
                 </div>
                 <div className="mt-1 text-[10.5px] muted">Optional — helps buyers contact you faster. Shown on your store profile.</div>
@@ -234,7 +234,7 @@ export default function BecomeSeller({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Full legal name" hint="Exactly as printed on your ID.">
-                <input name="fullName" className={inputCls} placeholder="Rahul Kumar Sharma" required />
+                <input name="fullName" className={inputCls} placeholder="John Doe" required />
               </Field>
               <Field label="Date of birth">
                 <input name="dob" type="date" className={inputCls} />
@@ -272,7 +272,7 @@ export default function BecomeSeller({
                   "As printed on the document"
                 }
               >
-                <input name="idNumber" className={inputCls} placeholder="XXXX XXXX XXXX" required />
+                <input name="idNumber" className={inputCls} placeholder="Enter ID number" required />
               </Field>
               <Field label="Address" hint="Optional but speeds up approval.">
                 <input name="address" className={inputCls} placeholder="City, State" />
