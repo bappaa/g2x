@@ -884,29 +884,42 @@ export async function saveStoreAction(form: FormData): Promise<R> {
   }
 
   // Build dynamic update
-  const existing = await one<{ logo: string | null; banner: string | null }>(
-    `SELECT logo, banner FROM seller_profiles WHERE user_id=?`, [s.id]
+  const existing = await one<{ logo: string | null; banner: string | null; store_name: string | null; slug: string | null }>(
+    `SELECT logo, banner, store_name, slug FROM seller_profiles WHERE user_id=?`, [s.id]
   );
   const finalLogo = logoData === undefined ? existing?.logo ?? null : logoData;
   const finalBanner = bannerData === undefined ? existing?.banner ?? null : bannerData;
 
-  // --- Username change with 2 free then fee (admin sets fee) ---
+  // --- Username change with 2 free then fee (admin sets fee) — linked with buyer panel ---
   const userRow = await one<{ username: string | null; username_changes: number; balance: number }>(
     `SELECT username, username_changes, balance FROM users WHERE id=?`, [s.id]
   );
   const currentUsername = userRow?.username ?? "";
   const used = Number(userRow?.username_changes ?? 0);
   const balance = Number(userRow?.balance ?? 0);
+  const existingStoreName = (existing?.store_name ?? "").trim();
 
-  let usernameCandidate = slug.replace(/-/g, "_").slice(0, 20);
-  if (usernameCandidate.length < 3) usernameCandidate = `${usernameCandidate}_store`.slice(0,20);
+  let usernameCandidate = slug.replace(/-/g, "_").slice(0, 15);
+  if (usernameCandidate.length < 3) usernameCandidate = `${usernameCandidate}_store`.slice(0,15);
   const takenUser = await one(`SELECT id FROM users WHERE username=? AND id<>?`, [usernameCandidate, s.id]);
   let finalUsername = usernameCandidate;
   if (takenUser) {
-    finalUsername = `${usernameCandidate}_${Math.random().toString(36).slice(2,6)}`.slice(0,20);
+    finalUsername = `${usernameCandidate}_${Math.random().toString(36).slice(2,6)}`.slice(0,15);
   }
 
-  const willChangeUsername = finalUsername.toLowerCase() !== currentUsername.toLowerCase() && finalUsername.length >= 3;
+  const storeNameChanged = existingStoreName.toLowerCase() !== storeName.toLowerCase();
+  let willChangeUsername = finalUsername.toLowerCase() !== currentUsername.toLowerCase() && finalUsername.length >= 3;
+
+  // If store name changed but slug produces same username, force a different username so fee logic applies
+  if (storeNameChanged && !willChangeUsername) {
+    // generate a variant to ensure username changes when store name changes
+    const variant = `${usernameCandidate}_${Math.random().toString(36).slice(2,4)}`.slice(0,15);
+    // ensure variant is free
+    const takenVariant = await one(`SELECT id FROM users WHERE username=? AND id<>?`, [variant, s.id]);
+    finalUsername = takenVariant ? `${usernameCandidate}_${Math.random().toString(36).slice(2,6)}`.slice(0,15) : variant;
+    willChangeUsername = finalUsername.toLowerCase() !== currentUsername.toLowerCase();
+  }
+
   let fee = 0;
   if (willChangeUsername) {
     fee = used >= FREE_CHANGES ? await usernameChangeFee() : 0;

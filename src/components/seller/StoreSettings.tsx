@@ -31,6 +31,7 @@ export default function StoreSettings({
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
+  const busy = useRef(false);
   const logoRef = useRef<HTMLInputElement>(null);
   const bannerRef = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(profile.logo ?? null);
@@ -98,15 +99,21 @@ export default function StoreSettings({
       <Section title="Store profile">
         <form
           action={(fd) => {
+            if (busy.current) return;
+            busy.current = true;
             // Append remove flags
             if (removeLogo) fd.set("removeLogo", "1");
             if (removeBanner) fd.set("removeBanner", "1");
             start(async () => {
-              setErr(""); setMsg("");
-              const r = await saveStoreAction(fd);
-              if (!r.ok) return setErr(r.error || "Could not save.");
-              setMsg("Store updated. Your username is now your store name.");
-              router.refresh();
+              try {
+                setErr(""); setMsg("");
+                const r = await saveStoreAction(fd);
+                if (!r.ok) return setErr(r.error || "Could not save.");
+                setMsg("Store updated. Your username is now your store name.");
+                router.refresh();
+              } finally {
+                busy.current = false;
+              }
             });
           }}
           className="space-y-4"

@@ -95,7 +95,9 @@ export async function usernameChangeFee(): Promise<number> {
     `SELECT value FROM settings WHERE key='username_change_fee'`
   );
   const n = Number(r?.value);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  if (Number.isFinite(n) && n >= 0) return n;
+  // Default matches SettingsForm def: $5 if admin never set it
+  return 5;
 }
 
 /**
