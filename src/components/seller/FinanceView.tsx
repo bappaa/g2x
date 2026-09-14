@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Wallet, Clock, TrendingUp, Loader2, Check } from "lucide-react";
@@ -27,6 +27,7 @@ export default function FinanceView({
   const [err, setErr] = useState("");
   const [ok, setOk] = useState(false);
   const [pending, start] = useTransition();
+  const busy = useRef(false);
 
   const cards = [
     { l: "Available", v: money(available), i: Wallet, c: "text-emerald-400" },
@@ -141,16 +142,22 @@ export default function FinanceView({
             <Btn
               className="flex w-full items-center justify-center gap-2"
               disabled={pending}
-              onClick={() =>
+              onClick={() => {
+                if (busy.current) return;
+                busy.current = true;
                 start(async () => {
-                  setErr("");
-                  const r = await requestWithdrawalAction({ amount, method, detail });
-                  if (!r.ok) return setErr(r.error || "Could not request payout.");
-                  setOk(true);
-                  setTimeout(() => setOk(false), 2200);
-                  router.refresh();
-                })
-              }
+                  try {
+                    setErr("");
+                    const r = await requestWithdrawalAction({ amount, method, detail });
+                    if (!r.ok) return setErr(r.error || "Could not request payout.");
+                    setOk(true);
+                    setTimeout(() => setOk(false), 2200);
+                    router.refresh();
+                  } finally {
+                    busy.current = false;
+                  }
+                });
+              }}
             >
               {pending ? <Loader2 size={13} className="animate-spin" /> : ok ? <Check size={13} /> : null}
               {ok ? "Requested!" : `Withdraw ${money(amount)}`}

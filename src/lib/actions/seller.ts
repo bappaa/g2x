@@ -788,6 +788,13 @@ export async function requestWithdrawalAction(form: {
     };
   if (!form.detail.trim()) return { ok: false, error: "Enter your payout details." };
 
+  // Prevent double-click duplicate: same amount/method/detail within 60s
+  const dup = await one<{ id: string }>(
+    `SELECT id FROM withdrawals WHERE seller_id=? AND amount=? AND method=? AND detail=? AND created_at >= datetime('now','-60 seconds') LIMIT 1`,
+    [s.id, amt, form.method, form.detail.trim()]
+  );
+  if (dup) return { ok: false, error: "Duplicate withdrawal detected — please wait a moment." };
+
   const pending = await one<{ n: number }>(
     `SELECT COUNT(*) AS n FROM withdrawals WHERE seller_id=? AND status='pending'`, [s.id]
   );
