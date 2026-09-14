@@ -97,8 +97,8 @@ export async function GET(req: NextRequest) {
     if (!user) {
       const id = nid("usr_");
       await run(
-        `INSERT INTO users (id, name, email, provider, avatar, role)
-         VALUES (?,?,?,'google',?, 'buyer')`,
+        `INSERT INTO users (id, name, email, provider, avatar, role, email_verified)
+         VALUES (?,?,?,'google',?, 'buyer', 1)`,
         [id, info.name || email.split("@")[0], email, info.picture ?? null]
       );
       await run(
@@ -117,8 +117,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(
         `${base}/login?error=${encodeURIComponent("This account has been suspended.")}`
       );
-    } else if (info.picture) {
-      await run(`UPDATE users SET avatar=COALESCE(avatar,?) WHERE id=?`, [info.picture, user.id]);
+    } else {
+      // Existing user logging in via Google - ensure they are verified and avatar set
+      await run(`UPDATE users SET email_verified=1, avatar=COALESCE(avatar,?) WHERE id=?`, [info.picture ?? null, user.id]);
     }
 
     await createSession(

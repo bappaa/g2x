@@ -1,0 +1,378 @@
+# G2X - Arranged Workspace
+
+## Summary
+- Base path: `/home/user/g2x`
+- Total files: 340
+- Real files extracted from Part 1 dump: 161
+- Placeholder files awaiting next parts: 179
+
+## Real files (from your uploaded txt)
+- .env.example
+- .env.local
+- .eslintrc.json
+- .gitignore
+- DEPLOYMENT.md
+- PHASE26.md
+- README.md
+- STRUCTURE_OVERVIEW.md
+- VPS-DATABASE.md
+- c.mts
+- cleanup-stale.ps1
+- fix-vps.sh
+- next-env.d.ts
+- next.config.mjs
+- package-lock.json
+- package.json
+- postcss.config.mjs
+- scripts/backup-db.mts
+- scripts/catalog-full.mts
+- scripts/catalog.json
+- scripts/check-env.mts
+- scripts/db-url.mjs
+- scripts/deploy-migrate.mts
+- scripts/fix-hero-badge.mts
+- scripts/fx-refresh.mts
+- scripts/migrate.mts
+- scripts/reseed-catalog.mts
+- scripts/restore-db.mts
+- scripts/seed-cms.mts
+- scripts/seed-delivery-times.mts
+- scripts/seed-gateways.mts
+- scripts/seed-nav.mts
+- scripts/seed-options.mts
+- scripts/seed-sellflow.mts
+- scripts/seed.mts
+- src/app/(auth)/layout.tsx
+- src/app/(auth)/login/page.tsx
+- src/app/(auth)/register/page.tsx
+- src/app/(auth)/verify-email/page.tsx
+- src/app/(site)/c/[category]/loading.tsx
+- src/app/(site)/c/[category]/page.tsx
+- src/app/(site)/cart/loading.tsx
+- src/app/(site)/cart/page.tsx
+- src/app/(site)/checkout/loading.tsx
+- src/app/(site)/checkout/page.tsx
+- src/app/(site)/dashboard/become-seller/loading.tsx
+- src/app/(site)/dashboard/become-seller/page.tsx
+- src/app/(site)/dashboard/disputes/loading.tsx
+- src/app/(site)/dashboard/disputes/page.tsx
+- src/app/(site)/dashboard/layout.tsx
+- src/app/(site)/dashboard/loading.tsx
+- src/app/(site)/dashboard/messages/loading.tsx
+- src/app/(site)/dashboard/messages/page.tsx
+- src/app/(site)/dashboard/notifications/loading.tsx
+- src/app/(site)/dashboard/notifications/page.tsx
+- src/app/(site)/dashboard/orders/[id]/loading.tsx
+- src/app/(site)/dashboard/orders/[id]/page.tsx
+- src/app/(site)/dashboard/orders/loading.tsx
+- src/app/(site)/dashboard/orders/page.tsx
+- src/app/(site)/dashboard/page.tsx
+- src/app/(site)/dashboard/products/loading.tsx
+- src/app/(site)/dashboard/products/page.tsx
+- src/app/(site)/dashboard/profile/loading.tsx
+- src/app/(site)/dashboard/profile/page.tsx
+- src/app/(site)/dashboard/reviews/loading.tsx
+- src/app/(site)/dashboard/reviews/page.tsx
+- src/app/(site)/dashboard/security/loading.tsx
+- src/app/(site)/dashboard/security/page.tsx
+- src/app/(site)/dashboard/transactions/loading.tsx
+- src/app/(site)/dashboard/transactions/page.tsx
+- src/app/(site)/dashboard/verification/loading.tsx
+- src/app/(site)/dashboard/verification/page.tsx
+- src/app/(site)/dashboard/wallet/loading.tsx
+- src/app/(site)/dashboard/wallet/page.tsx
+- src/app/(site)/dashboard/wishlist/loading.tsx
+- src/app/(site)/dashboard/wishlist/page.tsx
+- src/app/(site)/g/[game]/[category]/[slug]/loading.tsx
+- src/app/(site)/g/[game]/[category]/[slug]/page.tsx
+- src/app/(site)/g/[game]/[category]/loading.tsx
+- src/app/(site)/g/[game]/[category]/page.tsx
+- src/app/(site)/g/[game]/loading.tsx
+- src/app/(site)/g/[game]/page.tsx
+- src/app/(site)/layout.tsx
+- src/app/(site)/loading.tsx
+- src/app/(site)/p/[slug]/loading.tsx
+- src/app/(site)/p/[slug]/page.tsx
+- src/app/(site)/page.tsx
+- src/app/(site)/seller/disputes/loading.tsx
+- src/app/(site)/seller/disputes/page.tsx
+- src/app/(site)/seller/finance/loading.tsx
+- src/app/(site)/seller/finance/page.tsx
+- src/app/(site)/seller/layout.tsx
+- src/app/(site)/seller/listings/loading.tsx
+- src/app/(site)/seller/listings/page.tsx
+- src/app/(site)/seller/loading.tsx
+- src/app/(site)/seller/offers/loading.tsx
+- src/app/(site)/seller/offers/page.tsx
+- src/app/(site)/seller/orders/loading.tsx
+- src/app/(site)/seller/orders/page.tsx
+- src/app/(site)/seller/page.tsx
+- src/app/(site)/seller/reviews/loading.tsx
+- src/app/(site)/seller/reviews/page.tsx
+- src/app/(site)/seller/sell/[category]/[game]/[product]/loading.tsx
+- src/app/(site)/seller/sell/[category]/[game]/[product]/page.tsx
+- src/app/(site)/seller/sell/[category]/[game]/loading.tsx
+- src/app/(site)/seller/sell/[category]/[game]/page.tsx
+- src/app/(site)/seller/sell/[category]/loading.tsx
+- src/app/(site)/seller/sell/[category]/page.tsx
+- src/app/(site)/seller/sell/loading.tsx
+- src/app/(site)/seller/sell/page.tsx
+- src/app/(site)/seller/store/loading.tsx
+- src/app/(site)/seller/store/page.tsx
+- src/app/(site)/support/loading.tsx
+- src/app/(site)/support/page.tsx
+- src/app/admin/activity/page.tsx
+- src/app/admin/announcements/page.tsx
+- src/app/admin/banners/page.tsx
+- src/app/admin/bulk/page.tsx
+- src/app/admin/buyer-kyc/page.tsx
+- src/app/admin/categories/page.tsx
+- src/app/admin/cms/page.tsx
+- src/app/admin/commission/page.tsx
+- src/app/admin/delivery-logs/page.tsx
+- src/app/admin/disputes/page.tsx
+- src/app/admin/games/page.tsx
+- src/app/admin/gateways/page.tsx
+- src/app/admin/import/page.tsx
+- src/app/admin/layout.tsx
+- src/app/admin/levels/page.tsx
+- src/app/admin/media/page.tsx
+- src/app/admin/messages/page.tsx
+- src/app/admin/navigation/page.tsx
+- src/app/admin/offers/page.tsx
+- src/app/admin/options/page.tsx
+- src/app/admin/order-status/page.tsx
+- src/app/admin/orders/page.tsx
+- src/app/admin/page.tsx
+- src/app/admin/payments/page.tsx
+- src/app/admin/permissions/page.tsx
+- src/app/admin/products/page.tsx
+- src/app/admin/promotions/page.tsx
+- src/app/admin/reports/products/page.tsx
+- src/app/admin/reports/revenue/page.tsx
+- src/app/admin/reports/sales/page.tsx
+- src/app/admin/reports/sellers/page.tsx
+- src/app/admin/reports/users/page.tsx
+- src/app/admin/roles/page.tsx
+- src/app/admin/seller-requests/page.tsx
+- src/app/admin/sellers/page.tsx
+- src/app/admin/settings/page.tsx
+- src/app/admin/templates/page.tsx
+- src/app/admin/tickets/page.tsx
+- src/app/admin/transactions/page.tsx
+- src/app/admin/users/page.tsx
+- src/app/admin/verifications/page.tsx
+- src/app/admin/wallets/page.tsx
+- src/app/admin/withdrawals/page.tsx
+- src/app/api/auth/google/route.ts
+- tailwind.config.ts
+- tsconfig.json
+- tsconfig.tsbuildinfo
+
+## Placeholder files (structure created, awaiting content)
+- HOTFIX-BUILD-AND-CONSOLE.md
+- HOTFIX-SELL-500.md
+- HOTFIX-WIZARD-PERF.md
+- PERF-AND-FIXES.md
+- g2x.db
+- g2x.db-shm
+- g2x.db-wal
+- public/art/8ball.png (empty binary placeholder)
+- public/art/apex.png (empty binary placeholder)
+- public/art/bgmi.png (empty binary placeholder)
+- public/art/cash.png (empty binary placeholder)
+- public/art/coc.png (empty binary placeholder)
+- public/art/codm.png (empty binary placeholder)
+- public/art/coins.png (empty binary placeholder)
+- public/art/diamond.png (empty binary placeholder)
+- public/art/freefire.png (empty binary placeholder)
+- public/art/genshin.png (empty binary placeholder)
+- public/art/gta.png (empty binary placeholder)
+- public/art/hero.png (empty binary placeholder)
+- public/art/item-crate.png (empty binary placeholder)
+- public/art/item-pass.png (empty binary placeholder)
+- public/art/logo-64.png (empty binary placeholder)
+- public/art/lol.png (empty binary placeholder)
+- public/art/placeholder.png (empty binary placeholder)
+- public/art/pokemongo.png (empty binary placeholder)
+- public/art/robux.png (empty binary placeholder)
+- public/art/uc.png (empty binary placeholder)
+- public/art/vp.png (empty binary placeholder)
+- public/art/wallet.png (empty binary placeholder)
+- src/app/api/kyc/[...key]/route.ts
+- src/app/api/media/[id]/route.ts
+- src/app/api/search/route.ts
+- src/app/api/seller/catalog/route.ts
+- src/app/api/wishlist/route.ts
+- src/app/apple-icon.png (empty binary placeholder)
+- src/app/favicon.ico (empty binary placeholder)
+- src/app/fonts/GeistMonoVF.woff (empty binary placeholder)
+- src/app/fonts/GeistVF.woff (empty binary placeholder)
+- src/app/globals.css
+- src/app/icon.png (empty binary placeholder)
+- src/app/layout.tsx
+- src/app/robots.ts
+- src/app/sitemap.ts
+- src/components/BannerSlider.tsx
+- src/components/BrandIcon.tsx
+- src/components/Categories.tsx
+- src/components/CategoryIcon.tsx
+- src/components/Footer.tsx
+- src/components/Header.tsx
+- src/components/Hero.tsx
+- src/components/LiveSupport.tsx
+- src/components/LocalTime.tsx
+- src/components/LocaleProvider.tsx
+- src/components/LocaleSwitcher.tsx
+- src/components/Logo.tsx
+- src/components/MonitorNotice.tsx
+- src/components/NavMenu.tsx
+- src/components/PanelBadge.tsx
+- src/components/Services.tsx
+- src/components/SiteShell.tsx
+- src/components/Skeleton.tsx
+- src/components/Stats.tsx
+- src/components/Testimonials.tsx
+- src/components/TimeAgo.tsx
+- src/components/admin/AdminNav.tsx
+- src/components/admin/AnnouncementsManager.tsx
+- src/components/admin/BannersManager.tsx
+- src/components/admin/BulkProducts.tsx
+- src/components/admin/BuyerKycReview.tsx
+- src/components/admin/CategoriesManager.tsx
+- src/components/admin/ChatMonitor.tsx
+- src/components/admin/CmsManager.tsx
+- src/components/admin/ContentReset.tsx
+- src/components/admin/CouponsManager.tsx
+- src/components/admin/DisputesManager.tsx
+- src/components/admin/GamesManager.tsx
+- src/components/admin/GatewaysManager.tsx
+- src/components/admin/ImagePicker.tsx
+- src/components/admin/ImportExport.tsx
+- src/components/admin/MediaLibrary.tsx
+- src/components/admin/NavManager.tsx
+- src/components/admin/OffersModeration.tsx
+- src/components/admin/OptionsManager.tsx
+- src/components/admin/OrdersManager.tsx
+- src/components/admin/ProductsManager.tsx
+- src/components/admin/RolesManager.tsx
+- src/components/admin/SellerLevels.tsx
+- src/components/admin/SellersManager.tsx
+- src/components/admin/SettingsForm.tsx
+- src/components/admin/TemplatesManager.tsx
+- src/components/admin/TicketsManager.tsx
+- src/components/admin/UsersManager.tsx
+- src/components/admin/VerificationReview.tsx
+- src/components/admin/WithdrawalsManager.tsx
+- src/components/admin/ui.tsx
+- src/components/auth/AuthForm.tsx
+- src/components/auth/VerifyEmail.tsx
+- src/components/browse/GameIndex.tsx
+- src/components/browse/GameRail.tsx
+- src/components/browse/ListingDetail.tsx
+- src/components/browse/ListingGrid.tsx
+- src/components/browse/ProductCard.tsx
+- src/components/browse/ProductView.tsx
+- src/components/browse/WishlistSync.tsx
+- src/components/dash/BecomeSeller.tsx
+- src/components/dash/BuyerKyc.tsx
+- src/components/dash/Credentials.tsx
+- src/components/dash/DashboardNav.tsx
+- src/components/dash/DisputesView.tsx
+- src/components/dash/MarkRead.tsx
+- src/components/dash/MessagesView.tsx
+- src/components/dash/OrderDetail.tsx
+- src/components/dash/OrderReview.tsx
+- src/components/dash/PanelShell.tsx
+- src/components/dash/ProfileForm.tsx
+- src/components/dash/ReviewsView.tsx
+- src/components/dash/SecurityView.tsx
+- src/components/dash/UsernameCard.tsx
+- src/components/dash/WalletView.tsx
+- src/components/dash/WishlistView.tsx
+- src/components/seller/FinanceView.tsx
+- src/components/seller/ListingsView.tsx
+- src/components/seller/OfferForm.tsx
+- src/components/seller/OffersView.tsx
+- src/components/seller/SalesChart.tsx
+- src/components/seller/SellWizard.tsx
+- src/components/seller/SellerDisputes.tsx
+- src/components/seller/SellerNav.tsx
+- src/components/seller/SellerOrders.tsx
+- src/components/seller/SellerReviews.tsx
+- src/components/seller/StoreSettings.tsx
+- src/components/shop/CartView.tsx
+- src/components/shop/CheckoutView.tsx
+- src/components/support/SupportView.tsx
+- src/components/ui.tsx
+- src/lib/actions/admin.ts
+- src/lib/actions/auth.ts
+- src/lib/actions/buyer-kyc.ts
+- src/lib/actions/kyc.ts
+- src/lib/actions/seller.ts
+- src/lib/actions/shop.ts
+- src/lib/admin.ts
+- src/lib/after.ts
+- src/lib/buyer-kyc.ts
+- src/lib/cache.ts
+- src/lib/catalog.ts
+- src/lib/creds.ts
+- src/lib/data.ts
+- src/lib/db.ts
+- src/lib/ensure-schema.ts
+- src/lib/escrow.ts
+- src/lib/fmt.ts
+- src/lib/fx.ts
+- src/lib/gameart.ts
+- src/lib/gateway-fees.ts
+- src/lib/gateways.ts
+- src/lib/handle.ts
+- src/lib/homepage.ts
+- src/lib/i18n.ts
+- src/lib/img.ts
+- src/lib/kyc.ts
+- src/lib/locale.ts
+- src/lib/mail.ts
+- src/lib/media.ts
+- src/lib/migrations.sql
+- src/lib/moderation.ts
+- src/lib/otp.ts
+- src/lib/queries-admin.ts
+- src/lib/queries.ts
+- src/lib/ratelimit.ts
+- src/lib/retention.ts
+- src/lib/schema-patches.mjs
+- src/lib/schema.sql
+- src/lib/session.ts
+- src/lib/storage.ts
+- src/lib/subscription.ts
+- src/lib/username.ts
+- src/lib/wallet.ts
+- src/middleware.ts
+
+## Next Steps
+1. You uploaded Part 1 which contained 19 root files. Those are now fully restored in `/home/user/g2x/`
+2. The full folder structure from your file tree list has been created (108 dirs, 339 files total)
+3. Upload the next part(s) of your dump (e.g., src files) as another .txt file
+4. I will parse and overwrite the placeholders with real content
+
+## How the parser works
+The dump format is:
+```
+<file_path>
+
+<file_content>
+
+<next_file_path>
+
+<next_file_content>
+```
+
+The parser in `/home/user/parse_g2x_dump.py` automatically detects this and writes files.
+
+## Workspace ready for editing
+You can now:
+- Edit files in `/home/user/g2x/`
+- Run `npm install` and `npm run dev` (after you upload src files)
+- Check for bugs
+

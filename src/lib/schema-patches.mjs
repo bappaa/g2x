@@ -153,6 +153,9 @@ export const PATCHES = [
      created_at TEXT DEFAULT (datetime('now'))
    )`,
   `CREATE INDEX IF NOT EXISTS idx_otp_user ON email_otps(user_id, purpose)`,
+
+  // --- Phase 27 fix: Google users are already verified by Google ---
+  `UPDATE users SET email_verified=1 WHERE provider='google' AND email_verified=0`,
 ];
 
 /** Errors that mean "already applied" — expected on every run after the first. */

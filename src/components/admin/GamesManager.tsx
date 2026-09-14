@@ -216,12 +216,12 @@ function GameForm({ game, categories, onClose }: { game: G | null; categories: C
           </Field>
         </div>
         <ImagePicker
-          label="Game icon / key art"
+          label="Game logo * (shows on homepage)"
           urlName="logo"
           fileName="logoFile"
           defaultUrl={game?.logo ?? ""}
           square
-          hint="Upload an icon and it is stored in the database — editable any time."
+          hint={game ? "Shows on homepage and as fallback for products. Edit anytime." : "REQUIRED: Upload game logo (e.g., Valorant icon) - shows on homepage. You will add currency/top-up images when creating products."}
         />
 
         <Field label="Accent colour">

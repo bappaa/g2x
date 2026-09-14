@@ -209,12 +209,15 @@ export async function demoGoogleAction(next = "/dashboard"): Promise<ActionResul
   if (!user) {
     const id = nid("usr_");
     await run(
-      `INSERT INTO users (id, name, email, provider, role, country, username)
-       VALUES (?,?,?,'google','buyer','',?)`,
+      `INSERT INTO users (id, name, email, provider, role, country, username, email_verified)
+       VALUES (?,?,?,'google','buyer','',?,1)`,
       [id, "Demo Buyer", email, await generateUsername()]
     );
     await welcome(id, "Demo Buyer");
     user = { id };
+  } else {
+    // Ensure demo google user is verified
+    await run(`UPDATE users SET email_verified=1 WHERE id=?`, [user.id]);
   }
   const { ip, ua } = clientMeta();
   await createSession(user.id, ip ?? undefined, ua ?? undefined);

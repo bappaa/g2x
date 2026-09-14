@@ -131,13 +131,16 @@ export async function verifyOtp(
   return { ok: true };
 }
 
-/** Has this account confirmed its email? */
+/** Has this account confirmed its email? Google users are always verified. */
 export async function isEmailVerified(userId: string): Promise<boolean> {
   try {
-    const u = await one<{ email_verified: number }>(
-      `SELECT email_verified FROM users WHERE id=?`,
+    const u = await one<{ email_verified: number; provider: string }>(
+      `SELECT email_verified, provider FROM users WHERE id=?`,
       [userId]
     );
+    if (!u) return false;
+    // Google already verified the email via OAuth — never gate these accounts
+    if (String(u.provider ?? "").toLowerCase() === "google") return true;
     return Number(u?.email_verified ?? 0) === 1;
   } catch {
     // Column missing on an un-migrated database — never lock anyone out.
