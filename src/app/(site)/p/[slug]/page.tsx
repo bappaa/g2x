@@ -79,14 +79,14 @@ const pages: Record<string, { title: string; body: string[] }> = {
     body: [
       "Sellers must deliver within the delivery window shown on their offer, keep stock accurate, and never request payment outside the platform.",
       "Selling hacked, stolen or chargeback-sourced goods results in a permanent ban and forfeiture of the pending balance.",
-      "Commission is deducted automatically per sale and shown as a snapshot on every order.",
+      "All fees are calculated automatically and reflected in your earnings. Focus on competitive pricing and fast delivery to rank higher.",
     ],
   },
   "fees": {
     title: "Fees",
     body: [
-      "Buyers pay a 2% service fee at checkout, shown transparently in the order summary.",
-      "Sellers pay a commission on each completed sale; the exact percentage is set per category and displayed in the Seller Panel before you publish an offer.",
+      "Buyer pricing is shown transparently at checkout including any applicable service fees.",
+      "Seller earnings are calculated automatically after each completed sale and shown in your Finance dashboard.",
       "Withdrawals to UPI, PayPal and bank transfer are free above the minimum payout threshold.",
     ],
   },

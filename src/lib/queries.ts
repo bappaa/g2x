@@ -523,21 +523,65 @@ export const getSellerListings = (sellerId: string, status?: string) =>
 export const getSellerListing = (id: string, sellerId: string) =>
   one(`SELECT * FROM listings WHERE id=? AND seller_id=?`, [id, sellerId]);
 
-export const getSellerOrders = (sellerId: string, status?: string) =>
-  all(
+export const getSellerOrders = (
+  sellerId: string,
+  status?: string,
+  opts?: { q?: string; limit?: number; offset?: number }
+) => {
+  const args: any[] = [sellerId];
+  let where = `WHERE oi.seller_id=?`;
+  if (status && status !== "all") {
+    where += ` AND oi.status=?`;
+    args.push(status);
+  }
+  if (opts?.q) {
+    const like = `%${opts.q}%`;
+    where += ` AND (o.code LIKE ? OR oi.title LIKE ? OR u.username LIKE ? OR u.email LIKE ?)`;
+    args.push(like, like, like, like);
+  }
+  const limit = Math.min(opts?.limit ?? 1000, 1000);
+  const offset = opts?.offset ?? 0;
+  return all(
     `SELECT oi.*, o.code, o.created_at, o.delivery_uid, o.buyer_note, o.payment_method,
             COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_name,
-            COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_email, o.buyer_id,
+            u.email AS buyer_email, o.buyer_id,
             COALESCE(p.category_slug, l.category_slug) AS category_slug
        FROM order_items oi
        JOIN orders o ON o.id=oi.order_id
        JOIN users u ON u.id=o.buyer_id
        LEFT JOIN products p ON p.id=oi.product_id
        LEFT JOIN listings l ON l.id=oi.listing_id
-      WHERE oi.seller_id=? ${status && status !== "all" ? "AND oi.status=?" : ""}
-      ORDER BY o.created_at DESC`,
-    status && status !== "all" ? [sellerId, status] : [sellerId]
+      ${where}
+      ORDER BY o.created_at DESC LIMIT ? OFFSET ?`,
+    [...args, limit, offset]
   );
+};
+
+export const countSellerOrders = async (
+  sellerId: string,
+  status?: string,
+  q?: string
+) => {
+  const args: any[] = [sellerId];
+  let where = `WHERE oi.seller_id=?`;
+  if (status && status !== "all") {
+    where += ` AND oi.status=?`;
+    args.push(status);
+  }
+  if (q) {
+    const like = `%${q}%`;
+    where += ` AND (o.code LIKE ? OR oi.title LIKE ? OR u.username LIKE ? OR u.email LIKE ?)`;
+    args.push(like, like, like, like);
+  }
+  const row = await one<{ n: number }>(
+    `SELECT COUNT(*) as n FROM order_items oi
+     JOIN orders o ON o.id=oi.order_id
+     JOIN users u ON u.id=o.buyer_id
+     ${where}`,
+    args
+  );
+  return Number(row?.n ?? 0);
+};
 
 export const getSellerOrderItem = (id: string, sellerId: string) =>
   one(

@@ -4,13 +4,13 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Plus, Trash2, Upload, X, Lock, AlertTriangle } from "lucide-react";
 import { useMoney } from "@/components/LocaleProvider";
-import { createOfferAction } from "@/lib/actions/seller";
+import { updateOfferFullAction } from "@/lib/actions/seller";
 
-export type SellConfig = {
+type SellConfig = {
   slug: string; name: string; unit_label: string | null;
   needs_title: number; needs_images: number; needs_credentials: number;
   needs_quantity: number; allow_volume_discount: number;
-  commission_pct: number | null;
+  commission_pct?: number | null;
   sell_notice_title: string | null; sell_notice: string | null;
   fulfilment?: string;
   show_delivery_method?: number;
@@ -18,46 +18,36 @@ export type SellConfig = {
   show_platform?: number;
   show_login_method?: number;
 };
-export type FieldTpl = {
+type FieldTpl = {
   id: string; label: string; field_key: string; field_type: string;
   options: string | null; required: number;
 };
-export type Opt = { value: string; label: string };
-export type AccountSet = {
+type Opt = { value: string; label: string };
+type AccountSet = {
   login: string; password: string; url: string;
   emailLogin: string; emailPassword: string;
   twoFaLogin: string; twoFaPassword: string;
   extra: string;
 };
 
-const MAX_IMAGE = 2 * 1024 * 1024;
 const emptyAccount = (): AccountSet => ({
   login: "", password: "", url: "", emailLogin: "", emailPassword: "",
   twoFaLogin: "", twoFaPassword: "", extra: "",
 });
 
-/* --- small presentational helpers, in our own design language --- */
-
-function Card({ title, badge, children }: { title: string; badge?: string; children: React.ReactNode }) {
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl panel p-4 sm:p-5">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="text-[13.5px] font-bold">{title}</h2>
-        {badge && (
-          <span className="rounded bg-brand-600/20 px-1.5 py-0.5 text-[9.5px] font-black text-brand-400">
-            {badge}
-          </span>
-        )}
       </div>
       {children}
     </section>
   );
 }
-
 function Hint({ children }: { children: React.ReactNode }) {
   return <div className="mt-2 rounded-lg soft px-3 py-2 text-[11px] leading-relaxed muted">{children}</div>;
 }
-
 function Label({ children, req }: { children: React.ReactNode; req?: boolean }) {
   return (
     <label className="mb-1.5 block text-[11.5px] font-semibold">
@@ -66,34 +56,9 @@ function Label({ children, req }: { children: React.ReactNode; req?: boolean }) 
     </label>
   );
 }
-
-const field =
+const fieldCls =
   "h-10 w-full rounded-lg border border-[var(--line)] bg-transparent px-3 text-[12.5px] outline-none transition-all focus:border-brand-500 focus:shadow-[0_0_0_3px_rgba(139,61,255,.12)] soft";
 
-/**
- * THE OFFER FORM
- * ==============
- * One component drives every category. What it asks for is not hardcoded — it
- * comes from `categories` (does this category need a title? images? account
- * credentials? volume discounts? what is the unit called?) plus the admin's
- * `field_templates` rows for that category.
- *
- * So "Currency" shows quantity + price per K, "Accounts" shows the credential
- * vault and hides volume discounts, and adding a new requirement is an admin
- * action rather than a code change.
- */
-
-/**
- * Shrink an offer photo in the browser before it is uploaded.
- *
- * A phone photo is several megabytes, and base64 adds another third on top.
- * Six of them comfortably exceeded the server-action body limit, which failed
- * the whole submit with a 413 — the seller lost everything they had typed.
- *
- * 1280px on the long edge is plenty for a listing thumbnail and keeps each
- * image around 100-200 KB. Falls back to the original file if the browser
- * cannot decode it; the server still validates either way.
- */
 async function downscale(file: File, max = 1280, quality = 0.82): Promise<string> {
   const asDataUrl = () =>
     new Promise<string>((res) => {
@@ -101,16 +66,12 @@ async function downscale(file: File, max = 1280, quality = 0.82): Promise<string
       r.onload = () => res(String(r.result));
       r.readAsDataURL(file);
     });
-
-  // GIFs are usually animated; re-encoding would freeze them.
   if (file.type === "image/gif") return asDataUrl();
-
   try {
     const bmp = await createImageBitmap(file);
     const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
     const w = Math.round(bmp.width * scale);
     const h = Math.round(bmp.height * scale);
-
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
@@ -123,9 +84,19 @@ async function downscale(file: File, max = 1280, quality = 0.82): Promise<string
   }
 }
 
-export default function OfferForm({
-  config, product, game, fields, regions, platforms, deliveryMethods, deliveryTimes, loginMethods,
+export default function EditOfferForm({
+  offer,
+  config,
+  product,
+  game,
+  fields,
+  regions,
+  platforms,
+  deliveryMethods,
+  deliveryTimes,
+  loginMethods,
 }: {
+  offer: any;
   config: SellConfig;
   product: { id: string; name: string; image: string; base_price: number };
   game: string;
@@ -143,45 +114,45 @@ export default function OfferForm({
   const picker = useRef<HTMLInputElement>(null);
 
   const unit = config.unit_label || "unit";
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [images, setImages] = useState<{ name: string; data: string }[]>([]);
-  const [price, setPrice] = useState("");
-  const [stock, setStock] = useState("1");
-  const [minQty, setMinQty] = useState("1");
-  const [deliveryTime, setDeliveryTime] = useState("");
-  const [deliveryMethod, setDeliveryMethod] = useState(deliveryMethods[0]?.value ?? "");
-  const [region, setRegion] = useState("");
-  const [platform, setPlatform] = useState("");
-  const [loginMethod, setLoginMethod] = useState("");
-  /**
-   * Fulfilment mode.
-   *
-   * 'auto'   — the seller pre-fills the details now and G2X delivers instantly.
-   * 'manual' — the seller sends the details through chat after the sale.
-   * 'both'   — the seller chooses (the default).
-   *
-   * The admin sets this per product, so a product that can only ever be
-   * hand-delivered never shows the credential vault, and an instant-code
-   * product never offers "Manual".
-   */
   const mode = config.fulfilment || "both";
-
-  /**
-   * Gift cards share the credential-vault plumbing but need only a code, not a
-   * login / email / 2FA set. Driving it off the category keeps one component
-   * for both instead of a near-duplicate form.
-   */
   const isGiftCard = config.slug === "gift-cards";
   const vaultNoun = isGiftCard ? "Gift Card" : "Account";
-  const [auto, setAuto] = useState(mode !== "manual");
-  const [instructions, setInstructions] = useState("");
-  const [custom, setCustom] = useState<Record<string, string>>({});
-  const [volume, setVolume] = useState<{ qty: string; pct: string }[]>([{ qty: "", pct: "" }]);
-  const [accounts, setAccounts] = useState<AccountSet[]>([emptyAccount()]);
-  const [agreeTos, setAgreeTos] = useState(false);
-  const [agreeRules, setAgreeRules] = useState(false);
+
+  // Parse existing JSON fields
+  let existingImages: string[] = [];
+  try { existingImages = JSON.parse(offer.images || "[]"); } catch {}
+  let existingVolume: { qty: number; pct: number }[] = [];
+  try { existingVolume = JSON.parse(offer.volume_discounts || "[]"); } catch {}
+  let existingAccounts: AccountSet[] = [];
+  try { 
+    const acc = JSON.parse(offer.accounts_data || "[]");
+    if (Array.isArray(acc) && acc.length) existingAccounts = acc;
+  } catch {}
+  let existingCustom: Record<string, string> = {};
+  try { existingCustom = JSON.parse(offer.custom_fields || "{}"); } catch {}
+
+  const [title, setTitle] = useState(offer.title || product.name);
+  const [description, setDescription] = useState(offer.description || "");
+  const [images, setImages] = useState<{ name: string; data: string }[]>(
+    existingImages.map((d, i) => ({ name: `image-${i}`, data: d }))
+  );
+  const [price, setPrice] = useState(String(offer.price ?? ""));
+  const [stock, setStock] = useState(String(offer.stock ?? "1"));
+  const [minQty, setMinQty] = useState(String(offer.min_qty ?? "1"));
+  const [deliveryTime, setDeliveryTime] = useState(offer.delivery_time || "");
+  const [deliveryMethod, setDeliveryMethod] = useState(offer.delivery_method || deliveryMethods[0]?.value || "");
+  const [region, setRegion] = useState(offer.region || "");
+  const [platform, setPlatform] = useState(offer.platform || "");
+  const [loginMethod, setLoginMethod] = useState(offer.login_method || "");
+  const [auto, setAuto] = useState(offer.auto_delivery ? !!offer.auto_delivery : mode !== "manual");
+  const [instructions, setInstructions] = useState(offer.instructions || "");
+  const [custom, setCustom] = useState<Record<string, string>>(existingCustom);
+  const [volume, setVolume] = useState<{ qty: string; pct: string }[]>(
+    existingVolume.length ? existingVolume.map(v => ({ qty: String(v.qty), pct: String(v.pct) })) : [{ qty: "", pct: "" }]
+  );
+  const [accounts, setAccounts] = useState<AccountSet[]>(existingAccounts.length ? existingAccounts : [emptyAccount()]);
+  const [agreeTos, setAgreeTos] = useState(true);
+  const [agreeRules, setAgreeRules] = useState(true);
   const [err, setErr] = useState("");
 
   const priceNum = Number(price) || 0;
@@ -194,7 +165,7 @@ export default function OfferForm({
     setErr("");
     const next: { name: string; data: string }[] = [];
     for (const f of Array.from(files).slice(0, 6)) {
-      if (f.size > MAX_IMAGE) {
+      if (f.size > 2 * 1024 * 1024) {
         setErr(`${f.name} is larger than 2 MB.`);
         continue;
       }
@@ -210,11 +181,8 @@ export default function OfferForm({
   const submit = () => {
     if (busy.current) return;
     setErr("");
-
-    if ((config.needs_title || !product.id) && !title.trim())
-      return setErr("Offer title is required.");
+    if ((config.needs_title || !product.id) && !title.trim()) return setErr("Offer title is required.");
     if (!(priceNum > 0)) return setErr("Enter a price greater than 0.");
-    // Automatic delivery is instant; only hand-delivery needs a promised time.
     if (!auto && !deliveryTime) return setErr("Guaranteed delivery time is required.");
     if (config.needs_credentials && auto && mode !== "manual") {
       const bad = accounts.findIndex((a) =>
@@ -231,16 +199,13 @@ export default function OfferForm({
       if (f.required && !String(custom[f.field_key] ?? "").trim())
         return setErr(`${f.label} is required.`);
     }
-    if (!agreeTos || !agreeRules) return setErr("Please accept the Terms of Service and Seller Rules.");
+    if (!agreeTos || !agreeRules) return setErr("Please accept the Terms and Rules.");
 
     busy.current = true;
     start(async () => {
       try {
         const fd = new FormData();
-        // Empty productId = a free-form listing (accounts / boosting).
-        fd.set("productId", product.id);
-        fd.set("gameSlug", game);
-        fd.set("categorySlug", config.slug);
+        fd.set("id", offer.id);
         fd.set("title", title.trim() || product.name);
         fd.set("description", description.trim());
         fd.set("price", String(priceNum));
@@ -265,22 +230,12 @@ export default function OfferForm({
         if (config.needs_credentials) fd.set("accounts", JSON.stringify(accounts));
         Object.entries(custom).forEach(([k, v]) => fd.set("cf_" + k, v));
 
-        /**
-         * A rejected request (413, gateway timeout, dropped connection) makes
-         * the action resolve to `undefined`, and reading `.ok` off that threw —
-         * which React turned into a blank "Application error" page and lost
-         * everything the seller had typed. Treat any non-result as a failure
-         * and keep the form on screen.
-         */
-        const r = await createOfferAction(fd).catch(() => null);
+        const r = await updateOfferFullAction(fd).catch(() => null);
         if (!r || !r.ok) {
-          setErr(
-            r?.error ||
-              "Could not create the offer — the upload may be too large. Try fewer or smaller photos."
-          );
+          setErr(r?.error || "Could not update the offer.");
           return;
         }
-        router.push(`/seller/offers?cat=${config.slug}`);
+        router.push("/seller/offers");
         router.refresh();
       } finally {
         busy.current = false;
@@ -290,7 +245,11 @@ export default function OfferForm({
 
   return (
     <div className="mx-auto max-w-[720px] space-y-4">
-      {/* ---------- title / offer details ---------- */}
+      <div className="rounded-2xl panel p-4">
+        <h1 className="text-[18px] font-black">Edit Offer</h1>
+        <p className="mt-1 text-[12px] muted">Update your offer details. Click Save changes when done.</p>
+      </div>
+
       {(config.needs_title === 1 || !product.id) && (
         <Card title="Offer Title">
           <div className="mb-1 text-right text-[10.5px] muted">{title.length}/160</div>
@@ -299,16 +258,11 @@ export default function OfferForm({
             maxLength={160}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Type here…"
-            className={field}
+            className={fieldCls}
           />
-          <Hint>
-            Give your item a descriptive title. What would buyers search for to find it? Put the most
-            searchable words at the front. Titles have a 160 character limit.
-          </Hint>
         </Card>
       )}
 
-      {/* ---------- admin-defined fields ---------- */}
       {fields.length > 0 && (
         <Card title="Offer Details">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -328,7 +282,7 @@ export default function OfferForm({
                     <select
                       value={custom[f.field_key] ?? ""}
                       onChange={(e) => setCustom((c) => ({ ...c, [f.field_key]: e.target.value }))}
-                      className={field}
+                      className={fieldCls}
                     >
                       <option value="">Select</option>
                       <option value="yes">Yes</option>
@@ -338,27 +292,20 @@ export default function OfferForm({
                     <select
                       value={custom[f.field_key] ?? ""}
                       onChange={(e) => setCustom((c) => ({ ...c, [f.field_key]: e.target.value }))}
-                      className={field}
+                      className={fieldCls}
                     >
                       <option value="">Select</option>
                       {opts.map((o) => (
                         <option key={o} value={o}>{o}</option>
                       ))}
                     </select>
-                  ) : f.field_type === "dropdown" ? (
-                    <input
-                      value={custom[f.field_key] ?? ""}
-                      onChange={(e) => setCustom((c) => ({ ...c, [f.field_key]: e.target.value }))}
-                      placeholder="Type here…"
-                      className={field}
-                    />
                   ) : f.field_type === "textarea" ? (
                     <textarea
                       rows={3}
                       value={custom[f.field_key] ?? ""}
                       onChange={(e) => setCustom((c) => ({ ...c, [f.field_key]: e.target.value }))}
                       placeholder="Type here…"
-                      className={`${field} h-auto py-2`}
+                      className={`${fieldCls} h-auto py-2`}
                     />
                   ) : (
                     <input
@@ -366,7 +313,7 @@ export default function OfferForm({
                       value={custom[f.field_key] ?? ""}
                       onChange={(e) => setCustom((c) => ({ ...c, [f.field_key]: e.target.value }))}
                       placeholder="Type here…"
-                      className={field}
+                      className={fieldCls}
                     />
                   )}
                 </div>
@@ -376,10 +323,8 @@ export default function OfferForm({
         </Card>
       )}
 
-      {/* ---------- images ---------- */}
       {config.needs_images === 1 && (
-        <Card title="Upload offer photo(s) (Optional)">
-          <Hint>We recommend that your images are at least 800 pixels square.</Hint>
+        <Card title="Offer photos">
           <div className="mt-3 flex flex-wrap gap-2">
             {images.map((im, i) => (
               <span key={i} className="relative h-20 w-20 overflow-hidden rounded-lg soft">
@@ -388,7 +333,6 @@ export default function OfferForm({
                 <button
                   type="button"
                   onClick={() => setImages((p) => p.filter((_, j) => j !== i))}
-                  aria-label="Remove image"
                   className="absolute right-0.5 top-0.5 grid h-5 w-5 place-items-center rounded-full bg-black/70 text-white"
                 >
                   <X size={11} />
@@ -413,13 +357,9 @@ export default function OfferForm({
             className="hidden"
             onChange={(e) => addImages(e.target.files)}
           />
-          <div className="mt-2 text-[10.5px] muted">
-            Must be JPEG, PNG, WEBP or GIF and cannot exceed 2 MB each.
-          </div>
         </Card>
       )}
 
-      {/* ---------- description ---------- */}
       <Card title="Description (Optional)">
         <div className="mb-1 text-right text-[10.5px] muted">{description.length}/2000</div>
         <textarea
@@ -428,24 +368,18 @@ export default function OfferForm({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Type here…"
-          className={`${field} h-auto py-2`}
+          className={`${fieldCls} h-auto py-2`}
         />
-        <Hint>
-          The listing title and description must be accurate and as informative as possible (no random
-          or lottery). A misleading description is a violation of our{" "}
-          <Link href="/p/seller-rules" className="text-brand-400 hover:underline">Seller Rules</Link>.
-        </Hint>
       </Card>
 
-      {/* ---------- delivery ---------- */}
       <Card title="Delivery">
         {mode === "both" && (
           <div className="mb-3">
             <Label>Delivery method</Label>
             <div className="space-y-1.5">
               {[
-                { v: true, l: "Automatic", d: "When the buyer purchases your account, G2X instantly delivers the details so you don't even have to be online." },
-                { v: false, l: "Manual", d: "When this offer is sold, you will have to manually send the required account details to the buyer through G2X chat." },
+                { v: true, l: "Automatic", d: "G2X instantly delivers the details." },
+                { v: false, l: "Manual", d: "You send details through chat after sale." },
               ].map((o) => (
                 <label key={o.l} className="flex cursor-pointer items-start gap-2.5 rounded-lg soft px-3 py-2.5">
                   <input
@@ -464,33 +398,18 @@ export default function OfferForm({
           </div>
         )}
 
-        {/*
-          Guaranteed delivery time.
-
-          Automatic fulfilment is instant by definition — the buyer gets the
-          pre-filled details the moment they pay — so the field only appears
-          when the seller is delivering by hand, exactly as in the approved
-          design. It stays required in that case.
-        */}
         {!auto && (
           <>
             <Label req>Guaranteed Delivery Time</Label>
-            <select value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} className={field}>
+            <select value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} className={fieldCls}>
               <option value="">Choose</option>
               {deliveryTimes.map((d) => (
                 <option key={d.value} value={d.label}>{d.label}</option>
               ))}
             </select>
-            <Hint>Faster delivery time improves your offer&apos;s ranking in the offer list.</Hint>
           </>
         )}
 
-        {/*
-          "How the goods change hands" (in-game trade, mail, auction house…) is
-          a different question from "who types the details in" (automatic vs
-          manual). Currency is manually fulfilled yet still needs this list, so
-          it is driven purely by the admin's `show_delivery_method` switch.
-        */}
         {deliveryMethods.length > 0 && config.show_delivery_method !== 0 && (
           <div className="mt-3">
             <Label>Delivery method</Label>
@@ -515,7 +434,7 @@ export default function OfferForm({
           {regions.length > 0 && config.show_region !== 0 && (
             <div>
               <Label>Region</Label>
-              <select value={region} onChange={(e) => setRegion(e.target.value)} className={field}>
+              <select value={region} onChange={(e) => setRegion(e.target.value)} className={fieldCls}>
                 <option value="">Select Region</option>
                 {regions.map((r) => (
                   <option key={r.value} value={r.label}>{r.label}</option>
@@ -526,7 +445,7 @@ export default function OfferForm({
           {platforms.length > 0 && config.show_platform !== 0 && (
             <div>
               <Label>Platform</Label>
-              <select value={platform} onChange={(e) => setPlatform(e.target.value)} className={field}>
+              <select value={platform} onChange={(e) => setPlatform(e.target.value)} className={fieldCls}>
                 <option value="">Select Platform</option>
                 {platforms.map((r) => (
                   <option key={r.value} value={r.label}>{r.label}</option>
@@ -537,7 +456,7 @@ export default function OfferForm({
           {loginMethods.length > 0 && config.show_login_method !== 0 && (
             <div>
               <Label>Login method</Label>
-              <select value={loginMethod} onChange={(e) => setLoginMethod(e.target.value)} className={field}>
+              <select value={loginMethod} onChange={(e) => setLoginMethod(e.target.value)} className={fieldCls}>
                 <option value="">Select</option>
                 {loginMethods.map((r) => (
                   <option key={r.value} value={r.label}>{r.label}</option>
@@ -548,9 +467,8 @@ export default function OfferForm({
         </div>
       </Card>
 
-      {/* ---------- account credential vault ---------- */}
       {config.needs_credentials === 1 && auto && mode !== "manual" && (
-        <Card title={`${vaultNoun} information shared with buyer`}>
+        <Card title={`${vaultNoun} information`}>
           <div className="space-y-4">
             {accounts.map((a, i) => (
               <div key={i} className="rounded-xl border border-[var(--line)] p-3">
@@ -560,214 +478,82 @@ export default function OfferForm({
                     <button
                       type="button"
                       onClick={() => setAccounts((p) => p.filter((_, j) => j !== i))}
-                      aria-label={`Remove ${vaultNoun.toLowerCase()}`}
                       className="muted transition-colors hover:text-rose-400"
                     >
                       <Trash2 size={14} />
                     </button>
                   )}
                 </div>
-
-                {/* A gift card is just a code; an account needs the full set. */}
                 {isGiftCard ? (
                   <>
-                    <div className="mb-1 text-[11.5px] font-bold">
-                      Gift card code <span className="muted">(Required)</span>
-                    </div>
-                    <input
-                      value={a.login}
-                      onChange={(e) => setAcc(i, "login", e.target.value)}
-                      placeholder="Type the code here…"
-                      className={field}
-                    />
-                    <div className="mb-1 mt-3 text-[11.5px] font-bold">
-                      Redemption URL <span className="muted">(Optional)</span>
-                    </div>
-                    <input
-                      value={a.url}
-                      onChange={(e) => setAcc(i, "url", e.target.value)}
-                      placeholder="Type here…"
-                      className={field}
-                    />
+                    <div className="mb-1 text-[11.5px] font-bold">Gift card code <span className="muted">(Required)</span></div>
+                    <input value={a.login} onChange={(e) => setAcc(i, "login", e.target.value)} placeholder="Type the code here…" className={fieldCls} />
                   </>
                 ) : (
-                <>
-                <div className="mb-1 text-[11.5px] font-bold">
-                  Account details <span className="muted">(Required)</span>
-                </div>
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <div>
-                    <Label>Login / Username</Label>
-                    <input value={a.login} onChange={(e) => setAcc(i, "login", e.target.value)} placeholder="Type here…" className={field} />
-                  </div>
-                  <div>
-                    <Label>Password</Label>
-                    <input value={a.password} onChange={(e) => setAcc(i, "password", e.target.value)} placeholder="Type here…" className={field} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label>URL</Label>
-                    <input value={a.url} onChange={(e) => setAcc(i, "url", e.target.value)} placeholder="Type here…" className={field} />
-                  </div>
-                </div>
-
-                <div className="mb-1 mt-3 text-[11.5px] font-bold">
-                  Email details <span className="muted">(Optional)</span>
-                </div>
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <div>
-                    <Label>Login</Label>
-                    <input value={a.emailLogin} onChange={(e) => setAcc(i, "emailLogin", e.target.value)} placeholder="Type here…" className={field} />
-                  </div>
-                  <div>
-                    <Label>Password</Label>
-                    <input value={a.emailPassword} onChange={(e) => setAcc(i, "emailPassword", e.target.value)} placeholder="Type here…" className={field} />
-                  </div>
-                </div>
-
-                <div className="mb-1 mt-3 text-[11.5px] font-bold">
-                  2FA details <span className="muted">(Optional)</span>
-                </div>
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  <div>
-                    <Label>Login</Label>
-                    <input value={a.twoFaLogin} onChange={(e) => setAcc(i, "twoFaLogin", e.target.value)} placeholder="Type here…" className={field} />
-                  </div>
-                  <div>
-                    <Label>Password</Label>
-                    <input value={a.twoFaPassword} onChange={(e) => setAcc(i, "twoFaPassword", e.target.value)} placeholder="Type here…" className={field} />
-                  </div>
-                </div>
-                </>
+                  <>
+                    <div className="grid gap-2.5 sm:grid-cols-2">
+                      <div><Label>Login / Username</Label><input value={a.login} onChange={(e) => setAcc(i, "login", e.target.value)} placeholder="Type here…" className={fieldCls} /></div>
+                      <div><Label>Password</Label><input value={a.password} onChange={(e) => setAcc(i, "password", e.target.value)} placeholder="Type here…" className={fieldCls} /></div>
+                    </div>
+                  </>
                 )}
-
-                <div className="mb-1 mt-3 text-[11.5px] font-bold">
-                  Additional info <span className="muted">(Optional)</span>
-                </div>
-                <textarea
-                  rows={2}
-                  value={a.extra}
-                  onChange={(e) => setAcc(i, "extra", e.target.value)}
-                  placeholder="Type here…"
-                  className={`${field} h-auto py-2`}
-                />
-
-                <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-                  <AlertTriangle size={14} className="mt-px shrink-0 text-amber-400" />
-                  <span className="text-[11px] leading-relaxed text-amber-200/90">
-                    <b>Warning: Additional info field is not encrypted.</b> Under no circumstances
-                    should you enter sensitive data such as passwords, login details, or personal
-                    information.
-                  </span>
-                </div>
               </div>
             ))}
           </div>
-
           <button
             type="button"
-            onClick={() => setAccounts((p) => [...p, emptyAccount()])}
-            className="mt-3 flex items-center gap-1.5 text-[12px] font-bold text-brand-400 transition-colors hover:text-brand-300"
+            onClick={() => setAccounts((p) => [...p, { login: "", password: "", url: "", emailLogin: "", emailPassword: "", twoFaLogin: "", twoFaPassword: "", extra: "" }])}
+            className="mt-3 flex items-center gap-1.5 text-[12px] font-bold text-brand-400"
           >
             <Plus size={13} /> ADD ADDITIONAL {vaultNoun.toUpperCase()}
           </button>
-
-          <div className="mt-3 flex items-start gap-2 rounded-lg soft px-3 py-2.5">
-            <Lock size={14} className="mt-px shrink-0 text-brand-400" />
-            <span className="text-[11px] leading-relaxed muted">
-              Your account information is encrypted and only shared with the buyer after the purchase
-              is completed.
-            </span>
-          </div>
         </Card>
       )}
 
       {(mode === "manual" || (config.needs_credentials === 1 && !auto)) && (
         <Card title="Manual delivery">
-          <Hint>
-            You will receive the order in your seller panel and must send the account details to the
-            buyer through G2X chat within your guaranteed delivery time.
-          </Hint>
+          <Hint>You will receive the order in your seller panel and must send the account details to the buyer through G2X chat.</Hint>
           <div className="mt-3">
             <Label>Notes for the buyer (optional)</Label>
-            <textarea
-              rows={3}
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              placeholder="Type here…"
-              className={`${field} h-auto py-2`}
-            />
+            <textarea rows={3} value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Type here…" className={`${fieldCls} h-auto py-2`} />
           </div>
         </Card>
       )}
 
-      {/* ---------- quantity ---------- */}
       {config.needs_quantity === 1 && (
         <Card title="Quantity">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label req>Total Quantity available</Label>
               <div className="relative">
-                <input
-                  type="number"
-                  min={1}
-                  value={stock}
-                  onChange={(e) => setStock(e.target.value)}
-                  className={`${field} pr-14`}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] muted">{unit}</span>
+                <input type="number" min={1} value={stock} onChange={(e) => setStock(e.target.value)} className={`${fieldCls} pr-14`} />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] muted">K</span>
               </div>
             </div>
             <div>
               <Label>Minimum Offer quantity</Label>
               <div className="relative">
-                <input
-                  type="number"
-                  min={1}
-                  value={minQty}
-                  onChange={(e) => setMinQty(e.target.value)}
-                  className={`${field} pr-14`}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] muted">{unit}</span>
+                <input type="number" min={1} value={minQty} onChange={(e) => setMinQty(e.target.value)} className={`${fieldCls} pr-14`} />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] muted">K</span>
               </div>
             </div>
           </div>
         </Card>
       )}
 
-      {/* ---------- price ---------- */}
       <Card title="Price">
         <Label req>Price per {unit}</Label>
         <div className="relative">
-          <input
-            type="number"
-            step="0.01"
-            min={0}
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="Price"
-            className={`${field} pr-20`}
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] font-semibold muted">
-            $ USD
-          </span>
+          <input type="number" step="0.01" min={0} value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Price" className={`${fieldCls} pr-20`} />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] font-semibold muted">$ USD</span>
         </div>
-        {/*
-          Prices are STORED in USD so every offer stays comparable, but a seller
-          reading the site in INR needs to see what they are actually charging.
-          The live conversion removes the guesswork.
-        */}
         {priceNum > 0 && (
           <div className="mt-2 text-[11.5px] font-semibold text-brand-400">
             Buyers see {money(priceNum)} per {unit}
           </div>
         )}
-        <Hint>
-          Prices are entered in USD and shown to every buyer in their own currency. Competitive
-          prices improve your offer&apos;s ranking in the offer list.
-        </Hint>
       </Card>
 
-      {/* ---------- volume discount ---------- */}
       {config.allow_volume_discount === 1 && (
         <Card title="Volume discount">
           <div className="space-y-2">
@@ -776,92 +562,54 @@ export default function OfferForm({
                 <div className="min-w-0 flex-1">
                   <Label>Minimum quantity for discount</Label>
                   <div className="relative">
-                    <input
-                      type="number"
-                      min={0}
-                      value={v.qty}
-                      onChange={(e) => setVolume((p) => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))}
-                      placeholder="0"
-                      className={`${field} pr-14`}
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] muted">{unit}</span>
+                    <input type="number" min={0} value={v.qty} onChange={(e) => setVolume((p) => p.map((x, j) => (j === i ? { ...x, qty: e.target.value } : x)))} placeholder="0" className={`${fieldCls} pr-14`} />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] muted">K</span>
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
                   <Label>Discount percentage</Label>
                   <div className="relative">
-                    <input
-                      type="number"
-                      min={0}
-                      max={90}
-                      value={v.pct}
-                      onChange={(e) => setVolume((p) => p.map((x, j) => (j === i ? { ...x, pct: e.target.value } : x)))}
-                      placeholder="0"
-                      className={`${field} pr-10`}
-                    />
+                    <input type="number" min={0} max={90} value={v.pct} onChange={(e) => setVolume((p) => p.map((x, j) => (j === i ? { ...x, pct: e.target.value } : x)))} placeholder="0" className={`${fieldCls} pr-10`} />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] muted">%</span>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setVolume((p) => (p.length > 1 ? p.filter((_, j) => j !== i) : p))}
-                  aria-label="Remove row"
-                  className="mb-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg soft muted transition-colors hover:text-rose-400"
-                >
+                <button type="button" onClick={() => setVolume((p) => (p.length > 1 ? p.filter((_, j) => j !== i) : p))} className="mb-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg soft muted hover:text-rose-400">
                   <Trash2 size={14} />
                 </button>
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => setVolume((p) => [...p, { qty: "", pct: "" }])}
-            className="mt-2.5 rounded-lg soft px-3 py-1.5 text-[12px] font-semibold transition-colors hover:bg-brand-600/10"
-          >
+          <button type="button" onClick={() => setVolume((p) => [...p, { qty: "", pct: "" }])} className="mt-2.5 rounded-lg soft px-3 py-1.5 text-[12px] font-semibold hover:bg-brand-600/10">
             + Add row
           </button>
         </Card>
       )}
 
-      {/* ---------- consent + submit ---------- */}
       <div className="space-y-2">
         <label className="flex cursor-pointer items-start gap-2 text-[12px]">
           <input type="checkbox" checked={agreeTos} onChange={(e) => setAgreeTos(e.target.checked)} className="mt-0.5 accent-[var(--brand,#8b3dff)]" />
-          <span>
-            I have read and agree to the{" "}
-            <Link href="/p/terms" className="text-brand-400 hover:underline">Terms of Service</Link>.
-          </span>
+          <span>I have read and agree to the <Link href="/p/terms" className="text-brand-400 hover:underline">Terms of Service</Link>.</span>
         </label>
         <label className="flex cursor-pointer items-start gap-2 text-[12px]">
           <input type="checkbox" checked={agreeRules} onChange={(e) => setAgreeRules(e.target.checked)} className="mt-0.5 accent-[var(--brand,#8b3dff)]" />
-          <span>
-            I have read and agree to the{" "}
-            <Link href="/p/seller-rules" className="text-brand-400 hover:underline">Seller Rules</Link>.
-          </span>
+          <span>I have read and agree to the <Link href="/p/seller-rules" className="text-brand-400 hover:underline">Seller Rules</Link>.</span>
         </label>
       </div>
 
       {err && (
-        <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-[12px] text-rose-300">
-          {err}
-        </div>
+        <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-3.5 py-2.5 text-[12px] text-rose-300">{err}</div>
       )}
 
-      <div className="flex items-center gap-3 pb-2">
-        <Link
-          href={`/seller/sell/${config.slug}/${game}`}
-          className="rounded-xl soft px-5 py-2.5 text-[12.5px] font-semibold transition-colors hover:bg-brand-600/10"
-        >
-          Back
-        </Link>
+      <div className="flex items-center gap-3 pb-6">
+        <Link href="/seller/offers" className="rounded-xl soft px-5 py-2.5 text-[12.5px] font-semibold hover:bg-brand-600/10">Back</Link>
         <button
           type="button"
           onClick={submit}
           disabled={pending}
-          className="flex items-center gap-2 rounded-xl bg-brand-600 px-6 py-2.5 text-[12.5px] font-bold text-white transition-all hover:bg-brand-500 disabled:opacity-50"
+          className="flex items-center gap-2 rounded-xl bg-brand-600 px-6 py-2.5 text-[12.5px] font-bold text-white hover:bg-brand-500 disabled:opacity-50"
         >
           {pending && <Loader2 size={14} className="animate-spin" />}
-          Place offer
+          Save changes
         </button>
       </div>
     </div>

@@ -1,9 +1,10 @@
 "use client";
 import Image from "next/image";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Pause, Play, Trash2, Pencil, X, Loader2 } from "lucide-react";
+import { Plus, Pause, Play, Trash2, Pencil, X, Loader2, Link2, Check } from "lucide-react";
 import { Btn, Empty, Field, Tag, inputCls } from "@/components/ui";
 import { statusTone, label } from "@/lib/fmt";
 import { saveListingAction, listingStatusAction, deleteListingAction } from "@/lib/actions/seller";
@@ -32,6 +33,7 @@ export default function ListingsView({
   const router = useRouter();
   const [edit, setEdit] = useState<L | null>(null);
   const [open, setOpen] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [, start] = useTransition();
 
   const act = (fn: () => Promise<unknown>) =>
@@ -39,6 +41,17 @@ export default function ListingsView({
       await fn();
       router.refresh();
     });
+
+  const copyLink = async (l: L) => {
+    const url = `${window.location.origin}/g/${l.game_slug}/${l.category_slug}/${l.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(l.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      prompt("Copy this link:", url);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -77,18 +90,29 @@ export default function ListingsView({
                 <button
                   onClick={() => act(() => listingStatusAction(l.id, l.status === "active" ? "paused" : "active"))}
                   className="grid h-8 w-8 place-items-center rounded-lg soft hover:bg-brand-500/15 hover:text-brand-400"
+                  title={l.status === "active" ? "Pause" : "Activate"}
                 >
                   {l.status === "active" ? <Pause size={13} /> : <Play size={13} />}
                 </button>
-                <button
-                  onClick={() => { setEdit(l); setOpen(true); }}
+                {/* Edit now goes to dedicated page like currency page */}
+                <Link
+                  href={`/seller/listings/${l.id}/edit`}
                   className="grid h-8 w-8 place-items-center rounded-lg soft hover:bg-brand-500/15 hover:text-brand-400"
+                  title="Edit"
                 >
                   <Pencil size={13} />
+                </Link>
+                <button
+                  onClick={() => copyLink(l)}
+                  className="grid h-8 w-8 place-items-center rounded-lg soft hover:bg-brand-500/15 hover:text-brand-400"
+                  title={copiedId === l.id ? "Copied!" : "Copy product link"}
+                >
+                  {copiedId === l.id ? <Check size={13} className="text-emerald-400" /> : <Link2 size={13} />}
                 </button>
                 <button
                   onClick={() => act(() => deleteListingAction(l.id))}
                   className="grid h-8 w-8 place-items-center rounded-lg soft hover:bg-rose-500/15 hover:text-rose-400"
+                  title="Delete"
                 >
                   <Trash2 size={13} />
                 </button>

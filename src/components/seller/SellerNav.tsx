@@ -6,12 +6,13 @@ import { motion } from "framer-motion";
 import { useMoney } from "@/components/LocaleProvider";
 import {
   LayoutDashboard, Tag as TagIcon, Package, Star, Wallet, Store, Gavel, ArrowLeft,
-  ChevronDown,
+  ChevronDown, MessageSquare,
 } from "lucide-react";
 
 const links = [
   { href: "/seller", label: "Overview", icon: LayoutDashboard },
   { href: "/seller/orders", label: "Orders", icon: Package, badge: true },
+  { href: "/seller/messages", label: "Messages", icon: MessageSquare },
   { href: "/seller/reviews", label: "Reviews", icon: Star },
   { href: "/seller/disputes", label: "Disputes", icon: Gavel },
   { href: "/seller/finance", label: "Finance & Payouts", icon: Wallet },

@@ -362,6 +362,75 @@ export async function createOfferAction(form: FormData): Promise<R> {
   return { ok: true };
 }
 
+export async function updateOfferFullAction(form: FormData): Promise<R> {
+  const s = await requireSeller();
+  await ensureSchema();
+  const id = String(form.get("id") ?? "").trim();
+  if (!id) return { ok: false, error: "Missing offer id." };
+  const owned = await one(`SELECT id, product_id FROM offers WHERE id=? AND seller_id=?`, [id, s.id]);
+  if (!owned) return { ok: false, error: "Offer not found." };
+
+  const price = num(form.get("price"));
+  const stock = Math.max(0, Math.floor(num(form.get("stock"))));
+  const minQty = Math.max(1, Math.floor(num(form.get("minQty")) || 1));
+  const title = String(form.get("title") ?? "").trim();
+  const description = String(form.get("description") ?? "").trim();
+  const deliveryTime = String(form.get("deliveryTime") ?? "").trim();
+  const deliveryMethod = String(form.get("deliveryMethod") ?? "").trim();
+  const region = String(form.get("region") ?? "").trim();
+  const platform = String(form.get("platform") ?? "").trim();
+  const loginMethod = String(form.get("loginMethod") ?? "").trim();
+  const instructions = String(form.get("instructions") ?? "").trim();
+  const autoDelivery = String(form.get("autoDelivery") ?? "1") === "1" ? 1 : 0;
+
+  if (!(price > 0)) return { ok: false, error: "Price must be greater than 0." };
+  if (!deliveryTime) return { ok: false, error: "Delivery time is required." };
+
+  const parseJson = <T,>(key: string, fallback: T): T => {
+    try {
+      const v = JSON.parse(String(form.get(key) ?? ""));
+      return (v ?? fallback) as T;
+    } catch {
+      return fallback;
+    }
+  };
+
+  const images = parseJson<string[]>("images", []).filter(
+    (d) => typeof d === "string" && d.startsWith("data:image/")
+  );
+  const volume = parseJson<{ qty: number; pct: number }[]>("volumeDiscounts", []).filter(
+    (v) => Number(v.qty) > 0 && Number(v.pct) > 0 && Number(v.pct) < 100
+  );
+  const accounts = parseJson<Record<string, string>[]>("accounts", []);
+
+  const custom: Record<string, string> = {};
+  Array.from(form.keys()).forEach((k) => {
+    if (k.startsWith("cf_")) custom[k.slice(3)] = String(form.get(k));
+  });
+
+  const finalStock = stock;
+  const status = finalStock <= 0 ? "out_of_stock" : "active";
+
+  await run(
+    `UPDATE offers SET title=?, description=?, price=?, stock=?, min_qty=?,
+            delivery_time=?, delivery_method=?, login_method=?, region=?, platform=?,
+            instructions=?, custom_fields=?, images=?, volume_discounts=?, accounts_data=?,
+            auto_delivery=?, status=?, updated_at=datetime('now')
+     WHERE id=? AND seller_id=?`,
+    [
+      title.slice(0, 160), description || null, price, finalStock, minQty,
+      deliveryTime, deliveryMethod || null, loginMethod || null, region || null, platform || null,
+      instructions || null, JSON.stringify(custom), JSON.stringify(images),
+      JSON.stringify(volume), accounts.length ? JSON.stringify(accounts) : null,
+      autoDelivery, status, id, s.id
+    ]
+  );
+
+  revalidatePath("/seller/offers");
+  revalidateTag("catalog");
+  return { ok: true };
+}
+
 export async function offerStatusAction(id: string, status: string): Promise<R> {
   const s = await requireSeller();
   await run(`UPDATE offers SET status=?, updated_at=datetime('now') WHERE id=? AND seller_id=?`, [status, id, s.id]);
@@ -753,8 +822,6 @@ export async function saveStoreAction(form: FormData): Promise<R> {
   const s = await requireSeller();
   const storeName = String(form.get("storeName") ?? "").trim();
   const description = String(form.get("description") ?? "").trim();
-  const logo = String(form.get("logo") ?? "").trim();
-  const banner = String(form.get("banner") ?? "").trim();
   const payoutMethod = String(form.get("payoutMethod") ?? "").trim();
   const payoutDetail = String(form.get("payoutDetail") ?? "").trim();
 
@@ -763,12 +830,78 @@ export async function saveStoreAction(form: FormData): Promise<R> {
   const taken = await one(`SELECT user_id FROM seller_profiles WHERE slug=? AND user_id<>?`, [slug, s.id]);
   if (taken) return { ok: false, error: "That store name is already taken." };
 
+  // Handle logo upload (data URI, like avatar)
+  let logoData: string | null | undefined = undefined; // undefined = keep existing
+  const logoFile = form.get("logoFile");
+  const removeLogo = String(form.get("removeLogo") ?? "") === "1";
+  if (removeLogo) {
+    logoData = null;
+  } else if (logoFile instanceof File && logoFile.size > 0) {
+    if (logoFile.size > 1024 * 1024) return { ok: false, error: "Store logo must be 1 MB or smaller." };
+    const type = (logoFile.type || "").toLowerCase();
+    if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(type))
+      return { ok: false, error: "Store logo must be PNG, JPEG or WEBP." };
+    const buf = Buffer.from(await logoFile.arrayBuffer());
+    logoData = `data:${type};base64,${buf.toString("base64")}`;
+  }
+
+  let bannerData: string | null | undefined = undefined;
+  const bannerFile = form.get("bannerFile");
+  const removeBanner = String(form.get("removeBanner") ?? "") === "1";
+  if (removeBanner) {
+    bannerData = null;
+  } else if (bannerFile instanceof File && bannerFile.size > 0) {
+    if (bannerFile.size > 2 * 1024 * 1024) return { ok: false, error: "Banner must be 2 MB or smaller." };
+    const type = (bannerFile.type || "").toLowerCase();
+    if (!["image/png", "image/jpeg", "image/jpg", "image/webp"].includes(type))
+      return { ok: false, error: "Banner must be PNG, JPEG or WEBP." };
+    const buf = Buffer.from(await bannerFile.arrayBuffer());
+    bannerData = `data:${type};base64,${buf.toString("base64")}`;
+  }
+
+  // Build dynamic update
+  const existing = await one<{ logo: string | null; banner: string | null }>(
+    `SELECT logo, banner FROM seller_profiles WHERE user_id=?`, [s.id]
+  );
+  const finalLogo = logoData === undefined ? existing?.logo ?? null : logoData;
+  const finalBanner = bannerData === undefined ? existing?.banner ?? null : bannerData;
+
   await run(
     `UPDATE seller_profiles SET store_name=?, slug=?, description=?, logo=?, banner=?,
             payout_method=?, payout_detail=? WHERE user_id=?`,
-    [storeName, slug, description, logo || null, banner || null,
+    [storeName, slug, description, finalLogo, finalBanner,
      payoutMethod || null, payoutDetail || null, s.id]
   );
+
+  // Merge username with store slug (username = store slug with _ instead of -)
+  try {
+    let usernameCandidate = slug.replace(/-/g, "_").slice(0, 20);
+    if (usernameCandidate.length < 3) usernameCandidate = `${usernameCandidate}_store`.slice(0,20);
+    const takenUser = await one(`SELECT id FROM users WHERE username=? AND id<>?`, [usernameCandidate, s.id]);
+    let finalUsername = usernameCandidate;
+    if (takenUser) {
+      finalUsername = `${usernameCandidate}_${Math.random().toString(36).slice(2,6)}`.slice(0,20);
+    }
+    await run(`UPDATE users SET username=? WHERE id=?`, [finalUsername, s.id]);
+  } catch {}
+
   revalidatePath("/seller/store");
+  revalidatePath("/", "layout");
   return { ok: true };
+}
+
+export async function sellerMessageBuyerAction(buyerId: string, orderCode?: string): Promise<R> {
+  const s = await requireSeller();
+  // Find any existing thread between this buyer and seller (most recent first)
+  // We ignore order_id in lookup to avoid duplicate threads when buyer already messaged
+  const existing = await one<{ id: string }>(
+    `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? ORDER BY updated_at DESC LIMIT 1`,
+    [buyerId, s.id]
+  );
+  if (existing) return { ok: true, id: existing.id };
+  const id = nid("thr_");
+  await run(`INSERT INTO threads (id,buyer_id,seller_id,order_id) VALUES (?,?,?,?)`, [
+    id, buyerId, s.id, orderCode ?? null,
+  ]);
+  return { ok: true, id };
 }

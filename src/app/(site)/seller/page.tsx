@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/session";
 import { getSellerStats, getSellerOrders, getSellerSalesSeries, getTopSellerProducts } from "@/lib/queries";
 import { Section, Tag, Empty, FadeIn } from "@/components/ui";
 import { statusTone, label } from "@/lib/fmt";
-import { DollarSign, Package, Percent, Star, ArrowRight } from "lucide-react";
+import { DollarSign, Package, Star, ArrowRight } from "lucide-react";
 import SalesChart from "@/components/seller/SalesChart";
 import LocalTime from "@/components/LocalTime";
 import { serverLocale } from "@/lib/locale";
@@ -28,9 +28,8 @@ export default async function Page() {
   ]);
 
   const cards = [
-    { l: "Net Earnings", v: money(Number(stats.totals?.net ?? 0)), i: DollarSign },
+    { l: "Total Earnings", v: money(Number(stats.totals?.net ?? 0)), i: DollarSign },
     { l: "Completed Orders", v: String(Number(stats.totals?.orders ?? 0)), i: Package },
-    { l: "Commission Paid", v: money(Number(stats.totals?.commission ?? 0)), i: Percent },
     { l: "Rating", v: `${Number(stats.rating?.avg ?? 0).toFixed(1)}★ (${Number(stats.rating?.n ?? 0)})`, i: Star },
   ];
 
@@ -48,7 +47,7 @@ export default async function Page() {
         </div>
       </FadeIn>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {cards.map((c, i) => (
           <FadeIn key={c.l} delay={i * 0.05}>
             <div className="rounded-2xl panel p-4">

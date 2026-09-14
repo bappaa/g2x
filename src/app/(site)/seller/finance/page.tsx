@@ -6,7 +6,7 @@ import FinanceView from "@/components/seller/FinanceView";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Finance & Payouts — G2X.GG" };
 
-type Prof = { available_bal: number; pending_bal: number; commission_pct: number; payout_method: string | null; payout_detail: string | null };
+type Prof = { available_bal: number; pending_bal: number; payout_method: string | null; payout_detail: string | null };
 
 export default async function Page() {
   const u = await requireUser();
@@ -21,9 +21,7 @@ export default async function Page() {
     <FinanceView
       available={Number(prof.available_bal)}
       pendingBal={Number(prof.pending_bal)}
-      commissionPct={Number(prof.commission_pct)}
       lifetimeNet={Number(stats.totals?.net ?? 0)}
-      commissionPaid={Number(stats.totals?.commission ?? 0)}
       payoutMethod={prof.payout_method ?? "Bank Transfer"}
       payoutDetail={prof.payout_detail ?? ""}
       withdrawals={wds as never}

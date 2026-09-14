@@ -7,15 +7,14 @@ import { Truck, XCircle, Plus, Loader2, User, MessageSquare } from "lucide-react
 import { Btn, Empty, Tag, inputCls } from "@/components/ui";
 import Credentials from "@/components/dash/Credentials";
 import { statusTone, label } from "@/lib/fmt";
-import { deliverOrderAction, cancelOrderItemAction } from "@/lib/actions/seller";
-import { startThreadAction } from "@/lib/actions/shop";
+import { deliverOrderAction, cancelOrderItemAction, sellerMessageBuyerAction } from "@/lib/actions/seller";
 import LocalTime from "@/components/LocalTime";
 import { img } from "@/lib/img";
 import { useMoney } from "@/components/LocaleProvider";
 
 type OI = {
   id: string; code: string; title: string; subtitle: string; image: string; qty: number;
-  unit_price: number; line_total: number; seller_net: number; commission_amt: number;
+  unit_price: number; line_total: number; seller_net: number;
   status: string; created_at: string; delivery_uid: string; buyer_note: string | null;
   buyer_name: string; buyer_email: string; buyer_id: string; delivery_time: string;
   opt_region?: string | null; opt_delivery?: string | null;
@@ -74,7 +73,6 @@ function OrderRow({ o }: { o: OI }) {
             <Info l="Quantity" v={`${o.qty} × ${money(o.unit_price)}`} />
             {o.opt_region && <Info l="Game server" v={o.opt_region} />}
             {o.opt_delivery && <Info l="Delivery method" v={o.opt_delivery} />}
-            <Info l="Commission" v={`− ${money(o.commission_amt)}`} />
             {o.buyer_note && <Info l="Buyer note" v={o.buyer_note} />}
           </div>
 
@@ -92,8 +90,12 @@ function OrderRow({ o }: { o: OI }) {
                 className="flex items-center gap-1.5"
                 onClick={() =>
                   start(async () => {
-                    const r = await startThreadAction(o.buyer_id, o.code);
-                    if (r.ok) router.push("/dashboard/messages");
+                    const r = await sellerMessageBuyerAction(o.buyer_id, o.code);
+                    if (r.ok && (r as any).id) {
+                      router.push(`/seller/messages?t=${(r as any).id}`);
+                    } else {
+                      router.push(`/seller/messages`);
+                    }
                   })
                 }
               >

@@ -22,7 +22,7 @@ type Verification = {
 
 const PERKS = [
   { icon: TrendingUp, t: "Reach 2M+ gamers", d: "Your offers appear on every matching product page." },
-  { icon: Wallet, t: "8% flat commission", d: "No listing fees. You keep 92% of every sale." },
+  { icon: Wallet, t: "Zero listing fees", d: "List unlimited products, pay only when you sell." },
   { icon: ShieldCheck, t: "Escrow protection", d: "Funds are secured at checkout, released on delivery." },
   { icon: Clock, t: "Fast payouts", d: "Withdraw to bank, PayPal or crypto from $10." },
 ];

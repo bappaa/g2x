@@ -102,6 +102,19 @@ export async function submitVerificationAction(form: FormData): Promise<R> {
   const taken = await one(`SELECT slug FROM seller_profiles WHERE slug=? AND user_id<>?`, [slug, u.id]);
   if (taken) return { ok: false, error: "That store name is already taken." };
 
+  // Username merges with store name: store slug becomes username (if free, else with suffix)
+  let usernameCandidate = slug.replace(/-/g, "_");
+  // Ensure valid username: 3-20 chars, alphanumeric + underscore
+  if (usernameCandidate.length < 3) usernameCandidate = usernameCandidate + "_store";
+  if (usernameCandidate.length > 20) usernameCandidate = usernameCandidate.slice(0, 20);
+  // Check if username taken by another user
+  let finalUsername = usernameCandidate;
+  const userTaken = await one(`SELECT id FROM users WHERE username=? AND id<>?`, [finalUsername, u.id]);
+  if (userTaken) {
+    // Append random suffix to make unique
+    finalUsername = `${usernameCandidate}_${Math.random().toString(36).slice(2,6)}`.slice(0, 20);
+  }
+
   await run(
     `INSERT INTO seller_profiles (user_id,store_name,slug,description,primary_cat,status)
      VALUES (?,?,?,?,?, 'pending')
@@ -111,7 +124,13 @@ export async function submitVerificationAction(form: FormData): Promise<R> {
        status='pending'`,
     [u.id, storeName, slug, description, primaryCat]
   );
-  await run(`UPDATE users SET is_seller=1 WHERE id=?`, [u.id]);
+  // Merge username with store name
+  try {
+    await run(`UPDATE users SET is_seller=1, username=?, username_changes=username_changes+1 WHERE id=?`, [finalUsername, u.id]);
+  } catch {
+    // If username column update fails (duplicate), just set is_seller
+    await run(`UPDATE users SET is_seller=1 WHERE id=?`, [u.id]);
+  }
 
   await notify(
     u.id,

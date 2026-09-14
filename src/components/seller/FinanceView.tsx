@@ -2,7 +2,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Wallet, Clock, Percent, TrendingUp, Loader2, Check } from "lucide-react";
+import { Wallet, Clock, TrendingUp, Loader2, Check } from "lucide-react";
 import { Btn, Field, Section, Tag, Empty, inputCls } from "@/components/ui";
 import { statusTone, label } from "@/lib/fmt";
 import { requestWithdrawalAction } from "@/lib/actions/seller";
@@ -13,11 +13,11 @@ type W = { id: string; amount: number; method: string; detail: string; status: s
 type T = { id: string; type: string; amount: number; reference: string; created_at: string };
 
 export default function FinanceView({
-  available, pendingBal, commissionPct, lifetimeNet, commissionPaid,
+  available, pendingBal, lifetimeNet,
   payoutMethod, payoutDetail, withdrawals, txns,
 }: {
-  available: number; pendingBal: number; commissionPct: number; lifetimeNet: number;
-  commissionPaid: number; payoutMethod: string; payoutDetail: string; withdrawals: W[]; txns: T[];
+  available: number; pendingBal: number; lifetimeNet: number;
+  payoutMethod: string; payoutDetail: string; withdrawals: W[]; txns: T[];
 }) {
   const money = useMoney();
   const router = useRouter();
@@ -31,8 +31,7 @@ export default function FinanceView({
   const cards = [
     { l: "Available", v: money(available), i: Wallet, c: "text-emerald-400" },
     { l: "In escrow", v: money(pendingBal), i: Clock, c: "text-amber-400" },
-    { l: "Lifetime net", v: money(lifetimeNet), i: TrendingUp, c: "" },
-    { l: `Commission (${commissionPct}%)`, v: money(commissionPaid), i: Percent, c: "" },
+    { l: "Lifetime earnings", v: money(lifetimeNet), i: TrendingUp, c: "" },
   ];
 
   return (

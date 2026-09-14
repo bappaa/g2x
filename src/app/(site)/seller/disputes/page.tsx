@@ -7,9 +7,8 @@ import { purgeMediaInBackground } from "@/lib/retention";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Seller Disputes — G2X.GG" };
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: { d?: string } }) {
   const u = await requireUser();
-  // Housekeeping rides along with ordinary traffic — there is no cron here.
   purgeMediaInBackground();
   const [disputes, msgs] = await Promise.all([
     getSellerDisputes(u.id),
@@ -19,5 +18,5 @@ export default async function Page() {
       [u.id]
     ),
   ]);
-  return <SellerDisputes disputes={disputes as never} messages={msgs as never} />;
+  return <SellerDisputes disputes={disputes as never} messages={msgs as never} activeCode={searchParams.d ?? null} />;
 }

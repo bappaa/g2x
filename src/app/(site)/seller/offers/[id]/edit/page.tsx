@@ -1,0 +1,82 @@
+import { notFound } from "next/navigation";
+import { requireSeller } from "@/lib/session";
+import { one } from "@/lib/db";
+import { getSellConfig, getFieldTemplates, getOptionLists, mergeSellConfig } from "@/lib/queries";
+import EditOfferForm from "@/components/seller/EditOfferForm";
+import Image from "next/image";
+import { img } from "@/lib/img";
+import { Breadcrumb } from "@/components/ui";
+
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Edit Offer — G2X.GG" };
+
+export default async function Page({ params }: { params: { id: string } }) {
+  const s = await requireSeller();
+
+  const offer = await one<any>(
+    `SELECT o.*, p.name as product_name, p.image as product_image, p.game_slug, p.category_slug, p.slug as product_slug, g.name as game_name, g.logo as game_logo
+     FROM offers o
+     JOIN products p ON p.id=o.product_id
+     JOIN games g ON g.slug=p.game_slug
+     WHERE o.id=? AND o.seller_id=?`,
+    [params.id, s.id]
+  );
+  if (!offer) notFound();
+
+  const cfg = await getSellConfig(offer.category_slug);
+  if (!cfg) notFound();
+
+  const product = {
+    id: offer.product_id,
+    name: offer.product_name,
+    image: offer.product_image,
+    base_price: 0,
+  };
+
+  const gameRow = await one<{ name: string; logo: string }>(
+    `SELECT name, logo FROM games WHERE slug=?`, [offer.game_slug]
+  );
+
+  const sell = mergeSellConfig(cfg, { category_slug: offer.category_slug } as any);
+
+  const [fields, opts] = await Promise.all([
+    getFieldTemplates(cfg.slug),
+    getOptionLists(["region", "platform", "delivery_method", "delivery_time", "login_method"]),
+  ]);
+
+  return (
+    <div className="space-y-4">
+      <Breadcrumb
+        items={[
+          { label: "Seller", href: "/seller" },
+          { label: "My Offers", href: "/seller/offers" },
+          { label: `Edit ${offer.title || offer.product_name}` },
+        ]}
+      />
+      <div className="rounded-2xl panel p-4">
+        <div className="flex items-center gap-3">
+          <div className="relative h-10 w-10 overflow-hidden rounded-lg soft">
+            <Image src={img(offer.product_image || gameRow?.logo || "/art/coins.png")} alt="" fill className="object-cover" />
+          </div>
+          <div>
+            <div className="text-[13px] font-bold">Sell Game {cfg.name}</div>
+            <div className="text-[11px] muted">{gameRow?.name} · {offer.product_name}</div>
+          </div>
+        </div>
+      </div>
+
+      <EditOfferForm
+        offer={offer}
+        config={sell}
+        product={product}
+        game={offer.game_slug}
+        fields={fields}
+        regions={opts.region ?? []}
+        platforms={opts.platform ?? []}
+        deliveryMethods={opts.delivery_method ?? []}
+        deliveryTimes={opts.delivery_time ?? []}
+        loginMethods={opts.login_method ?? []}
+      />
+    </div>
+  );
+}
