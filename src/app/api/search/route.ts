@@ -9,7 +9,7 @@ export const revalidate = 300;
 
 export async function GET(req: Request) {
   const ip = clientIp(headers());
-  const rl = await rateLimit(ip, "search", 30, 60);
+  const rl = await rateLimit(`search:${ip}`, 30, 60);
   if (!rl.ok) {
     return NextResponse.json({ error: "Too many requests" }, { 
       status: 429,

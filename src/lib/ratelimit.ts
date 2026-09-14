@@ -86,7 +86,7 @@ export async function rateLimit(key: string, limit: number, windowS: number): Pr
     // Track violation for IP reputation
     const ipMatch = cleanKey.match(/(\d+\.\d+\.\d+\.\d+|[a-f0-9:]+)$/i);
     if (ipMatch) {
-      void trackViolation(ipMatch[1], cleanKey);
+      void trackViolation(ipMatch[1]);
     }
     return { ok: false, remaining: 0, retryAfter: row.reset_at - now };
   }
@@ -96,7 +96,7 @@ export async function rateLimit(key: string, limit: number, windowS: number): Pr
 }
 
 /** Track IP violations for reputation */
-async function trackViolation(ip: string, _bucket: string): Promise<void> {
+async function trackViolation(ip: string): Promise<void> {
   try {
     await run(
       `INSERT INTO ip_reputation (ip, score, violations, last_seen) VALUES (?,?,1, datetime('now'))

@@ -7,7 +7,7 @@ import { headers } from "next/headers";
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   // Rate limit media endpoint to prevent abuse (gaming sites get scraped heavily)
   const ip = clientIp(headers());
-  const rl = await rateLimit(ip, "media_fetch", 100, 60);
+  const rl = await rateLimit(`media_fetch:${ip}`, 100, 60);
   if (!rl.ok) {
     return new NextResponse("Too many requests", { 
       status: 429, 
