@@ -5,7 +5,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  Plus, Search, Pause, Play, Trash2, Pencil, TrendingDown, TrendingUp, Link2, Check,
+  Plus, Search, Pause, Play, Trash2, Pencil, Link2, Check,
 } from "lucide-react";
 import { Empty, Tag, inputCls } from "@/components/ui";
 import { statusTone, label } from "@/lib/fmt";
@@ -168,7 +168,6 @@ export default function OffersView({
       ) : (
         <div className="space-y-2.5">
           {rows.map((o) => {
-            const beat = o.market_min != null && o.price <= o.market_min;
             const isListing = o.kind === "listing";
             return (
               <motion.div key={o.id} layout className="rounded-2xl panel p-4">
@@ -185,12 +184,6 @@ export default function OffersView({
 
                   <div className="text-right">
                     <div className="text-[15px] font-black text-brand-500">{money(o.price)}</div>
-                    {o.market_min != null && !isListing && (
-                      <div className={`flex items-center justify-end gap-1 text-[10.5px] ${beat ? "text-emerald-400" : "text-amber-400"}`}>
-                        {beat ? <TrendingDown size={10} /> : <TrendingUp size={10} />}
-                        market {money(o.market_min)}
-                      </div>
-                    )}
                   </div>
 
                   {!isListing ? (

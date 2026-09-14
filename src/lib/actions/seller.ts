@@ -9,9 +9,10 @@ export type R = { ok: boolean; error?: string; id?: string };
 import { mail } from "../mail";
 import { escrowHoldHours } from "../escrow";
 import { scheduleSubscriptions } from "../subscription";
-import { getWallet, WITHDRAW_SQL } from "../wallet";
+import { getWallet, WITHDRAW_SQL, SPEND_SQL, spendArgs } from "../wallet";
 import { RESERVED_FIELD_KEYS } from "../queries";
 import { ensureSchema } from "../ensure-schema";
+import { FREE_CHANGES, usernameChangeFee } from "../username";
 
 async function notify(userId: string, title: string, body: string, href: string, kind = "order") {
   await run(
@@ -882,25 +883,63 @@ export async function saveStoreAction(form: FormData): Promise<R> {
   const finalLogo = logoData === undefined ? existing?.logo ?? null : logoData;
   const finalBanner = bannerData === undefined ? existing?.banner ?? null : bannerData;
 
-  await run(
-    `UPDATE seller_profiles SET store_name=?, slug=?, description=?, logo=?, banner=?,
-            payout_method=?, payout_detail=?, whatsapp=?, telegram=?, discord=? WHERE user_id=?`,
-    [storeName, slug, description, finalLogo, finalBanner,
-     payoutMethod || null, payoutDetail || null,
-     whatsapp || null, telegram || null, discord || null, s.id]
+  // --- Username change with 2 free then fee (admin sets fee) ---
+  const userRow = await one<{ username: string | null; username_changes: number; balance: number }>(
+    `SELECT username, username_changes, balance FROM users WHERE id=?`, [s.id]
   );
+  const currentUsername = userRow?.username ?? "";
+  const used = Number(userRow?.username_changes ?? 0);
+  const balance = Number(userRow?.balance ?? 0);
 
-  // Merge username with store slug (username = store slug with _ instead of -)
-  try {
-    let usernameCandidate = slug.replace(/-/g, "_").slice(0, 20);
-    if (usernameCandidate.length < 3) usernameCandidate = `${usernameCandidate}_store`.slice(0,20);
-    const takenUser = await one(`SELECT id FROM users WHERE username=? AND id<>?`, [usernameCandidate, s.id]);
-    let finalUsername = usernameCandidate;
-    if (takenUser) {
-      finalUsername = `${usernameCandidate}_${Math.random().toString(36).slice(2,6)}`.slice(0,20);
+  let usernameCandidate = slug.replace(/-/g, "_").slice(0, 20);
+  if (usernameCandidate.length < 3) usernameCandidate = `${usernameCandidate}_store`.slice(0,20);
+  const takenUser = await one(`SELECT id FROM users WHERE username=? AND id<>?`, [usernameCandidate, s.id]);
+  let finalUsername = usernameCandidate;
+  if (takenUser) {
+    finalUsername = `${usernameCandidate}_${Math.random().toString(36).slice(2,6)}`.slice(0,20);
+  }
+
+  const willChangeUsername = finalUsername.toLowerCase() !== currentUsername.toLowerCase() && finalUsername.length >= 3;
+  let fee = 0;
+  if (willChangeUsername) {
+    fee = used >= FREE_CHANGES ? await usernameChangeFee() : 0;
+    if (fee > 0 && balance < fee) {
+      return { ok: false, error: `Changing store name changes your username and costs $${fee.toFixed(2)}. Your wallet has $${balance.toFixed(2)} — top up first.` };
     }
-    await run(`UPDATE users SET username=? WHERE id=?`, [finalUsername, s.id]);
-  } catch {}
+  }
+
+  // Transaction: update store + username + fee
+  const stmts: { sql: string; args: unknown[] }[] = [
+    {
+      sql: `UPDATE seller_profiles SET store_name=?, slug=?, description=?, logo=?, banner=?,
+            payout_method=?, payout_detail=?, whatsapp=?, telegram=?, discord=? WHERE user_id=?`,
+      args: [storeName, slug, description, finalLogo, finalBanner,
+             payoutMethod || null, payoutDetail || null,
+             whatsapp || null, telegram || null, discord || null, s.id],
+    },
+  ];
+
+  if (willChangeUsername) {
+    stmts.push({
+      sql: `UPDATE users SET username=?, username_changes=username_changes+1 WHERE id=?`,
+      args: [finalUsername, s.id],
+    });
+    if (fee > 0) {
+      stmts.push({ sql: SPEND_SQL, args: spendArgs(fee, s.id) });
+      stmts.push({
+        sql: `INSERT INTO transactions (id,user_id,type,amount,reference) VALUES (?,?, 'fee', ?, ?)`,
+        args: [nid("txn_"), s.id, -fee, `Store rename to ${storeName} (@${finalUsername})`],
+      });
+    }
+  }
+
+  try {
+    await tx(stmts as never);
+  } catch (e) {
+    const msg = String((e as Error)?.message ?? "");
+    if (/UNIQUE|constraint/i.test(msg)) return { ok: false, error: "That store name was just taken. Try another." };
+    throw e;
+  }
 
   revalidatePath("/seller/store");
   revalidatePath("/", "layout");
