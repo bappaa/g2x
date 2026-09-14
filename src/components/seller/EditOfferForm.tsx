@@ -2,7 +2,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, Plus, Trash2, Upload, X, Lock, AlertTriangle } from "lucide-react";
+import { Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import { useMoney } from "@/components/LocaleProvider";
 import { updateOfferFullAction } from "@/lib/actions/seller";
 
@@ -84,11 +84,30 @@ async function downscale(file: File, max = 1280, quality = 0.82): Promise<string
   }
 }
 
+type OfferRow = {
+  id: string;
+  title: string | null;
+  description: string | null;
+  price: number;
+  stock: number;
+  min_qty: number | null;
+  delivery_time: string | null;
+  delivery_method: string | null;
+  region: string | null;
+  platform: string | null;
+  login_method: string | null;
+  instructions: string | null;
+  auto_delivery: number | null;
+  images: string | null;
+  volume_discounts: string | null;
+  accounts_data: string | null;
+  custom_fields: string | null;
+};
+
 export default function EditOfferForm({
   offer,
   config,
   product,
-  game,
   fields,
   regions,
   platforms,
@@ -96,10 +115,9 @@ export default function EditOfferForm({
   deliveryTimes,
   loginMethods,
 }: {
-  offer: any;
+  offer: OfferRow;
   config: SellConfig;
   product: { id: string; name: string; image: string; base_price: number };
-  game: string;
   fields: FieldTpl[];
   regions: Opt[];
   platforms: Opt[];

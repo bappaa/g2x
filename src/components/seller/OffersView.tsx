@@ -5,9 +5,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  Plus, Search, Pause, Play, Trash2, Pencil, Loader2, TrendingDown, TrendingUp, Link2, Check,
+  Plus, Search, Pause, Play, Trash2, Pencil, TrendingDown, TrendingUp, Link2, Check,
 } from "lucide-react";
-import { Btn, Empty, Tag, inputCls } from "@/components/ui";
+import { Empty, Tag, inputCls } from "@/components/ui";
 import { statusTone, label } from "@/lib/fmt";
 import { img } from "@/lib/img";
 import { useMoney } from "@/components/LocaleProvider";
@@ -27,12 +27,19 @@ type Offer = {
 
 const TABS = ["all", "active", "paused", "out_of_stock", "draft"];
 
+type FieldTemplate = {
+  id: string;
+  label: string;
+  field_key: string;
+};
+
 export default function OffersView({
-  offers, fields, status, category = "", page = 1, perPage = 30, total = 0,
+  offers, status, category = "", page = 1, perPage = 30, total = 0,
 }: {
-  offers: Offer[]; fields: any[]; status: string;
+  offers: Offer[]; status: string;
   page?: number; perPage?: number; total?: number;
   category?: string;
+  fields?: FieldTemplate[];
 }) {
   const money = useMoney();
   const router = useRouter();
@@ -53,11 +60,13 @@ export default function OffersView({
       router.refresh();
     });
 
+  type OfferWithSlugs = Offer & { game_slug?: string; product_slug?: string };
   const copyLink = async (o: Offer) => {
     // Product page with offer id so buyer can find and buy this specific offer
-    const game = (o as any).game_slug || "game";
+    const oo = o as OfferWithSlugs;
+    const game = oo.game_slug || "game";
     const cat = o.category_slug || "category";
-    const slug = (o as any).product_slug || o.product_id;
+    const slug = oo.product_slug || o.product_id;
     const url = `${window.location.origin}/g/${game}/${cat}/${slug}?offer=${o.id}`;
     try {
       await navigator.clipboard.writeText(url);

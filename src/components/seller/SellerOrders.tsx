@@ -90,9 +90,12 @@ function OrderRow({ o }: { o: OI }) {
                 className="flex items-center gap-1.5"
                 onClick={() =>
                   start(async () => {
-                    const r = await sellerMessageBuyerAction(o.buyer_id, o.code);
-                    if (r.ok && (r as any).id) {
-                      router.push(`/seller/messages?t=${(r as any).id}`);
+                    const r = (await sellerMessageBuyerAction(o.buyer_id, o.code)) as {
+                      ok: boolean;
+                      id?: string;
+                    };
+                    if (r.ok && r.id) {
+                      router.push(`/seller/messages?t=${r.id}`);
                     } else {
                       router.push(`/seller/messages`);
                     }

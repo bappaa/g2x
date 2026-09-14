@@ -528,7 +528,7 @@ export const getSellerOrders = (
   status?: string,
   opts?: { q?: string; limit?: number; offset?: number }
 ) => {
-  const args: any[] = [sellerId];
+  const args: (string | number)[] = [sellerId];
   let where = `WHERE oi.seller_id=?`;
   if (status && status !== "all") {
     where += ` AND oi.status=?`;
@@ -562,7 +562,7 @@ export const countSellerOrders = async (
   status?: string,
   q?: string
 ) => {
-  const args: any[] = [sellerId];
+  const args: (string | number)[] = [sellerId];
   let where = `WHERE oi.seller_id=?`;
   if (status && status !== "all") {
     where += ` AND oi.status=?`;

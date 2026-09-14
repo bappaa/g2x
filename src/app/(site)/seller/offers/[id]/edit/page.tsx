@@ -10,10 +10,38 @@ import { Breadcrumb } from "@/components/ui";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Edit Offer — G2X.GG" };
 
+type OfferDbRow = {
+  id: string;
+  product_id: string;
+  title: string | null;
+  description: string | null;
+  price: number;
+  stock: number;
+  min_qty: number | null;
+  delivery_time: string | null;
+  delivery_method: string | null;
+  region: string | null;
+  platform: string | null;
+  login_method: string | null;
+  instructions: string | null;
+  auto_delivery: number | null;
+  images: string | null;
+  volume_discounts: string | null;
+  accounts_data: string | null;
+  custom_fields: string | null;
+  product_name: string;
+  product_image: string;
+  game_slug: string;
+  category_slug: string;
+  product_slug: string;
+  game_name: string;
+  game_logo: string;
+};
+
 export default async function Page({ params }: { params: { id: string } }) {
   const s = await requireSeller();
 
-  const offer = await one<any>(
+  const offer = await one<OfferDbRow>(
     `SELECT o.*, p.name as product_name, p.image as product_image, p.game_slug, p.category_slug, p.slug as product_slug, g.name as game_name, g.logo as game_logo
      FROM offers o
      JOIN products p ON p.id=o.product_id
@@ -37,7 +65,7 @@ export default async function Page({ params }: { params: { id: string } }) {
     `SELECT name, logo FROM games WHERE slug=?`, [offer.game_slug]
   );
 
-  const sell = mergeSellConfig(cfg, { category_slug: offer.category_slug } as any);
+  const sell = mergeSellConfig(cfg, { category_slug: offer.category_slug } as unknown as Record<string, unknown>);
 
   const [fields, opts] = await Promise.all([
     getFieldTemplates(cfg.slug),
@@ -66,10 +94,9 @@ export default async function Page({ params }: { params: { id: string } }) {
       </div>
 
       <EditOfferForm
-        offer={offer}
+        offer={offer as unknown as { id: string; title: string | null; description: string | null; price: number; stock: number; min_qty: number | null; delivery_time: string | null; delivery_method: string | null; region: string | null; platform: string | null; login_method: string | null; instructions: string | null; auto_delivery: number | null; images: string | null; volume_discounts: string | null; accounts_data: string | null; custom_fields: string | null }}
         config={sell}
         product={product}
-        game={offer.game_slug}
         fields={fields}
         regions={opts.region ?? []}
         platforms={opts.platform ?? []}
