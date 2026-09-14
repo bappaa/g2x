@@ -234,10 +234,6 @@ export default function CheckoutView({
               <span className="muted">{tr("cart.subtotal")}</span>
               <span className="font-semibold">{money(subtotal)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="muted">Service fee (2%)</span>
-              <span className="font-semibold">{money(fee)}</span>
-            </div>
             {gwFee > 0 && (
               <div className="flex justify-between">
                 <span className="muted">

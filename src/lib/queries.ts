@@ -357,6 +357,7 @@ export const getPurchased = (userId: string) =>
 export const getThreads = (userId: string) =>
   all(
     `SELECT t.*,
+            o.code AS order_code,
             CASE WHEN t.buyer_id=? THEN sp.store_name
                  ELSE COALESCE('@' || bu.username, '@user_' || substr(bu.id,-6)) END AS other_name,
             CASE WHEN t.buyer_id=? THEN t.seller_id ELSE t.buyer_id END AS other_id,
@@ -365,6 +366,7 @@ export const getThreads = (userId: string) =>
        FROM threads t
        LEFT JOIN seller_profiles sp ON sp.user_id=t.seller_id
        LEFT JOIN users bu ON bu.id=t.buyer_id
+       LEFT JOIN orders o ON o.id=t.order_id
       WHERE t.buyer_id=? OR t.seller_id=?
       ORDER BY t.updated_at DESC`,
     [userId, userId, userId, userId, userId]
@@ -542,7 +544,7 @@ export const getSellerOrders = (
   const limit = Math.min(opts?.limit ?? 1000, 1000);
   const offset = opts?.offset ?? 0;
   return all(
-    `SELECT oi.*, o.code, o.created_at, o.delivery_uid, o.buyer_note, o.payment_method,
+    `SELECT oi.*, o.id as order_id, o.code, o.created_at, o.delivery_uid, o.buyer_note, o.payment_method,
             COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_name,
             u.email AS buyer_email, o.buyer_id,
             COALESCE(p.category_slug, l.category_slug) AS category_slug

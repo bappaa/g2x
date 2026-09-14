@@ -43,7 +43,8 @@ export default function ListingsView({
     });
 
   const copyLink = async (l: L) => {
-    const url = `${window.location.origin}/g/${l.game_slug}/${l.category_slug}/${l.id}`;
+    // Stable redirect route that always works
+    const url = `${window.location.origin}/listing/${l.id}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(l.id);

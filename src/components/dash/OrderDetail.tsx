@@ -9,7 +9,7 @@ import { Check, Gavel, MessageSquare, Loader2, PartyPopper, ShieldAlert } from "
 import Credentials from "@/components/dash/Credentials";
 import { Btn, Tag, Section, inputCls } from "@/components/ui";
 import { statusTone, label } from "@/lib/fmt";
-import { openDisputeAction, startThreadAction } from "@/lib/actions/shop";
+import { openDisputeAction, startThreadAction, sendMessageAction } from "@/lib/actions/shop";
 import OrderReview from "./OrderReview";
 import LocalTime from "@/components/LocalTime";
 import { img } from "@/lib/img";
@@ -203,7 +203,6 @@ export default function OrderDetail({
             <h3 className="text-[14px] font-bold">Payment</h3>
             <div className="mt-3 space-y-2 text-[12.5px]">
               <Row l="Subtotal" v={money(order.subtotal)} />
-              <Row l="Service fee" v={money(order.fee)} />
               <Row l="Method" v={order.payment_method} />
               <div className="my-2 h-px bg-[var(--line)]" />
               <div className="flex justify-between">
@@ -247,13 +246,20 @@ export default function OrderDetail({
               onClick={() =>
                 start(async () => {
                   const r = await startThreadAction(items[0]?.seller_id, order.code);
-                  if (r.ok) router.push("/dashboard/messages");
+                  if (r.ok) router.push(`/dashboard/messages?t=${r.id}`);
                   else setErr(r.error || "Could not open chat.");
                 })
               }
             >
               <MessageSquare size={13} /> Contact Seller
             </Btn>
+
+            {/* Inline message box for manual delivery */}
+            <div className="mt-3 rounded-xl soft p-3">
+              <div className="mb-2 text-[12px] font-semibold">Message seller — Order {order.code}</div>
+              <div className="mb-2 text-[11px] muted">For manual delivery, chat directly here. Separate thread per order.</div>
+              <MessageBox orderCode={order.code} sellerId={items[0]?.seller_id} />
+            </div>
 
             {!showDispute ? (
               <button
@@ -310,6 +316,56 @@ export default function OrderDetail({
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MessageBox({ orderCode, sellerId }: { orderCode: string; sellerId: string }) {
+  const router = useRouter();
+  const [text, setText] = useState("");
+  const [err, setErr] = useState("");
+  const [pending, start] = useTransition();
+
+  return (
+    <div className="space-y-2">
+      <textarea
+        rows={2}
+        className={inputCls}
+        placeholder={`Message about order ${orderCode}...`}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      {err && <div className="text-[11px] text-rose-400">{err}</div>}
+      <div className="flex gap-2">
+        <Btn
+          className="flex items-center gap-1.5"
+          disabled={pending || !text.trim()}
+          onClick={() =>
+            start(async () => {
+              setErr("");
+              const thr = await startThreadAction(sellerId, orderCode);
+              if (!thr.ok || !thr.id) return setErr(thr.error || "Could not open chat.");
+              const r = await sendMessageAction(thr.id, `[Order ${orderCode}] ${text.trim()}`);
+              if (!r.ok) return setErr(r.error || "Could not send.");
+              setText("");
+              router.push(`/dashboard/messages?t=${thr.id}`);
+            })
+          }
+        >
+          {pending ? <Loader2 size={13} className="animate-spin" /> : <MessageSquare size={13} />}
+          Send
+        </Btn>
+        <Btn
+          variant="ghost"
+          onClick={async () => {
+            const thr = await startThreadAction(sellerId, orderCode);
+            if (thr.ok && thr.id) router.push(`/dashboard/messages?t=${thr.id}`);
+            else router.push("/dashboard/messages");
+          }}
+        >
+          Open chat
+        </Btn>
       </div>
     </div>
   );

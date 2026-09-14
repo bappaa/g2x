@@ -573,8 +573,8 @@ export async function deliverOrderAction(
   credentials: { label: string; value: string }[]
 ): Promise<R> {
   const s = await requireSeller();
-  const item = await one<{ id: string; order_id: string; status: string; title: string }>(
-    `SELECT id, order_id, status, title FROM order_items WHERE id=? AND seller_id=?`,
+  const item = await one<{ id: string; order_id: string; status: string; title: string; seller_net: number }>(
+    `SELECT id, order_id, status, title, seller_net FROM order_items WHERE id=? AND seller_id=?`,
     [itemId, s.id]
   );
   if (!item) return { ok: false, error: "Order item not found." };
@@ -585,9 +585,23 @@ export async function deliverOrderAction(
   if (!clean.length)
     return { ok: false, error: "Add at least one delivery detail (code, login, or note)." };
 
-  const order = await one<{ code: string; buyer_id: string }>(
-    `SELECT code, buyer_id FROM orders WHERE id=?`, [item.order_id]
+  const order = await one<{ code: string; buyer_id: string; total: number }>(
+    `SELECT code, buyer_id, total FROM orders WHERE id=?`, [item.order_id]
   );
+
+  // Block delivery if buyer not verified for orders >= $30
+  if (order) {
+    try {
+      const { kycBlocksDelivery } = await import("../buyer-kyc");
+      const blocked = await kycBlocksDelivery(order.buyer_id, Number(order.total ?? 0));
+      if (blocked) {
+        return {
+          ok: false,
+          error: "Buyer has not verified identity for orders $30+. Please wait until they verify to deliver. The buyer is prompted to verify in their panel.",
+        };
+      }
+    } catch {}
+  }
 
   await tx([
     {
@@ -889,18 +903,74 @@ export async function saveStoreAction(form: FormData): Promise<R> {
   return { ok: true };
 }
 
-export async function sellerMessageBuyerAction(buyerId: string, orderCode?: string): Promise<R> {
+export async function sellerMessageBuyerAction(buyerId: string, orderId?: string): Promise<R> {
   const s = await requireSeller();
-  // Find any existing thread between this buyer and seller (most recent first)
-  // We ignore order_id in lookup to avoid duplicate threads when buyer already messaged
-  const existing = await one<{ id: string }>(
-    `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? ORDER BY updated_at DESC LIMIT 1`,
-    [buyerId, s.id]
-  );
-  if (existing) return { ok: true, id: existing.id };
+  // Separate threads per order so buyer/seller don't get confused
+  if (orderId) {
+    const existing = await one<{ id: string }>(
+      `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? AND order_id=? ORDER BY updated_at DESC LIMIT 1`,
+      [buyerId, s.id, orderId]
+    );
+    if (existing) return { ok: true, id: existing.id };
+  } else {
+    const existing = await one<{ id: string }>(
+      `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? ORDER BY updated_at DESC LIMIT 1`,
+      [buyerId, s.id]
+    );
+    if (existing) return { ok: true, id: existing.id };
+  }
   const id = nid("thr_");
   await run(`INSERT INTO threads (id,buyer_id,seller_id,order_id) VALUES (?,?,?,?)`, [
-    id, buyerId, s.id, orderCode ?? null,
+    id, buyerId, s.id, orderId ?? null,
   ]);
   return { ok: true, id };
+}
+
+export async function sellerOrderMessageAction(input: {
+  buyerId: string;
+  orderId: string;
+  orderCode: string;
+  body: string;
+}): Promise<R> {
+  const s = await requireSeller();
+  const text = input.body.trim();
+  if (text.length < 1) return { ok: false, error: "Message is empty." };
+  if (text.length > 2000) return { ok: false, error: "Message too long (max 2000)." };
+
+  // Find or create thread for this specific order
+  let threadId: string;
+  const existing = await one<{ id: string }>(
+    `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? AND order_id=? LIMIT 1`,
+    [input.buyerId, s.id, input.orderId]
+  );
+  if (existing) {
+    threadId = existing.id;
+  } else {
+    threadId = nid("thr_");
+    await run(`INSERT INTO threads (id,buyer_id,seller_id,order_id) VALUES (?,?,?,?)`, [
+      threadId, input.buyerId, s.id, input.orderId,
+    ]);
+  }
+
+  await run(
+    `INSERT INTO messages (id,thread_id,sender_id,body) VALUES (?,?,?,?)`,
+    [nid("msg_"), threadId, s.id, `[Order ${input.orderCode}] ${text}`]
+  );
+  await run(`UPDATE threads SET updated_at=datetime('now') WHERE id=?`, [threadId]);
+
+  // Notify buyer
+  try {
+    const { one: oneDb } = await import("../db");
+    const buyer = await oneDb<{ email: string }>(`SELECT email FROM users WHERE id=?`, [input.buyerId]);
+    if (buyer?.email) {
+      const { mail } = await import("../mail");
+      await mail.newMessage(buyer.email, {
+        from: "Seller",
+        preview: text.slice(0, 180),
+        href: "/dashboard/messages",
+      });
+    }
+  } catch {}
+
+  return { ok: true, id: threadId };
 }

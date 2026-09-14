@@ -3,17 +3,17 @@ import Image from "next/image";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Truck, XCircle, Plus, Loader2, User, MessageSquare } from "lucide-react";
+import { Truck, XCircle, Plus, Loader2, User, MessageSquare, Send } from "lucide-react";
 import { Btn, Empty, Tag, inputCls } from "@/components/ui";
 import Credentials from "@/components/dash/Credentials";
 import { statusTone, label } from "@/lib/fmt";
-import { deliverOrderAction, cancelOrderItemAction, sellerMessageBuyerAction } from "@/lib/actions/seller";
+import { deliverOrderAction, cancelOrderItemAction, sellerMessageBuyerAction, sellerOrderMessageAction } from "@/lib/actions/seller";
 import LocalTime from "@/components/LocalTime";
 import { img } from "@/lib/img";
 import { useMoney } from "@/components/LocaleProvider";
 
 type OI = {
-  id: string; code: string; title: string; subtitle: string; image: string; qty: number;
+  id: string; order_id: string; code: string; title: string; subtitle: string; image: string; qty: number;
   unit_price: number; line_total: number; seller_net: number;
   status: string; created_at: string; delivery_uid: string; buyer_note: string | null;
   buyer_name: string; buyer_email: string; buyer_id: string; delivery_time: string;
@@ -40,7 +40,8 @@ function OrderRow({ o }: { o: OI }) {
   const [open, setOpen] = useState(false);
   const [fields, setFields] = useState([{ label: "Code", value: "" }]);
   const [reason, setReason] = useState("");
-  const [mode, setMode] = useState<"deliver" | "cancel" | null>(null);
+  const [mode, setMode] = useState<"deliver" | "cancel" | "message" | null>(null);
+  const [msgText, setMsgText] = useState("");
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
 
@@ -60,8 +61,8 @@ function OrderRow({ o }: { o: OI }) {
         </div>
         <Tag tone={statusTone(o.status)}>{label(o.status)}</Tag>
         <div className="text-right">
-          <div className="text-[14px] font-black text-brand-500">{money(o.line_total)}</div>
-          <div className="text-[10.5px] muted">net {money(o.seller_net)}</div>
+          <div className="text-[14px] font-black text-brand-500">{money(o.seller_net)}</div>
+          <div className="text-[10.5px] muted">×{o.qty}</div>
         </div>
       </button>
 
@@ -70,6 +71,7 @@ function OrderRow({ o }: { o: OI }) {
           <div className="grid gap-2 sm:grid-cols-2">
             <Info l="Buyer" v={o.buyer_name} icon={User} />
             <Info l="Delivery UID" v={o.delivery_uid} />
+            <Info l="Order ID" v={o.code} />
             <Info l="Quantity" v={`${o.qty} × ${money(o.unit_price)}`} />
             {o.opt_region && <Info l="Game server" v={o.opt_region} />}
             {o.opt_delivery && <Info l="Delivery method" v={o.opt_delivery} />}
@@ -88,9 +90,35 @@ function OrderRow({ o }: { o: OI }) {
               <Btn
                 variant="ghost"
                 className="flex items-center gap-1.5"
+                onClick={() => setMode("message")}
+              >
+                <MessageSquare size={13} /> Message buyer
+              </Btn>
+              <button
+                onClick={() => setMode("cancel")}
+                className="flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-[12.5px] font-semibold text-rose-400 hover:bg-rose-500/10"
+              >
+                <XCircle size={13} /> Cancel & refund
+              </button>
+            </div>
+          )}
+
+          {/* Always show message box option even when not processing, for manual delivery */}
+          {!canAct && mode === null && (
+            <div className="flex flex-wrap gap-2">
+              <Btn
+                variant="ghost"
+                className="flex items-center gap-1.5"
+                onClick={() => setMode("message")}
+              >
+                <MessageSquare size={13} /> Message buyer (Order {o.code})
+              </Btn>
+              <Btn
+                variant="ghost"
+                className="flex items-center gap-1.5"
                 onClick={() =>
                   start(async () => {
-                    const r = (await sellerMessageBuyerAction(o.buyer_id, o.code)) as {
+                    const r = (await sellerMessageBuyerAction(o.buyer_id, o.order_id)) as {
                       ok: boolean;
                       id?: string;
                     };
@@ -102,14 +130,68 @@ function OrderRow({ o }: { o: OI }) {
                   })
                 }
               >
-                <MessageSquare size={13} /> Message buyer
+                <MessageSquare size={13} /> Open full chat
               </Btn>
-              <button
-                onClick={() => setMode("cancel")}
-                className="flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-[12.5px] font-semibold text-rose-400 hover:bg-rose-500/10"
-              >
-                <XCircle size={13} /> Cancel & refund
-              </button>
+            </div>
+          )}
+
+          {mode === "message" && (
+            <div className="rounded-xl soft p-3 space-y-2">
+              <div className="text-[12px] font-semibold">Message buyer — Order {o.code}</div>
+              <div className="text-[11px] muted">This creates a separate thread for this order so you do not get confused. Buyer sees order ID.</div>
+              <textarea
+                rows={3}
+                className={inputCls}
+                placeholder={`Hi ${o.buyer_name}, regarding order ${o.code}...`}
+                value={msgText}
+                onChange={(e) => setMsgText(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <Btn
+                  className="flex items-center gap-2"
+                  disabled={pending || !msgText.trim()}
+                  onClick={() =>
+                    start(async () => {
+                      setErr("");
+                      const r = await sellerOrderMessageAction({
+                        buyerId: o.buyer_id,
+                        orderId: o.order_id,
+                        orderCode: o.code,
+                        body: msgText,
+                      });
+                      if (!r.ok) return setErr(r.error || "Could not send message.");
+                      setMsgText("");
+                      setMode(null);
+                      // Optionally go to full chat
+                      if (r.id) router.push(`/seller/messages?t=${r.id}`);
+                      else router.refresh();
+                    })
+                  }
+                >
+                  {pending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                  Send message
+                </Btn>
+                <Btn variant="ghost" onClick={() => setMode(null)}>Cancel</Btn>
+                <Btn
+                  variant="ghost"
+                  className="ml-auto"
+                  onClick={() =>
+                    start(async () => {
+                      const r = (await sellerMessageBuyerAction(o.buyer_id, o.order_id)) as {
+                        ok: boolean;
+                        id?: string;
+                      };
+                      if (r.ok && r.id) {
+                        router.push(`/seller/messages?t=${r.id}`);
+                      } else {
+                        router.push(`/seller/messages`);
+                      }
+                    })
+                  }
+                >
+                  Open chat
+                </Btn>
+              </div>
             </div>
           )}
 

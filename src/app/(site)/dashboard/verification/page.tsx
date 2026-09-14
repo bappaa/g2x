@@ -27,6 +27,21 @@ export default async function Page({ searchParams }: { searchParams: { after?: s
   /** Set when we arrived straight from a completed payment. */
   const justPaid = searchParams.after;
 
+  // If already verified, hide verification UI entirely for cleaner dashboard
+  const isVerified = current?.status === "approved";
+  if (isVerified && !justPaid) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-emerald-500/20 text-emerald-400">✓</div>
+          <h1 className="mt-3 text-[18px] font-black">You are verified</h1>
+          <p className="mt-1 text-[12px] muted">Identity verification completed. All limits lifted. This section is now hidden for a cleaner UI.</p>
+          <a href="/dashboard" className="mt-4 inline-flex rounded-lg bg-brand-600 px-4 py-2 text-[12px] font-bold text-white hover:bg-brand-500">Go to Dashboard</a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div>

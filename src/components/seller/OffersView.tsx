@@ -73,15 +73,13 @@ export default function OffersView({
     });
 
   const copyLink = async (o: Offer) => {
-    let url = "";
-    if (o.kind === "listing") {
-      // listing detail page: /g/[game]/[category]/[id]
-      url = `${window.location.origin}/g/${o.game_slug}/${o.category_slug}/${o.id}`;
-    } else {
-      // offer: product page with offer id highlighted
-      const slug = o.product_slug || o.product_id || o.id;
-      url = `${window.location.origin}/g/${o.game_slug}/${o.category_slug}/${slug}?offer=${o.id}`;
-    }
+    // Use stable redirect routes that always work, even if slugs change
+    // /offer/[id] -> redirects to /g/[game]/[category]/[product]?offer=[id]
+    // /listing/[id] -> redirects to /g/[game]/[category]/[id]
+    const url =
+      o.kind === "listing"
+        ? `${window.location.origin}/listing/${o.id}`
+        : `${window.location.origin}/offer/${o.id}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(o.id);

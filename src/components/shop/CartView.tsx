@@ -152,7 +152,6 @@ export default function CartView({ items }: { items: CartRow[] }) {
           <h3 className="text-[14px] font-bold">Order Summary</h3>
           <div className="mt-3 space-y-2 text-[12.5px]">
             <Row l={`Subtotal (${rows.reduce((t, r) => t + r.qty, 0)} items)`} v={money(subtotal)} />
-            <Row l="Service fee (2%)" v={money(fee)} />
             <div className="my-2 h-px bg-[var(--line)]" />
             <div className="flex items-center justify-between">
               <span className="text-[13px] font-bold">Total</span>

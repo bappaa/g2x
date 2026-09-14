@@ -29,6 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           orders={Number(stats?.orders ?? 0)}
           unread={unread}
           isSeller={!!u.isSeller}
+          kycStatus={u.kycStatus}
         />
       }
     >

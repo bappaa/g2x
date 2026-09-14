@@ -47,10 +47,17 @@ const groups = [
 ];
 
 export default function DashboardNav({
-  name, username, balance, orders, unread, isSeller,
+  name, username, balance, orders, unread, isSeller, kycStatus,
 }: {
-  name: string; username: string | null; balance: number; orders: number; unread: number; isSeller: boolean;
+  name: string; username: string | null; balance: number; orders: number; unread: number; isSeller: boolean; kycStatus?: string | null;
 }) {
+  const isVerified = kycStatus === "approved";
+  const filteredGroups = groups.map(g => {
+    if (g.title === "Account" && isVerified) {
+      return { ...g, links: g.links.filter(l => l.href !== "/dashboard/verification") };
+    }
+    return g;
+  });
   const money = useMoney();
   const path = usePathname();
 
@@ -78,7 +85,7 @@ export default function DashboardNav({
       </div>
 
       <nav className="mt-4 space-y-3.5">
-          {groups.map((g) => (
+          {filteredGroups.map((g) => (
             <div key={g.title}>
               <div className="mb-1.5 px-2 text-[9.5px] font-bold uppercase tracking-widest muted group-data-[collapsed=true]/rail:hidden">
                 {g.title}

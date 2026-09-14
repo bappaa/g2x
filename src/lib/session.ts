@@ -35,6 +35,7 @@ export type SessionUser = {
   createdAt: string;
   sellerStatus?: string | null;
   storeName?: string | null;
+  kycStatus?: string | null;
 };
 
 export async function createSession(userId: string, ip?: string, ua?: string) {
@@ -120,6 +121,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     createdAt: String(row.created_at),
     sellerStatus: (row.seller_status as string) ?? null,
     storeName: (row.store_name as string) ?? null,
+    kycStatus: (row.kyc_status as string) ?? null,
   };
 }
 
