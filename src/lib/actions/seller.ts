@@ -907,7 +907,7 @@ export async function saveStoreAction(form: FormData): Promise<R> {
     finalUsername = `${usernameCandidate}_${Math.random().toString(36).slice(2,6)}`.slice(0,15);
   }
 
-  const storeNameChanged = existingStoreName.toLowerCase() !== storeName.toLowerCase();
+  const storeNameChanged = existingStoreName.trim() !== storeName.trim();
   let willChangeUsername = finalUsername.toLowerCase() !== currentUsername.toLowerCase() && finalUsername.length >= 3;
 
   // If store name changed but slug produces same username, force a different username so fee logic applies
@@ -918,6 +918,15 @@ export async function saveStoreAction(form: FormData): Promise<R> {
     const takenVariant = await one(`SELECT id FROM users WHERE username=? AND id<>?`, [variant, s.id]);
     finalUsername = takenVariant ? `${usernameCandidate}_${Math.random().toString(36).slice(2,6)}`.slice(0,15) : variant;
     willChangeUsername = finalUsername.toLowerCase() !== currentUsername.toLowerCase();
+  }
+
+  // Also if store name changed, treat as username change even if finalUsername would be same after forcing
+  if (storeNameChanged) {
+    willChangeUsername = true;
+    // Ensure finalUsername is different if still same after previous logic
+    if (finalUsername.toLowerCase() === currentUsername.toLowerCase()) {
+      finalUsername = `${usernameCandidate}_${Math.random().toString(36).slice(2,5)}`.slice(0,15);
+    }
   }
 
   let fee = 0;
