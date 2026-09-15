@@ -884,8 +884,8 @@ export async function saveStoreAction(form: FormData): Promise<R> {
   }
 
   // Build dynamic update
-  const existing = await one<{ logo: string | null; banner: string | null; store_name: string | null; slug: string | null }>(
-    `SELECT logo, banner, store_name, slug FROM seller_profiles WHERE user_id=?`, [s.id]
+  const existing = await one<{ logo: string | null; banner: string | null; store_name: string | null; slug: string | null; available_bal: number }>(
+    `SELECT logo, banner, store_name, slug, available_bal FROM seller_profiles WHERE user_id=?`, [s.id]
   );
   const finalLogo = logoData === undefined ? existing?.logo ?? null : logoData;
   const finalBanner = bannerData === undefined ? existing?.banner ?? null : bannerData;
@@ -898,6 +898,7 @@ export async function saveStoreAction(form: FormData): Promise<R> {
   const used = Number(userRow?.username_changes ?? 0);
   const balance = Number(userRow?.balance ?? 0);
   const existingStoreName = (existing?.store_name ?? "").trim();
+  const availableBal = Number(existing?.available_bal ?? 0);
 
   let usernameCandidate = slug.replace(/-/g, "_").slice(0, 15);
   if (usernameCandidate.length < 3) usernameCandidate = `${usernameCandidate}_store`.slice(0,15);
@@ -932,19 +933,29 @@ export async function saveStoreAction(form: FormData): Promise<R> {
   let fee = 0;
   if (willChangeUsername) {
     fee = used >= FREE_CHANGES ? await usernameChangeFee() : 0;
-    if (fee > 0 && balance < fee) {
-      return { ok: false, error: `Changing store name changes your username and costs $${fee.toFixed(2)}. Your wallet has $${balance.toFixed(2)} — top up first.` };
+    if (fee > 0) {
+      // Must have enough in wallet AND in available balance (seller earnings)
+      if (balance < fee) {
+        return { ok: false, error: `Changing store name changes your username and costs $${fee.toFixed(2)}. Your wallet has $${balance.toFixed(2)} — top up first.` };
+      }
+      if (availableBal < fee) {
+        return { ok: false, error: `Changing store name costs $${fee.toFixed(2)} but your available balance is $${availableBal.toFixed(2)} — you need earnings to cover it.` };
+      }
     }
   }
 
   // Transaction: update store + username + fee
+  // Fee is deducted from available balance (seller earnings) AND wallet, per user request
   const stmts: { sql: string; args: unknown[] }[] = [
     {
       sql: `UPDATE seller_profiles SET store_name=?, slug=?, description=?, logo=?, banner=?,
-            payout_method=?, payout_detail=?, whatsapp=?, telegram=?, discord=? WHERE user_id=?`,
+            payout_method=?, payout_detail=?, whatsapp=?, telegram=?, discord=?,
+            available_bal = available_bal - ?
+            WHERE user_id=?`,
       args: [storeName, slug, description, finalLogo, finalBanner,
              payoutMethod || null, payoutDetail || null,
-             whatsapp || null, telegram || null, discord || null, s.id],
+             whatsapp || null, telegram || null, discord || null,
+             willChangeUsername && fee > 0 ? fee : 0, s.id],
     },
   ];
 
@@ -971,6 +982,7 @@ export async function saveStoreAction(form: FormData): Promise<R> {
   }
 
   revalidatePath("/seller/store");
+  revalidatePath("/seller/finance");
   revalidatePath("/", "layout");
   return { ok: true };
 }
