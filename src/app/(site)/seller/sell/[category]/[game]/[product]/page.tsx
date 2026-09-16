@@ -2,7 +2,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { requireSeller } from "@/lib/session";
 import { one } from "@/lib/db";
-import { getSellConfig, getFieldTemplates, getOptionLists, mergeSellConfig } from "@/lib/queries";
+import { getSellConfig, getFieldTemplates, getOptionLists, mergeSellConfig, getGameOfferFields } from "@/lib/queries";
 import { SellCrumbs, SellHeader } from "@/components/seller/SellWizard";
 import OfferForm from "@/components/seller/OfferForm";
 import { img } from "@/lib/img";
@@ -49,11 +49,11 @@ export default async function Page({
   // Product overrides win over the category defaults.
   const sell = mergeSellConfig(cfg, product);
 
-  // Dropdown values are all admin-managed option lists.
-  const [fields, opts] = await Promise.all([
+  // Dropdown values are all admin-managed option lists + game-specific cascading fields.
+  const [fields, opts, gameFields] = await Promise.all([
     getFieldTemplates(cfg.slug),
-    // One query for all five dropdowns instead of five round-trips.
     getOptionLists(["region", "platform", "delivery_method", "delivery_time", "login_method"]),
+    getGameOfferFields(params.game),
   ]);
   const regions = opts.region ?? [];
   const platforms = opts.platform ?? [];
@@ -97,6 +97,7 @@ export default async function Page({
         deliveryMethods={deliveryMethods}
         deliveryTimes={deliveryTimes}
         loginMethods={loginMethods}
+        gameFields={gameFields as never}
       />
     </div>
   );

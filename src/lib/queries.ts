@@ -941,3 +941,27 @@ export const getOptionList = unstable_cache(
   ["option-list"],
   { tags: ["catalog", "options"], revalidate: 300 }
 );
+
+/** Game-specific cascading offer fields (Region -> Realm -> Faction) — admin configures per game */
+export const getGameOfferFields = unstable_cache(
+  (gameSlug: string) =>
+    all<{
+      id: string; game_slug: string; field_key: string; label: string;
+      field_type: string; options: string | null;
+      parent_field: string | null; parent_value: string | null;
+      sort_order: number; required: number;
+    }>(
+      `SELECT * FROM game_offer_fields WHERE game_slug=? ORDER BY sort_order, label`,
+      [gameSlug]
+    ),
+  ["game-offer-fields"],
+  { tags: ["catalog", "game-fields"], revalidate: 300 }
+);
+
+export const getAllGameOfferFields = () =>
+  all<{
+    id: string; game_slug: string; field_key: string; label: string;
+    field_type: string; options: string | null;
+    parent_field: string | null; parent_value: string | null;
+    sort_order: number; required: number;
+  }>(`SELECT * FROM game_offer_fields ORDER BY game_slug, sort_order`);

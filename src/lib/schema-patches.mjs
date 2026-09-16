@@ -161,6 +161,23 @@ export const PATCHES = [
   `ALTER TABLE seller_profiles ADD COLUMN whatsapp TEXT`,
   `ALTER TABLE seller_profiles ADD COLUMN telegram TEXT`,
   `ALTER TABLE seller_profiles ADD COLUMN discord TEXT`,
+
+  // --- Phase 36: game-specific cascading offer fields (Region -> Realm -> Faction etc) ---
+  `CREATE TABLE IF NOT EXISTS game_offer_fields (
+     id TEXT PRIMARY KEY,
+     game_slug TEXT NOT NULL,
+     field_key TEXT NOT NULL,
+     label TEXT NOT NULL,
+     field_type TEXT NOT NULL DEFAULT 'dropdown',
+     options TEXT,
+     parent_field TEXT,
+     parent_value TEXT,
+     sort_order INTEGER NOT NULL DEFAULT 0,
+     required INTEGER NOT NULL DEFAULT 1,
+     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_game_offer_fields_game ON game_offer_fields(game_slug)`,
+  `CREATE INDEX IF NOT EXISTS idx_game_offer_fields_parent ON game_offer_fields(game_slug, parent_field)`,
 ];
 
 /** Errors that mean "already applied" — expected on every run after the first. */

@@ -150,6 +150,12 @@ export const adminProductsCount = (opts: { game?: string; category?: string; q?:
 export const adminTemplates = (category: string) =>
   all(`SELECT * FROM field_templates WHERE category_slug=? ORDER BY sort_order`, [category]);
 
+export const adminGameOfferFields = (gameSlug: string) =>
+  all(`SELECT * FROM game_offer_fields WHERE game_slug=? ORDER BY sort_order, label`, [gameSlug]);
+
+export const adminAllGameOfferFields = () =>
+  all(`SELECT * FROM game_offer_fields ORDER BY game_slug, sort_order`);
+
 /* ============================== offers ============================= */
 
 export const adminOffers = (opts: { q?: string; status?: string; limit?: number }) => {

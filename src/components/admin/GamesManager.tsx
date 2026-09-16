@@ -8,18 +8,26 @@ import { Btn, Tag, Field, inputCls, Empty } from "@/components/ui";
 import { Table, Tr, Td, Toolbar, IconAction } from "@/components/admin/ui";
 import ImagePicker from "@/components/admin/ImagePicker";
 import { saveGameAction, deleteGameAction, toggleGameAction } from "@/lib/actions/admin";
+import GameOfferFieldsEditor from "./GameOfferFieldsEditor";
 
 type G = {
   slug: string; name: string; logo: string; accent: string; status: string;
   sort_order: number; categories: number; products: number; cat_slugs: string | null;
 };
 type C = { slug: string; name: string };
+type GF = {
+  id: string; game_slug: string; field_key: string; label: string;
+  field_type: string; options: string | null;
+  parent_field: string | null; parent_value: string | null;
+  sort_order: number; required: number;
+};
 
 export default function GamesManager({
-  games, categories, page = 1, perPage = 40, total = 0, query = "",
+  games, categories, page = 1, perPage = 40, total = 0, query = "", allFields = [],
 }: {
   games: G[]; categories: C[];
   page?: number; perPage?: number; total?: number; query?: string;
+  allFields?: GF[];
 }) {
   const router = useRouter();
   const [q, setQ] = useState(query);
@@ -155,6 +163,7 @@ export default function GamesManager({
           <GameForm
             game={edit === "new" ? null : edit}
             categories={categories}
+            allFields={allFields}
             onClose={() => setEdit(null)}
           />
         )}
@@ -163,7 +172,7 @@ export default function GamesManager({
   );
 }
 
-function GameForm({ game, categories, onClose }: { game: G | null; categories: C[]; onClose: () => void }) {
+function GameForm({ game, categories, allFields, onClose }: { game: G | null; categories: C[]; allFields: GF[]; onClose: () => void }) {
   const router = useRouter();
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
@@ -263,6 +272,18 @@ function GameForm({ game, categories, onClose }: { game: G | null; categories: C
           </Btn>
           <Btn variant="ghost" type="button" onClick={onClose}>Cancel</Btn>
         </div>
+
+        {game && (
+          <GameOfferFieldsEditor
+            gameSlug={game.slug}
+            initialFields={allFields.filter((f) => f.game_slug === game.slug)}
+          />
+        )}
+        {!game && (
+          <div className="rounded-xl border border-dashed border-[var(--line)] p-3 text-center text-[11px] muted">
+            Save the game first, then edit it to configure cascading offer fields (Region → Realm → Faction).
+          </div>
+        )}
       </motion.form>
     </motion.div>
   );

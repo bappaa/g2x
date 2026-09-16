@@ -23,6 +23,12 @@ export type FieldTpl = {
   options: string | null; required: number;
 };
 export type Opt = { value: string; label: string };
+export type GameField = {
+  id: string; game_slug: string; field_key: string; label: string;
+  field_type: string; options: string | null;
+  parent_field: string | null; parent_value: string | null;
+  sort_order: number; required: number;
+};
 export type AccountSet = {
   login: string; password: string; url: string;
   emailLogin: string; emailPassword: string;
@@ -124,7 +130,7 @@ async function downscale(file: File, max = 1280, quality = 0.82): Promise<string
 }
 
 export default function OfferForm({
-  config, product, game, fields, regions, platforms, deliveryMethods, deliveryTimes, loginMethods,
+  config, product, game, fields, regions, platforms, deliveryMethods, deliveryTimes, loginMethods, gameFields = [],
 }: {
   config: SellConfig;
   product: { id: string; name: string; image: string; base_price: number };
@@ -135,6 +141,7 @@ export default function OfferForm({
   deliveryMethods: Opt[];
   deliveryTimes: Opt[];
   loginMethods: Opt[];
+  gameFields?: GameField[];
 }) {
   const router = useRouter();
   const money = useMoney();
@@ -155,6 +162,7 @@ export default function OfferForm({
   const [region, setRegion] = useState("");
   const [platform, setPlatform] = useState("");
   const [loginMethod, setLoginMethod] = useState("");
+  const [gameVals, setGameVals] = useState<Record<string, string>>({});
   /**
    * Fulfilment mode.
    *
@@ -185,6 +193,71 @@ export default function OfferForm({
   const [err, setErr] = useState("");
 
   const priceNum = Number(price) || 0;
+
+  // --- Game-specific cascading fields helpers ---
+  const getGameFieldOptions = (f: GameField): string[] => {
+    if (!f.options) return [];
+    try {
+      const parsed = JSON.parse(f.options);
+      if (Array.isArray(parsed)) return parsed.map(String);
+      if (typeof parsed === "object" && parsed !== null) {
+        // If object mapping parent value -> array, look up by parent value
+        if (f.parent_field) {
+          const parentVal = gameVals[f.parent_field] || (f.parent_field === "region" ? region : f.parent_field === "platform" ? platform : "");
+          if (parentVal && parsed[parentVal]) {
+            const v = parsed[parentVal];
+            return Array.isArray(v) ? v.map(String) : [String(v)];
+          }
+          // If parent_value is set and we have exact match, return its array
+          if (f.parent_value && parsed[f.parent_value]) {
+            const v = parsed[f.parent_value];
+            return Array.isArray(v) ? v.map(String) : [String(v)];
+          }
+          // Otherwise flatten all values if no parent selected yet? return empty to force selection
+          return [];
+        }
+        // If options is object without parent logic, return its values flattened or keys?
+        // For simple case where options is {"NA": ["Penance"]}, if no parent, return keys as options
+        // But for region field itself, options is array, so we already returned
+        // If object and no parent_field, return keys
+        return Object.keys(parsed);
+      }
+      return [];
+    } catch {
+      // comma separated fallback
+      return f.options.split(",").map((x) => x.trim()).filter(Boolean);
+    }
+  };
+
+  const isGameFieldVisible = (f: GameField): boolean => {
+    if (!f.parent_field) return true;
+    const parentVal = gameVals[f.parent_field] || (f.parent_field === "region" ? region : f.parent_field === "platform" ? platform : "");
+    if (!parentVal) return false;
+    if (f.parent_value && parentVal !== f.parent_value) return false;
+    return true;
+  };
+
+  const setGameVal = (key: string, val: string) => {
+    setGameVals((prev) => {
+      const next = { ...prev, [key]: val };
+      // When parent changes, clear children that depend on it
+      const toClear: string[] = [];
+      const findChildren = (parentKey: string) => {
+        for (const gf of gameFields) {
+          if (gf.parent_field === parentKey) {
+            toClear.push(gf.field_key);
+            findChildren(gf.field_key);
+          }
+        }
+      };
+      findChildren(key);
+      for (const c of toClear) delete next[c];
+      return next;
+    });
+    // Also sync to legacy region/platform if field_key is region/platform
+    if (key === "region") setRegion(val);
+    if (key === "platform") setPlatform(val);
+  };
 
   const setAcc = (i: number, k: keyof AccountSet, v: string) =>
     setAccounts((a) => a.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
@@ -231,6 +304,15 @@ export default function OfferForm({
       if (f.required && !String(custom[f.field_key] ?? "").trim())
         return setErr(`${f.label} is required.`);
     }
+    // Validate game-specific cascading fields
+    for (const gf of gameFields) {
+      if (!isGameFieldVisible(gf)) continue;
+      if (gf.required && !String(gameVals[gf.field_key] ?? "").trim()) {
+        // For region that also has legacy state, check region
+        if (gf.field_key === "region" && region) continue;
+        return setErr(`${gf.label} is required.`);
+      }
+    }
     if (!agreeTos || !agreeRules) return setErr("Please accept the Terms of Service and Seller Rules.");
 
     busy.current = true;
@@ -264,6 +346,11 @@ export default function OfferForm({
         );
         if (config.needs_credentials) fd.set("accounts", JSON.stringify(accounts));
         Object.entries(custom).forEach(([k, v]) => fd.set("cf_" + k, v));
+        // Include game-specific cascading fields as cf_ as well
+        Object.entries(gameVals).forEach(([k, v]) => fd.set("cf_" + k, v));
+        // Also ensure region/platform from gameVals override legacy if present
+        if (gameVals["region"]) fd.set("region", gameVals["region"]);
+        if (gameVals["platform"]) fd.set("platform", gameVals["platform"]);
 
         /**
          * A rejected request (413, gateway timeout, dropped connection) makes
@@ -511,8 +598,50 @@ export default function OfferForm({
           </div>
         )}
 
+        {/* Game-specific cascading fields from admin (Region -> Realm -> Faction etc) */}
+        {gameFields.length > 0 && (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {gameFields
+              .slice()
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map((gf) => {
+                if (!isGameFieldVisible(gf)) return null;
+                const opts = getGameFieldOptions(gf);
+                // If this game field is region and we have global regions but game defines its own, prefer game options
+                const isRegionKey = gf.field_key === "region";
+                const fallbackOpts = isRegionKey && opts.length === 0 ? regions.map((r) => r.label) : [];
+                const finalOpts = opts.length > 0 ? opts : fallbackOpts;
+                return (
+                  <div key={gf.id}>
+                    <Label req={!!gf.required}>{gf.label}</Label>
+                    {gf.field_type === "dropdown" ? (
+                      <select
+                        value={gameVals[gf.field_key] ?? (gf.field_key === "region" ? region : "")}
+                        onChange={(e) => setGameVal(gf.field_key, e.target.value)}
+                        className={field}
+                      >
+                        <option value="">Select {gf.label}</option>
+                        {finalOpts.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={gameVals[gf.field_key] ?? ""}
+                        onChange={(e) => setGameVal(gf.field_key, e.target.value)}
+                        placeholder={`Enter ${gf.label}`}
+                        className={field}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        )}
+
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {regions.length > 0 && config.show_region !== 0 && (
+          {/* Only show global region/platform if game doesn't already define them */}
+          {regions.length > 0 && config.show_region !== 0 && !gameFields.some((gf) => gf.field_key === "region") && (
             <div>
               <Label>Region</Label>
               <select value={region} onChange={(e) => setRegion(e.target.value)} className={field}>
@@ -523,7 +652,7 @@ export default function OfferForm({
               </select>
             </div>
           )}
-          {platforms.length > 0 && config.show_platform !== 0 && (
+          {platforms.length > 0 && config.show_platform !== 0 && !gameFields.some((gf) => gf.field_key === "platform") && (
             <div>
               <Label>Platform</Label>
               <select value={platform} onChange={(e) => setPlatform(e.target.value)} className={field}>

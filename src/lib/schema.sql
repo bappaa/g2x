@@ -92,6 +92,23 @@ CREATE TABLE IF NOT EXISTS field_templates (
   sort_order     INTEGER NOT NULL DEFAULT 0
 );
 
+-- Game-specific cascading offer fields (Region -> Realm -> Faction etc) — admin configures per game
+CREATE TABLE IF NOT EXISTS game_offer_fields (
+  id            TEXT PRIMARY KEY,
+  game_slug     TEXT NOT NULL REFERENCES games(slug) ON DELETE CASCADE,
+  field_key     TEXT NOT NULL,
+  label         TEXT NOT NULL,
+  field_type    TEXT NOT NULL DEFAULT 'dropdown',
+  options       TEXT,             -- JSON: array or object mapping parent_value -> array
+  parent_field  TEXT,             -- field_key of parent that triggers this
+  parent_value  TEXT,             -- specific parent value required (NULL = any value)
+  sort_order    INTEGER NOT NULL DEFAULT 0,
+  required      INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_game_offer_fields_game ON game_offer_fields(game_slug);
+CREATE INDEX IF NOT EXISTS idx_game_offer_fields_parent ON game_offer_fields(game_slug, parent_field);
+
 -- ---------------------------- sellers ----------------------------
 
 CREATE TABLE IF NOT EXISTS seller_profiles (

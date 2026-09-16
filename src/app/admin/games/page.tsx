@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/admin";
-import { adminGamesPage, adminGamesCount, adminCategories } from "@/lib/queries-admin";
+import { adminGamesPage, adminGamesCount, adminCategories, adminAllGameOfferFields } from "@/lib/queries-admin";
 import { AdminPage } from "@/components/admin/ui";
 import GamesManager from "@/components/admin/GamesManager";
 
@@ -17,14 +17,15 @@ export default async function Page({
   const page = Math.max(1, Number(searchParams.page ?? 1) || 1);
   const q = searchParams.q?.trim() || undefined;
 
-  const [games, total, cats] = await Promise.all([
+  const [games, total, cats, allFields] = await Promise.all([
     adminGamesPage({ q, limit: PER_PAGE, offset: (page - 1) * PER_PAGE }),
     adminGamesCount(q),
     adminCategories(),
+    adminAllGameOfferFields(),
   ]);
 
   return (
-    <AdminPage title="Games" sub="Add or remove any game and choose which category pages it appears on.">
+    <AdminPage title="Games" sub="Add or remove any game and choose which category pages it appears on. Configure cascading offer fields per game.">
       <GamesManager
         games={games as never}
         categories={cats as never}
@@ -32,6 +33,7 @@ export default async function Page({
         perPage={PER_PAGE}
         total={Number(total?.n ?? 0)}
         query={searchParams.q ?? ""}
+        allFields={allFields as never}
       />
     </AdminPage>
   );

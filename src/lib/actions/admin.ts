@@ -168,6 +168,88 @@ export async function reorderGamesAction(order: string[]): Promise<R> {
 }
 
 /* ==================================================================== */
+/* GAME OFFER FIELDS — cascading Region -> Realm -> Faction etc         */
+/* ==================================================================== */
+
+export async function saveGameOfferFieldAction(form: FormData): Promise<R> {
+  const a = await requireAdmin("catalog");
+  const id = String(form.get("id") ?? "").trim() || nid("gf_");
+  const gameSlug = sanitizeSlug(String(form.get("gameSlug") ?? "").trim());
+  const fieldKey = sanitizeSlug(String(form.get("fieldKey") ?? "").trim()).replace(/-/g, "_");
+  const label = sanitizeName(String(form.get("label") ?? "").trim(), 80);
+  const fieldType = String(form.get("fieldType") ?? "dropdown").trim() || "dropdown";
+  const parentField = sanitizeSlug(String(form.get("parentField") ?? "").trim()).replace(/-/g, "_") || null;
+  const parentValue = String(form.get("parentValue") ?? "").trim() || null;
+  const required = form.get("required") ? 1 : 0;
+  const sortOrder = Math.floor(num(form.get("sortOrder"), 0));
+
+  // options can be JSON or comma separated
+  const optionsRaw = String(form.get("options") ?? "").trim();
+  let optionsJson = optionsRaw;
+  if (optionsRaw) {
+    try {
+      const parsed = JSON.parse(optionsRaw);
+      optionsJson = JSON.stringify(parsed);
+    } catch {
+      // comma separated -> array
+      const arr = optionsRaw.split(",").map(s => s.trim()).filter(Boolean);
+      optionsJson = JSON.stringify(arr);
+    }
+  } else {
+    optionsJson = JSON.stringify([]);
+  }
+
+  if (!gameSlug) return { ok: false, error: "Game slug required" };
+  if (!fieldKey) return { ok: false, error: "Field key required (e.g. region, realm, faction)" };
+  if (!label) return { ok: false, error: "Label required" };
+
+  const game = await one(`SELECT slug FROM games WHERE slug=?`, [gameSlug]);
+  if (!game) return { ok: false, error: "Game not found" };
+
+  // upsert
+  const existing = await one(`SELECT id FROM game_offer_fields WHERE id=?`, [id]);
+  if (existing) {
+    await run(
+      `UPDATE game_offer_fields SET game_slug=?, field_key=?, label=?, field_type=?, options=?, parent_field=?, parent_value=?, sort_order=?, required=? WHERE id=?`,
+      [gameSlug, fieldKey, label, fieldType, optionsJson, parentField, parentValue, sortOrder, required, id]
+    );
+  } else {
+    // check duplicate field_key for same game + same parent_value combo
+    const dupe = await one(
+      `SELECT id FROM game_offer_fields WHERE game_slug=? AND field_key=? AND COALESCE(parent_field,'')=COALESCE(?, '') AND COALESCE(parent_value,'')=COALESCE(?, '') AND id<>?`,
+      [gameSlug, fieldKey, parentField, parentValue, id]
+    );
+    if (dupe) return { ok: false, error: `Field ${fieldKey} already exists for this game with same parent condition` };
+    await run(
+      `INSERT INTO game_offer_fields (id, game_slug, field_key, label, field_type, options, parent_field, parent_value, sort_order, required) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [id, gameSlug, fieldKey, label, fieldType, optionsJson, parentField, parentValue, sortOrder, required]
+    );
+  }
+
+  await audit(a.id, "game.field.save", `${gameSlug}:${fieldKey}`);
+  bustCatalog();
+  revalidatePath("/admin/games");
+  return { ok: true, id };
+}
+
+export async function deleteGameOfferFieldAction(id: string): Promise<R> {
+  const a = await requireAdmin("catalog");
+  await run(`DELETE FROM game_offer_fields WHERE id=?`, [id]);
+  await audit(a.id, "game.field.delete", id);
+  bustCatalog();
+  revalidatePath("/admin/games");
+  return { ok: true };
+}
+
+export async function reorderGameOfferFieldsAction(gameSlug: string, order: string[]): Promise<R> {
+  const a = await requireAdmin("catalog");
+  await tx(order.map((id, i) => ({ sql: `UPDATE game_offer_fields SET sort_order=? WHERE id=? AND game_slug=?`, args: [i, id, gameSlug] })) as never);
+  await audit(a.id, "game.field.reorder", `${gameSlug}:${order.length}`);
+  bustCatalog();
+  return { ok: true };
+}
+
+/* ==================================================================== */
 /* CATEGORIES                                                           */
 /* ==================================================================== */
 
