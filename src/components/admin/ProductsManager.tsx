@@ -276,14 +276,14 @@ function SellFlowForm({ p, onClose }: { p: P; onClose: () => void }) {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 10, scale: 0.98 }}
         onClick={(e) => e.stopPropagation()}
-        action={(fd) =>
+        onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement);
           start(async () => {
             const r = await saveProductSellFlowAction(fd);
             if (!r.ok) { setErr(r.error ?? "Could not save."); return; }
             onClose();
             router.refresh();
           })
-        }
+        }}
         className="max-h-[88vh] w-full max-w-[580px] overflow-y-auto rounded-2xl panel p-4 sm:p-5"
       >
         <input type="hidden" name="id" value={p.id} />

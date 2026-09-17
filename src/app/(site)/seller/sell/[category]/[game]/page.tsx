@@ -8,9 +8,10 @@ export const dynamic = "force-dynamic";
 
 /** Step 3a — pick which admin-listed product this offer is for. */
 export default async function Page({
-  params,
+  params, searchParams,
 }: {
   params: { category: string; game: string };
+  searchParams?: Record<string, string>;
 }) {
   await requireSeller();
   const cfg = await getSellConfig(params.category);
@@ -30,7 +31,8 @@ export default async function Page({
    * straight to the offer form.
    */
   if (!products.length) {
-    redirect(`/seller/sell/${cfg.slug}/${params.game}/new`);
+    const qs = searchParams ? new URLSearchParams(searchParams as Record<string, string>).toString() : "";
+    redirect(`/seller/sell/${cfg.slug}/${params.game}/new${qs ? `?${qs}` : ""}`);
   }
 
   return (
@@ -42,6 +44,7 @@ export default async function Page({
         category={cfg.slug}
         game={params.game}
         gameName={game.name}
+        serverParams={searchParams as Record<string, string>}
       />
     </div>
   );

@@ -21,7 +21,7 @@ export default function EditListingClient({ listing, games, categories }: { list
   return (
     <div className="rounded-2xl panel p-4 sm:p-5 space-y-4">
       <form
-        action={(fd) =>
+        onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement);
           start(async () => {
             setErr("");
             const r = await saveListingAction(fd);
@@ -29,7 +29,7 @@ export default function EditListingClient({ listing, games, categories }: { list
             router.push("/seller/offers?cat=" + listing.category_slug);
             router.refresh();
           })
-        }
+        }}
         className="space-y-4"
       >
         <input type="hidden" name="id" value={listing.id} />

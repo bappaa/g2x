@@ -11,9 +11,10 @@ export const dynamic = "force-dynamic";
 
 /** Step 3b — price, stock and everything the admin asks for. */
 export default async function Page({
-  params,
+  params, searchParams,
 }: {
   params: { category: string; game: string; product: string };
+  searchParams?: Record<string, string>;
 }) {
   await requireSeller();
   const cfg = await getSellConfig(params.category);
@@ -98,6 +99,7 @@ export default async function Page({
         deliveryTimes={deliveryTimes}
         loginMethods={loginMethods}
         gameFields={gameFields as never}
+        initialServerVals={searchParams as Record<string, string>}
       />
     </div>
   );

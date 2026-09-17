@@ -63,10 +63,29 @@ export default function StoreSettings({
     setErr("");
   };
 
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (busy.current) return;
+    busy.current = true;
+    const fd = new FormData(e.currentTarget);
+    if (removeLogo) fd.set("removeLogo", "1");
+    if (removeBanner) fd.set("removeBanner", "1");
+    start(async () => {
+      try {
+        setErr(""); setMsg("");
+        const r = await saveStoreAction(fd);
+        if (!r.ok) return setErr(r.error || "Could not save.");
+        setMsg("Store updated. Your username is now your store name.");
+        router.refresh();
+      } finally {
+        busy.current = false;
+      }
+    });
+  };
+
   return (
     <div className="space-y-4">
       <h1 className="text-[18px] font-black sm:text-[22px] tracking-tight">Store Settings</h1>
-
       <div className="rounded-2xl panel p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-4">
           <span className="grid h-14 w-14 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-amber-400 to-brand-600 text-[20px] font-black text-white">
@@ -95,29 +114,8 @@ export default function StoreSettings({
           </div>
         </div>
       </div>
-
       <Section title="Store profile">
-        <form
-          action={(fd) => {
-            if (busy.current) return;
-            busy.current = true;
-            // Append remove flags
-            if (removeLogo) fd.set("removeLogo", "1");
-            if (removeBanner) fd.set("removeBanner", "1");
-            start(async () => {
-              try {
-                setErr(""); setMsg("");
-                const r = await saveStoreAction(fd);
-                if (!r.ok) return setErr(r.error || "Could not save.");
-                setMsg("Store updated. Your username is now your store name.");
-                router.refresh();
-              } finally {
-                busy.current = false;
-              }
-            });
-          }}
-          className="space-y-4"
-        >
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Store name" hint={`This becomes your username @${username}. Linked with buyer panel.`}>
               <input name="storeName" defaultValue={profile.store_name} className={inputCls} required />
@@ -133,8 +131,6 @@ export default function StoreSettings({
               <input name="payoutDetail" defaultValue={profile.payout_detail ?? ""} className={inputCls} placeholder="Bank account / PayPal email / Crypto address" />
             </Field>
           </div>
-
-          {/* Username change info - linked with buyer panel, 2 free then fee */}
           <div className="flex items-start gap-2 rounded-xl soft px-3 py-3 text-[11.5px]">
             <AtSign size={14} className="mt-0.5 shrink-0 text-brand-400" />
             <div className="muted">
@@ -162,8 +158,6 @@ export default function StoreSettings({
               </div>
             </div>
           </div>
-
-          {/* Logo upload - replaces URL input */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <div className="mb-1.5 text-[11.5px] font-semibold">Store Logo (upload image)</div>
@@ -172,11 +166,7 @@ export default function StoreSettings({
                   <div className="relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={logoPreview} alt="logo" className="h-24 w-24 rounded-xl object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => { setLogoPreview(null); setRemoveLogo(true); if (logoRef.current) logoRef.current.value=""; }}
-                      className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white hover:bg-rose-500"
-                    >
+                    <button type="button" onClick={() => { setLogoPreview(null); setRemoveLogo(true); if (logoRef.current) logoRef.current.value=""; }} className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white hover:bg-rose-500">
                       <X size={12} />
                     </button>
                   </div>
@@ -186,34 +176,18 @@ export default function StoreSettings({
                   </div>
                 )}
                 <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => logoRef.current?.click()}
-                    className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-[11.5px] font-bold text-white hover:bg-brand-500"
-                  >
+                  <button type="button" onClick={() => logoRef.current?.click()} className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-[11.5px] font-bold text-white hover:bg-brand-500">
                     <Upload size={12} /> {logoPreview ? "Change logo" : "Upload logo"}
                   </button>
                   {logoPreview && !removeLogo && (
-                    <button
-                      type="button"
-                      onClick={() => { setLogoPreview(null); setRemoveLogo(true); if (logoRef.current) logoRef.current.value=""; }}
-                      className="rounded-lg soft px-3 py-1.5 text-[11.5px] font-semibold hover:text-rose-400"
-                    >
+                    <button type="button" onClick={() => { setLogoPreview(null); setRemoveLogo(true); if (logoRef.current) logoRef.current.value=""; }} className="rounded-lg soft px-3 py-1.5 text-[11.5px] font-semibold hover:text-rose-400">
                       Remove
                     </button>
                   )}
                 </div>
-                <input
-                  ref={logoRef}
-                  type="file"
-                  name="logoFile"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  onChange={(e) => handleLogoFile(e.target.files?.[0] ?? null)}
-                />
+                <input ref={logoRef} type="file" name="logoFile" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => handleLogoFile(e.target.files?.[0] ?? null)} />
               </div>
             </div>
-
             <div>
               <div className="mb-1.5 text-[11.5px] font-semibold">Store Banner (upload image)</div>
               <div className="rounded-xl border border-dashed border-[var(--line)] p-3">
@@ -221,11 +195,7 @@ export default function StoreSettings({
                   <div className="relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={bannerPreview} alt="banner" className="h-24 w-full rounded-lg object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => { setBannerPreview(null); setRemoveBanner(true); if (bannerRef.current) bannerRef.current.value=""; }}
-                      className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white hover:bg-rose-500"
-                    >
+                    <button type="button" onClick={() => { setBannerPreview(null); setRemoveBanner(true); if (bannerRef.current) bannerRef.current.value=""; }} className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white hover:bg-rose-500">
                       <X size={12} />
                     </button>
                   </div>
@@ -235,39 +205,22 @@ export default function StoreSettings({
                   </div>
                 )}
                 <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => bannerRef.current?.click()}
-                    className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-[11.5px] font-bold text-white hover:bg-brand-500"
-                  >
+                  <button type="button" onClick={() => bannerRef.current?.click()} className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-[11.5px] font-bold text-white hover:bg-brand-500">
                     <Upload size={12} /> {bannerPreview ? "Change banner" : "Upload banner"}
                   </button>
                   {bannerPreview && !removeBanner && (
-                    <button
-                      type="button"
-                      onClick={() => { setBannerPreview(null); setRemoveBanner(true); if (bannerRef.current) bannerRef.current.value=""; }}
-                      className="rounded-lg soft px-3 py-1.5 text-[11.5px] font-semibold hover:text-rose-400"
-                    >
+                    <button type="button" onClick={() => { setBannerPreview(null); setRemoveBanner(true); if (bannerRef.current) bannerRef.current.value=""; }} className="rounded-lg soft px-3 py-1.5 text-[11.5px] font-semibold hover:text-rose-400">
                       Remove
                     </button>
                   )}
                 </div>
-                <input
-                  ref={bannerRef}
-                  type="file"
-                  name="bannerFile"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  onChange={(e) => handleBannerFile(e.target.files?.[0] ?? null)}
-                />
+                <input ref={bannerRef} type="file" name="bannerFile" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => handleBannerFile(e.target.files?.[0] ?? null)} />
               </div>
             </div>
           </div>
-
           <Field label="About your store">
             <textarea name="description" rows={3} defaultValue={profile.description ?? ""} className={inputCls} placeholder="Instant delivery, trusted seller..." />
           </Field>
-
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="WhatsApp (optional)">
               <input name="whatsapp" defaultValue={profile.whatsapp ?? ""} className={inputCls} placeholder="+1 234 567 890" />
@@ -279,14 +232,13 @@ export default function StoreSettings({
               <input name="discord" defaultValue={profile.discord ?? ""} className={inputCls} placeholder="username or discord.gg/invite" />
             </Field>
           </div>
-
           {err && <div className="text-[11.5px] text-rose-400">{err}</div>}
           {msg && (
             <div className="flex items-center gap-1.5 text-[11.5px] text-emerald-400">
               <Check size={13} /> {msg}
             </div>
           )}
-          <Btn className="flex items-center gap-2" disabled={pending}>
+          <Btn type="submit" className="flex items-center gap-2" disabled={pending}>
             {pending && <Loader2 size={13} className="animate-spin" />} Save store
           </Btn>
         </form>

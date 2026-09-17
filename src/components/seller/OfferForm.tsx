@@ -130,7 +130,7 @@ async function downscale(file: File, max = 1280, quality = 0.82): Promise<string
 }
 
 export default function OfferForm({
-  config, product, game, fields, regions, platforms, deliveryMethods, deliveryTimes, loginMethods, gameFields = [],
+  config, product, game, fields, regions, platforms, deliveryMethods, deliveryTimes, loginMethods, gameFields = [], initialServerVals = {},
 }: {
   config: SellConfig;
   product: { id: string; name: string; image: string; base_price: number };
@@ -142,6 +142,7 @@ export default function OfferForm({
   deliveryTimes: Opt[];
   loginMethods: Opt[];
   gameFields?: GameField[];
+  initialServerVals?: Record<string, string>;
 }) {
   const router = useRouter();
   const money = useMoney();
@@ -159,10 +160,16 @@ export default function OfferForm({
   const [minQty, setMinQty] = useState("1");
   const [deliveryTime, setDeliveryTime] = useState("");
   const [deliveryMethod, setDeliveryMethod] = useState(deliveryMethods[0]?.value ?? "");
-  const [region, setRegion] = useState("");
-  const [platform, setPlatform] = useState("");
-  const [loginMethod, setLoginMethod] = useState("");
-  const [gameVals, setGameVals] = useState<Record<string, string>>({});
+  const [region, setRegion] = useState(initialServerVals["region"] || "");
+  const [platform, setPlatform] = useState(initialServerVals["platform"] || "");
+  const [loginMethod, setLoginMethod] = useState(initialServerVals["loginMethod"] || "");
+  const [gameVals, setGameVals] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const [k, v] of Object.entries(initialServerVals)) {
+      if (v) init[k] = v;
+    }
+    return init;
+  });
   /**
    * Fulfilment mode.
    *
@@ -598,16 +605,36 @@ export default function OfferForm({
           </div>
         )}
 
-        {/* Game-specific cascading fields from admin (Region -> Realm -> Faction etc) */}
+        {/* Selected server summary from previous step */}
+        {Object.keys(initialServerVals).length > 0 && (
+          <div className="mt-3 rounded-xl bg-brand-600/10 p-3">
+            <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-brand-300">Selected Server Details</div>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(initialServerVals).map(([k, v]) => {
+                if (!v) return null;
+                const gf = gameFields.find((f) => f.field_key === k);
+                const label = gf?.label || k;
+                return (
+                  <span key={k} className="rounded-lg bg-[var(--panel)] px-2.5 py-1 text-[11.5px]">
+                    <span className="muted">{label}:</span> <b>{v}</b>
+                  </span>
+                );
+              })}
+            </div>
+            <div className="mt-2 text-[10.5px] muted">These were selected in the game selection step and will be saved with your offer.</div>
+          </div>
+        )}
+
+        {/* Game-specific cascading fields from admin (Region -> Realm -> Faction etc) - only show those not already selected */}
         {gameFields.length > 0 && (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {gameFields
               .slice()
               .sort((a, b) => a.sort_order - b.sort_order)
+              .filter((gf) => !initialServerVals[gf.field_key])
               .map((gf) => {
                 if (!isGameFieldVisible(gf)) return null;
                 const opts = getGameFieldOptions(gf);
-                // If this game field is region and we have global regions but game defines its own, prefer game options
                 const isRegionKey = gf.field_key === "region";
                 const fallbackOpts = isRegionKey && opts.length === 0 ? regions.map((r) => r.label) : [];
                 const finalOpts = opts.length > 0 ? opts : fallbackOpts;
@@ -640,8 +667,7 @@ export default function OfferForm({
         )}
 
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {/* Only show global region/platform if game doesn't already define them */}
-          {regions.length > 0 && config.show_region !== 0 && !gameFields.some((gf) => gf.field_key === "region") && (
+          {regions.length > 0 && config.show_region !== 0 && !gameFields.some((gf) => gf.field_key === "region") && !initialServerVals["region"] && (
             <div>
               <Label>Region</Label>
               <select value={region} onChange={(e) => setRegion(e.target.value)} className={field}>
@@ -652,7 +678,7 @@ export default function OfferForm({
               </select>
             </div>
           )}
-          {platforms.length > 0 && config.show_platform !== 0 && !gameFields.some((gf) => gf.field_key === "platform") && (
+          {platforms.length > 0 && config.show_platform !== 0 && !gameFields.some((gf) => gf.field_key === "platform") && !initialServerVals["platform"] && (
             <div>
               <Label>Platform</Label>
               <select value={platform} onChange={(e) => setPlatform(e.target.value)} className={field}>
@@ -663,7 +689,7 @@ export default function OfferForm({
               </select>
             </div>
           )}
-          {loginMethods.length > 0 && config.show_login_method !== 0 && (
+          {loginMethods.length > 0 && config.show_login_method !== 0 && !initialServerVals["loginMethod"] && (
             <div>
               <Label>Login method</Label>
               <select value={loginMethod} onChange={(e) => setLoginMethod(e.target.value)} className={field}>

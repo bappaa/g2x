@@ -142,7 +142,9 @@ export default function BecomeSeller({
       <Stepper step={step} />
 
       <form
-        action={(fd) =>
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget as HTMLFormElement);
           start(async () => {
             setErr("");
             const r = await submitVerificationAction(fd);
@@ -151,8 +153,8 @@ export default function BecomeSeller({
               return;
             }
             router.refresh();
-          })
-        }
+          });
+        }}
         className="space-y-4"
       >
         {/* -------------------------- step 1 -------------------------- */}

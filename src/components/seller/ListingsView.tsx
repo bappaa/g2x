@@ -170,14 +170,14 @@ function Modal({
         </div>
 
         <form
-          action={(fd) =>
+          onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement);
             start(async () => {
               setErr("");
               const r = await saveListingAction(fd);
               if (!r.ok) return setErr(r.error || "Could not save listing.");
               onSaved();
             })
-          }
+          }}
           className="space-y-3"
         >
           <input type="hidden" name="id" value={listing?.id ?? ""} />

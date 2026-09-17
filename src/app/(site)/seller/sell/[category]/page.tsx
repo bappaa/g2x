@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireSeller } from "@/lib/session";
-import { getSellConfig, getSellGames } from "@/lib/queries";
+import { getSellConfig, getSellGames, getAllGameOfferFields } from "@/lib/queries";
 import { GamePicker, SellCrumbs, SellHeader, SellNotice } from "@/components/seller/SellWizard";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export default async function Page({ params }: { params: { category: string } })
   await requireSeller();
   const cfg = await getSellConfig(params.category);
   if (!cfg) notFound();
-  const games = await getSellGames(cfg.slug);
+  const [games, allFields] = await Promise.all([getSellGames(cfg.slug), getAllGameOfferFields()]);
 
   return (
     <div>
@@ -19,7 +19,7 @@ export default async function Page({ params }: { params: { category: string } })
       <div className="mx-auto max-w-[640px]">
         <SellNotice title={cfg.sell_notice_title} body={cfg.sell_notice} />
       </div>
-      <GamePicker games={games} category={cfg.slug} />
+      <GamePicker games={games} category={cfg.slug} allFields={allFields as never} />
     </div>
   );
 }

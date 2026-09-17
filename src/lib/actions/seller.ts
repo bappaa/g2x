@@ -9,7 +9,7 @@ export type R = { ok: boolean; error?: string; id?: string };
 import { mail } from "../mail";
 import { escrowHoldHours } from "../escrow";
 import { scheduleSubscriptions } from "../subscription";
-import { getWallet, WITHDRAW_SQL, SPEND_SQL, spendArgs } from "../wallet";
+import { getWallet, WITHDRAW_SQL, FEE_SQL } from "../wallet";
 import { RESERVED_FIELD_KEYS } from "../queries";
 import { ensureSchema } from "../ensure-schema";
 import { FREE_CHANGES, usernameChangeFee } from "../username";
@@ -965,7 +965,8 @@ export async function saveStoreAction(form: FormData): Promise<R> {
       args: [finalUsername, s.id],
     });
     if (fee > 0) {
-      stmts.push({ sql: SPEND_SQL, args: spendArgs(fee, s.id) });
+      // Deduct fee from wallet balance AND withdrawable (seller earnings), not from site credit.
+      stmts.push({ sql: FEE_SQL, args: [fee, fee, s.id] });
       stmts.push({
         sql: `INSERT INTO transactions (id,user_id,type,amount,reference) VALUES (?,?, 'fee', ?, ?)`,
         args: [nid("txn_"), s.id, -fee, `Store rename to ${storeName} (@${finalUsername})`],

@@ -37,7 +37,7 @@ async function welcome(userId: string, name: string) {
 }
 
 import { mail } from "../mail";
-import { SPEND_SQL, spendArgs } from "../wallet";
+import { FEE_SQL } from "../wallet";
 import {
   generateUsername, validateUsername, isUsernameFree, usernameChangeFee, FREE_CHANGES,
 } from "../username";
@@ -338,9 +338,14 @@ export async function changeUsernameAction(raw: string): Promise<ActionResult> {
   ];
 
   if (fee > 0) {
+    // Fee must come from seller earnings (available balance), not topped-up credit.
     stmts.push({
-      sql: SPEND_SQL,
-      args: spendArgs(fee, u.id),
+      sql: FEE_SQL,
+      args: [fee, fee, u.id],
+    });
+    stmts.push({
+      sql: `UPDATE seller_profiles SET available_bal = MAX(0, available_bal - ?) WHERE user_id=?`,
+      args: [fee, u.id],
     });
     stmts.push({
       sql: `INSERT INTO transactions (id,user_id,type,amount,reference)

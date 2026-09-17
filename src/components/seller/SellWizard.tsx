@@ -95,23 +95,24 @@ export function SellNotice({ title, body }: { title: string | null; body: string
  * and gets unusable past ~50 entries, so this is a custom combobox over the
  * same data.
  */
+type GameField = {
+  id: string; game_slug: string; field_key: string; label: string;
+  field_type: string; options: string | null;
+  parent_field: string | null; parent_value: string | null;
+  sort_order: number; required: number;
+};
+
 export function GamePicker({
-  games, category,
+  games, category, allFields = [],
 }: {
-  games: WizGame[]; category: string;
+  games: WizGame[]; category: string; allFields?: GameField[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<WizGame | null>(null);
+  const [serverVals, setServerVals] = useState<Record<string, string>>({});
 
-  /**
-   * Cap the rendered list.
-   *
-   * A category can hold 100+ games; painting them all into an open dropdown is
-   * wasted work when only ~8 are visible. Searching narrows it, so 60 rows is
-   * always more than enough to scroll through.
-   */
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
     const list = s ? games.filter((g) => g.name.toLowerCase().includes(s)) : games;
@@ -122,6 +123,84 @@ export function GamePicker({
     const total = s ? games.filter((g) => g.name.toLowerCase().includes(s)).length : games.length;
     return Math.max(0, total - 60);
   }, [q, games]);
+
+  const gameFields = useMemo(() => {
+    if (!picked) return [] as GameField[];
+    return (allFields as GameField[]).filter((f) => f.game_slug === picked.slug).sort((a, b) => a.sort_order - b.sort_order);
+  }, [picked, allFields]);
+
+  const getOptions = (f: GameField): string[] => {
+    if (!f.options) return [];
+    try {
+      const parsed = JSON.parse(f.options) as unknown;
+      if (Array.isArray(parsed)) return (parsed as unknown[]).map(String);
+      if (typeof parsed === "object" && parsed !== null) {
+        const rec = parsed as Record<string, unknown>;
+        if (f.parent_field) {
+          const pv = serverVals[f.parent_field] || "";
+          if (pv && rec[pv] !== undefined) {
+            const v = rec[pv];
+            return Array.isArray(v) ? (v as unknown[]).map(String) : [String(v as string)];
+          }
+          if (f.parent_value && rec[f.parent_value] !== undefined) {
+            const v = rec[f.parent_value];
+            return Array.isArray(v) ? (v as unknown[]).map(String) : [String(v as string)];
+          }
+          // If options is object mapping parent values to arrays, and no parent selected, show keys as options for parent field itself? For child, return empty until parent selected
+          return [];
+        }
+        return Object.keys(rec);
+      }
+      return [];
+    } catch {
+      return f.options.split(",").map((x) => x.trim()).filter(Boolean);
+    }
+  };
+
+  const isVisible = (f: GameField): boolean => {
+    if (!f.parent_field) return true;
+    const pv = serverVals[f.parent_field] || "";
+    if (!pv) return false;
+    if (f.parent_value && pv !== f.parent_value) return false;
+    return true;
+  };
+
+  const setServerVal = (key: string, val: string) => {
+    setServerVals((prev) => {
+      const next = { ...prev, [key]: val };
+      if (!val) delete next[key];
+      const toClear: string[] = [];
+      const findChildren = (parentKey: string) => {
+        for (const gf of gameFields) {
+          if (gf.parent_field === parentKey) {
+            toClear.push(gf.field_key);
+            findChildren(gf.field_key);
+          }
+        }
+      };
+      findChildren(key);
+      for (const c of toClear) delete next[c];
+      return next;
+    });
+  };
+
+  const requiredOk = useMemo(() => {
+    for (const f of gameFields) {
+      if (!isVisible(f)) continue;
+      if (f.required && !serverVals[f.field_key]) return false;
+    }
+    return true;
+  }, [gameFields, serverVals]);
+
+  const handleNext = () => {
+    if (!picked) return;
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(serverVals)) {
+      if (v) qs.set(k, v);
+    }
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    router.push(`/seller/sell/${category}/${picked.slug}${suffix}`);
+  };
 
   return (
     <div className="mx-auto max-w-[640px]">
@@ -165,6 +244,7 @@ export function GamePicker({
                       type="button"
                       onClick={() => {
                         setPicked(g);
+                        setServerVals({});
                         setOpen(false);
                         setQ("");
                       }}
@@ -187,6 +267,45 @@ export function GamePicker({
             </motion.div>
           )}
         </div>
+
+        {picked && gameFields.length > 0 && (
+          <div className="mt-5 rounded-xl soft p-3">
+            <div className="mb-2 text-[12px] font-bold">Select {picked.name} Server Details</div>
+            <p className="mb-3 text-[11px] muted">Admin configured fields for this game. Choose server/region to continue.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {gameFields.map((f) => {
+                if (!isVisible(f)) return null;
+                const opts = getOptions(f);
+                return (
+                  <div key={f.id}>
+                    <label className="mb-1 block text-[11px] font-semibold">
+                      {f.label} {f.required ? <span className="text-rose-400">*</span> : null}
+                    </label>
+                    {f.field_type === "dropdown" ? (
+                      <select
+                        value={serverVals[f.field_key] || ""}
+                        onChange={(e) => setServerVal(f.field_key, e.target.value)}
+                        className="h-10 w-full rounded-lg border border-[var(--line)] bg-transparent px-3 text-[12.5px] outline-none focus:border-brand-500"
+                      >
+                        <option value="">Select {f.label}</option>
+                        {opts.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={serverVals[f.field_key] || ""}
+                        onChange={(e) => setServerVal(f.field_key, e.target.value)}
+                        placeholder={`Enter ${f.label}`}
+                        className="h-10 w-full rounded-lg border border-[var(--line)] bg-transparent px-3 text-[12.5px] outline-none focus:border-brand-500"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-5 flex items-center justify-center gap-3">
@@ -198,8 +317,8 @@ export function GamePicker({
         </Link>
         <button
           type="button"
-          disabled={!picked}
-          onClick={() => picked && router.push(`/seller/sell/${category}/${picked.slug}`)}
+          disabled={!picked || !requiredOk}
+          onClick={handleNext}
           className="rounded-xl bg-brand-600 px-6 py-2.5 text-[12.5px] font-bold text-white transition-all hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Next
@@ -251,9 +370,10 @@ function GameLogo({ logo, name, slug, size = 22 }: {
  * what keeps offers comparable on the product page.
  */
 export function ProductPicker({
-  products, category, game, gameName,
+  products, category, game, gameName, serverParams = {},
 }: {
   products: WizProduct[]; category: string; game: string; gameName: string;
+  serverParams?: Record<string, string>;
 }) {
   const money = useMoney();
   const [q, setQ] = useState("");
@@ -293,10 +413,13 @@ export function ProductPicker({
         </div>
 
         <div className="divide-y divide-[var(--line)]">
-          {rows.map((p) => (
+          {rows.map((p) => {
+            const qs = new URLSearchParams(serverParams as Record<string, string>).toString();
+            const href = `/seller/sell/${category}/${game}/${p.id}${qs ? `?${qs}` : ""}`;
+            return (
             <Link
               key={p.id}
-              href={`/seller/sell/${category}/${game}/${p.id}`}
+              href={href}
               className="group flex items-center gap-3 py-3 transition-colors hover:bg-brand-600/[.06]"
             >
               <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg soft">
@@ -321,7 +444,8 @@ export function ProductPicker({
               </span>
               <ChevronRight size={16} className="shrink-0 muted transition-transform group-hover:translate-x-1" />
             </Link>
-          ))}
+          );
+          })}
           {!rows.length && (
             <div className="py-10 text-center text-[12.5px] muted">No products match that search.</div>
           )}
@@ -342,7 +466,7 @@ export function ProductPicker({
           Create your own offer for {gameName} and describe exactly what you are selling.
         </p>
         <Link
-          href={`/seller/sell/${category}/${game}/new`}
+          href={`/seller/sell/${category}/${game}/new${(() => { const qs = new URLSearchParams(serverParams as Record<string, string>).toString(); return qs ? `?${qs}` : ""; })()}`}
           className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-brand-500"
         >
           <Plus size={14} /> Create my own offer

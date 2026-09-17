@@ -134,6 +134,12 @@ export const CREDIT_SQL = `UPDATE users SET balance = balance + ? WHERE id=?`;
  * withdrawable, so a race cannot overdraw. Check `rowsAffected`.
  * Bind: amount, amount, userId, amount.
  */
+export const FEE_SQL = `
+  UPDATE users
+     SET balance = balance - ?,
+         withdrawable = MAX(0, COALESCE(withdrawable,0) - ?)
+   WHERE id=?`;
+
 export const WITHDRAW_SQL = `
   UPDATE users
      SET balance = balance - ?,
