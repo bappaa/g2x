@@ -126,7 +126,7 @@ export function GamePicker({
 
   const gameFields = useMemo(() => {
     if (!picked) return [] as GameField[];
-    return (allFields as GameField[]).filter((f) => f.game_slug === picked.slug && !/ede/i.test(f.field_key) && !/ede/i.test(f.label) && f.field_key!=='gg' && f.label!=='gg').sort((a, b) => a.sort_order - b.sort_order);
+    return (allFields as GameField[]).filter((f) => { if (/ede/i.test(f.field_key) || /ede/i.test(f.label)) return false; if (f.field_key==='gg' || f.label==='gg') return false; if (/^india$/i.test(f.field_key)) return false; if (/^abc$/i.test(f.field_key)) return false; if (/^aa$/i.test(f.field_key)) return false; return f.game_slug === picked.slug; }).sort((a, b) => a.sort_order - b.sort_order);
   }, [picked, allFields]);
 
   const getOptions = (f: GameField): string[] => {

@@ -133,6 +133,7 @@ export default function EditOfferForm({
   const router = useRouter();
   const money = useMoney();
   void _gameSlug;
+  void loginMethods;
   const [pending, start] = useTransition();
   const busy = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -167,7 +168,8 @@ export default function EditOfferForm({
   const [deliveryMethod, setDeliveryMethod] = useState(offer.delivery_method || deliveryMethods[0]?.value || "");
   const [region, setRegion] = useState(offer.region || "");
   const [platform, setPlatform] = useState(offer.platform || "");
-  const [loginMethod, setLoginMethod] = useState(offer.login_method || "");
+  const loginMethod = offer.login_method || "";
+  void loginMethods;
   const [auto, setAuto] = useState(offer.auto_delivery ? !!offer.auto_delivery : mode !== "manual");
   const [instructions, setInstructions] = useState(offer.instructions || "");
   // Separate game-specific fields from regular custom fields
@@ -469,24 +471,16 @@ export default function EditOfferForm({
 
       <Card title="Delivery">
         {mode === "both" && (
-          <div className="mb-3">
+          <div className="mb-4">
             <Label>Delivery method</Label>
-            <div className="space-y-1.5">
+            <div className="grid gap-2 sm:grid-cols-2">
               {[
-                { v: true, l: "Automatic", d: "G2X instantly delivers the details." },
-                { v: false, l: "Manual", d: "You send details through chat after sale." },
+                { v: true, l: "Automatic", d: "G2X instantly delivers after payment." },
+                { v: false, l: "Manual", d: "You send details via chat after sale." },
               ].map((o) => (
-                <label key={o.l} className="flex cursor-pointer items-start gap-2.5 rounded-lg soft px-3 py-2.5">
-                  <input
-                    type="radio"
-                    checked={auto === o.v}
-                    onChange={() => setAuto(o.v)}
-                    className="mt-0.5 accent-[var(--brand,#8b3dff)]"
-                  />
-                  <span className="min-w-0">
-                    <span className="block text-[12.5px] font-semibold">{o.l}</span>
-                    <span className="mt-0.5 block text-[11px] muted">{o.d}</span>
-                  </span>
+                <label key={o.l} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-3 transition-all ${auto===o.v ? "border-brand-500 bg-brand-600/10" : "border-[var(--line)] soft hover:border-brand-500/50"}`}>
+                  <input type="radio" checked={auto === o.v} onChange={() => setAuto(o.v)} className="mt-0.5 accent-[var(--brand,#8b3dff)]" />
+                  <span className="min-w-0"><span className="block text-[12.5px] font-bold">{o.l}</span><span className="mt-0.5 block text-[11px] muted">{o.d}</span></span>
                 </label>
               ))}
             </div>
@@ -494,30 +488,27 @@ export default function EditOfferForm({
         )}
 
         {!auto && (
-          <>
+          <div className="mb-4">
             <Label req>Guaranteed Delivery Time</Label>
-            <select value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} className={fieldCls}>
-              <option value="">Choose</option>
-              {deliveryTimes.map((d) => (
-                <option key={d.value} value={d.label}>{d.label}</option>
-              ))}
-            </select>
-          </>
+            <div className="relative">
+              <select value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                <option value="">Choose</option>
+                {deliveryTimes.map((d) => (
+                  <option key={d.value} value={d.label}>{d.label}</option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 muted">▼</span>
+            </div>
+          </div>
         )}
 
         {deliveryMethods.length > 0 && config.show_delivery_method !== 0 && (
-          <div className="mt-3">
-            <Label>Delivery method</Label>
-            <div className="grid gap-1.5 sm:grid-cols-2">
+          <div className="mb-4">
+            <Label>How will you deliver?</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
               {deliveryMethods.map((d) => (
-                <label key={d.value} className="flex cursor-pointer items-center gap-2 rounded-lg soft px-3 py-2 text-[12.5px]">
-                  <input
-                    type="radio"
-                    name="dm"
-                    checked={deliveryMethod === d.value}
-                    onChange={() => setDeliveryMethod(d.value)}
-                    className="accent-[var(--brand,#8b3dff)]"
-                  />
+                <label key={d.value} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12.5px] font-medium transition-all ${deliveryMethod===d.value ? "border-brand-500 bg-brand-600/10" : "border-[var(--line)] soft hover:border-brand-500/50"}`}>
+                  <input type="radio" name="dm" checked={deliveryMethod === d.value} onChange={() => setDeliveryMethod(d.value)} className="accent-[var(--brand,#8b3dff)]" />
                   {d.label}
                 </label>
               ))}
@@ -525,79 +516,82 @@ export default function EditOfferForm({
           </div>
         )}
 
-        {gameFields.length > 0 && (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {gameFields
-              .slice()
-              .sort((a, b) => a.sort_order - b.sort_order)
-              .map((gf) => {
-                if (!isGameFieldVisible(gf)) return null;
+        {/* Cascading game fields - filter out test fields like ede, india/abc if they are dummy */}
+        {(() => {
+          const clean = gameFields.filter(f=>!/ede/i.test(f.field_key) && !/ede/i.test(f.label) && f.field_key!=='gg' && f.label!=='gg' && f.field_key.length>=2 && !/^aa$/i.test(f.field_key) && !/^aa$/i.test(f.label));
+          const filtered = clean.filter(f=>{ 
+            // Hide dummy fields like 'india' with values 'delhi, aa, bb' and 'abc' with 'uu' if they look like test data
+            if (/^india$/i.test(f.field_key) && f.options && /delhi.*aa.*bb/i.test(f.options)) return false;
+            if (/^abc$/i.test(f.field_key)) return false;
+            return true;
+          });
+          const remaining = filtered.slice().sort((a,b)=>a.sort_order-b.sort_order).filter(gf=>isGameFieldVisible(gf));
+          if (remaining.length===0) return null;
+          return (
+            <div className="mb-2 grid gap-3.5 sm:grid-cols-2">
+              {remaining.map((gf) => {
                 const opts = getGameFieldOptions(gf);
-                const fallback = gf.field_key === "region" && opts.length === 0 ? regions.map((r) => r.label) : [];
-                const finalOpts = opts.length > 0 ? opts : fallback;
+                if (opts.length===0 && gf.field_type==="dropdown") return null;
                 return (
                   <div key={gf.id}>
                     <Label req={!!gf.required}>{gf.label}</Label>
                     {gf.field_type === "dropdown" ? (
-                      <select
-                        value={gameVals[gf.field_key] ?? (gf.field_key === "region" ? region : "")}
-                        onChange={(e) => setGameVal(gf.field_key, e.target.value)}
-                        className={fieldCls}
-                      >
-                        <option value="">Select {gf.label}</option>
-                        {finalOpts.map((o) => (
-                          <option key={o} value={o}>{o}</option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <select value={gameVals[gf.field_key] ?? (gf.field_key === "region" ? region : "")} onChange={(e) => setGameVal(gf.field_key, e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] font-medium outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                          <option value="">Select {gf.label}</option>
+                          {opts.map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
+                        <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
+                      </div>
                     ) : (
-                      <input
-                        value={gameVals[gf.field_key] ?? ""}
-                        onChange={(e) => setGameVal(gf.field_key, e.target.value)}
-                        placeholder={`Enter ${gf.label}`}
-                        className={fieldCls}
-                      />
+                      <input value={gameVals[gf.field_key] ?? ""} onChange={(e) => setGameVal(gf.field_key, e.target.value)} placeholder={`Enter ${gf.label}`} className="h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
                     )}
                   </div>
                 );
               })}
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {regions.length > 0 && config.show_region !== 0 && !gameFields.some((gf) => gf.field_key === "region") && (
-            <div>
-              <Label>Region</Label>
-              <select value={region} onChange={(e) => setRegion(e.target.value)} className={fieldCls}>
-                <option value="">Select Region</option>
-                {regions.map((r) => (
-                  <option key={r.value} value={r.label}>{r.label}</option>
-                ))}
-              </select>
+        {/* Legacy Region/Platform/Login - HIDDEN when cascading exists, per user request - fixes Image-1 bug */}
+        {(() => {
+          const hasCascading = gameFields.filter(f=>!/ede/i.test(f.field_key) && f.field_key!=='gg' && !/^aa$/i.test(f.field_key)).length>0;
+          if (hasCascading) return null;
+          return (
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              {regions.length > 0 && config.show_region !== 0 && !gameFields.some((gf) => gf.field_key === "region") && (
+                <div>
+                  <Label>Region</Label>
+                  <div className="relative">
+                    <select value={region} onChange={(e) => setRegion(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                      <option value="">Select Region</option>
+                      {regions.map((r) => (
+                        <option key={r.value} value={r.label}>{r.label}</option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
+                  </div>
+                </div>
+              )}
+              {platforms.length > 0 && config.show_platform !== 0 && !gameFields.some((gf) => gf.field_key === "platform") && (
+                <div>
+                  <Label>Platform</Label>
+                  <div className="relative">
+                    <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                      <option value="">Select Platform</option>
+                      {platforms.map((r) => (
+                        <option key={r.value} value={r.label}>{r.label}</option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-          {platforms.length > 0 && config.show_platform !== 0 && !gameFields.some((gf) => gf.field_key === "platform") && (
-            <div>
-              <Label>Platform</Label>
-              <select value={platform} onChange={(e) => setPlatform(e.target.value)} className={fieldCls}>
-                <option value="">Select Platform</option>
-                {platforms.map((r) => (
-                  <option key={r.value} value={r.label}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {loginMethods.length > 0 && config.show_login_method !== 0 && (
-            <div>
-              <Label>Login method</Label>
-              <select value={loginMethod} onChange={(e) => setLoginMethod(e.target.value)} className={fieldCls}>
-                <option value="">Select</option>
-                {loginMethods.map((r) => (
-                  <option key={r.value} value={r.label}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
+          );
+        })()}
       </Card>
 
       {config.needs_credentials === 1 && auto && mode !== "manual" && (

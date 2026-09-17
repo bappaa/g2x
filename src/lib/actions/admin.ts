@@ -1919,3 +1919,60 @@ export async function sendTestMailAction(to?: string) {
     };
   return { ok: true as const, id: r.id, to: target };
 }
+
+/* ==================================================================== */
+/* GAME CATEGORY IMAGES — single logo per game+category (currency/top-up) */
+/* ==================================================================== */
+
+export async function saveGameCategoryImageAction(form: FormData): Promise<R> {
+  const a = await requireAdmin("catalog");
+  const gameSlug = sanitizeSlug(String(form.get("gameSlug") ?? form.get("game") ?? "").trim());
+  const categorySlug = sanitizeSlug(String(form.get("categorySlug") ?? form.get("category") ?? "").trim());
+  if (!gameSlug || !categorySlug) return { ok: false, error: "Game and category required" };
+
+  const uploaded = await resolveImageField(form, "imageFile", "image", {
+    kind: "game_category",
+    refKey: `${gameSlug}:${categorySlug}`,
+    userId: a.id,
+  });
+  if (!uploaded.ok) return { ok: false, error: uploaded.error };
+  let image = sanitizeImageUrl(uploaded.url, "");
+  if (!image) {
+    const existing = await one<{ image: string }>(`SELECT image FROM game_category_images WHERE game_slug=? AND category_slug=?`, [gameSlug, categorySlug]);
+    if (existing?.image) image = existing.image;
+  }
+  if (!image) return { ok: false, error: "Category image is required - upload a logo for this category (e.g., UC icon for Top Up, Gold for Currency)" };
+
+  await run(
+    `INSERT INTO game_category_images (id, game_slug, category_slug, image) VALUES (?,?,?,?)
+     ON CONFLICT(game_slug, category_slug) DO UPDATE SET image=excluded.image`,
+    [nid("gci_"), gameSlug, categorySlug, image]
+  );
+
+  // Also update existing products in this game+category that have no image or have game logo as image, to use this category image
+  try {
+    const game = await one<{ logo: string }>(`SELECT logo FROM games WHERE slug=?`, [gameSlug]);
+    if (game) {
+      await run(
+        `UPDATE products SET image=? WHERE game_slug=? AND category_slug=? AND (image=? OR image='' OR image IS NULL)`,
+        [image, gameSlug, categorySlug, game.logo]
+      );
+    }
+  } catch {}
+
+  await audit(a.id, "game.category_image.save", `${gameSlug}:${categorySlug}`);
+  bustCatalog();
+  revalidatePath("/admin/games");
+  revalidatePath(`/g/${gameSlug}/${categorySlug}`);
+  return { ok: true };
+}
+
+export async function deleteGameCategoryImageAction(gameSlug: string, categorySlug: string): Promise<R> {
+  const a = await requireAdmin("catalog");
+  await run(`DELETE FROM game_category_images WHERE game_slug=? AND category_slug=?`, [gameSlug, categorySlug]);
+  await audit(a.id, "game.category_image.delete", `${gameSlug}:${categorySlug}`);
+  bustCatalog();
+  revalidatePath("/admin/games");
+  return { ok: true };
+}
+

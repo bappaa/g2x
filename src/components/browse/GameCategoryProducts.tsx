@@ -23,10 +23,12 @@ export default function GameCategoryProducts({
   products,
   gameFields = [],
   offers = [],
+  categoryImage,
 }: {
   products: (CardProduct & { id: string; slug: string })[];
   gameFields?: GameField[];
   offers?: OfferWithProduct[];
+  categoryImage?: string | null;
 }) {
   const parseCF = (o: DbOffer): Record<string, string> => {
     try {
@@ -67,8 +69,16 @@ export default function GameCategoryProducts({
 
   const offerCF = useMemo(() => offers.map((o) => ({ product_id: o.product_id, cf: parseCF(o), region: o.region })), [offers]);
 
-  // Filter out test fields like 'ede'
-  const cleanGameFields = gameFields.filter(f => !/ede/i.test(f.field_key) && !/ede/i.test(f.label) && f.field_key!=='gg' && f.label!=='gg' && f.field_key.length>=2);
+  // Filter out test fields like 'ede', 'india', 'abc', 'aa' (Image-2 bug)
+  const cleanGameFields = gameFields.filter(f => {
+    if (/ede/i.test(f.field_key) || /ede/i.test(f.label)) return false;
+    if (f.field_key === 'gg' || f.label === 'gg') return false;
+    if (/^aa$/i.test(f.field_key) || /^aa$/i.test(f.label)) return false;
+    if (/^india$/i.test(f.field_key)) return false;
+    if (/^abc$/i.test(f.field_key)) return false;
+    if (f.field_key.length < 2) return false;
+    return true;
+  });
 
   const filterOptions = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -99,10 +109,18 @@ export default function GameCategoryProducts({
     return map;
   }, [cleanGameFields, offerCF]);
 
+  // Filter out dummy test products like 'aa', 'all' (Image-2)
+  const cleanedProducts = products.filter(pr => {
+    const n = pr.name.trim().toLowerCase();
+    if (['aa','all','test','india'].includes(n)) return false;
+    if (n.length <= 2 && !/\d/.test(n)) return false;
+    return true;
+  });
+
   const filteredProducts = useMemo(() => {
-    if (cleanGameFields.length === 0 || Object.keys(filters).length === 0) return products;
+    if (cleanGameFields.length === 0 || Object.keys(filters).length === 0) return cleanedProducts;
     // Keep products that have at least one offer matching filters
-    return products.filter((p) => {
+    return cleanedProducts.filter((p) => {
       const relevantOffers = offerCF.filter((o) => o.product_id === p.id);
       if (relevantOffers.length === 0) return false;
       return relevantOffers.some(({ cf, region }) => {
@@ -113,7 +131,7 @@ export default function GameCategoryProducts({
         return true;
       });
     });
-  }, [products, filters, cleanGameFields, offerCF]);
+  }, [cleanedProducts, filters, cleanGameFields, offerCF]);
 
   const hasFilters = cleanGameFields.length > 0 && Object.values(filterOptions).some((arr) => arr.length > 0);
 
@@ -123,7 +141,7 @@ export default function GameCategoryProducts({
         <h2 className="text-[14px] font-bold">Currency Packages</h2>
         <span className="text-[11.5px] muted">
           {filteredProducts.length} {filteredProducts.length === 1 ? "product" : "products"}
-          {filteredProducts.length !== products.length ? ` / ${products.length}` : ""}
+          {filteredProducts.length !== cleanedProducts.length ? ` / ${cleanedProducts.length}` : ""}
         </span>
       </div>
 
@@ -175,9 +193,11 @@ export default function GameCategoryProducts({
 
       {filteredProducts.length ? (
         <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-          {filteredProducts.map((p, i) => (
-            <ProductCard key={p.id} p={p} i={i} />
-          ))}
+          {filteredProducts.map((p, i) => {
+            // Use category image as fallback if product image missing or equals generic - single logo per category saves bandwidth
+            const displayP = categoryImage && (!p.image || p.image.includes('/art/coins.png') || p.image === '') ? { ...p, image: categoryImage } : p;
+            return <ProductCard key={p.id} p={displayP} i={i} />;
+          })}
         </div>
       ) : (
         <div className="grid place-items-center rounded-xl border border-dashed border-[var(--line)] px-6 py-10 text-center">

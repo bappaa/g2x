@@ -113,13 +113,15 @@ export const getCategoryGameIndex = (category: string) =>
 
 /** products + cheapest live offer price */
 export const getProducts = (game: string, category?: string) =>
-  all<DbProduct & { min_price: number | null; offer_count: number }>(
+  all<DbProduct & { min_price: number | null; offer_count: number; category_image?: string | null }>(
     `SELECT p.*,
+            COALESCE(gci.image, '') AS category_image,
             (SELECT MIN(o.price) FROM offers o
               WHERE o.product_id=p.id AND o.status='active' AND o.stock>0) AS min_price,
             (SELECT COUNT(*) FROM offers o
               WHERE o.product_id=p.id AND o.status='active' AND o.stock>0) AS offer_count
        FROM products p
+       LEFT JOIN game_category_images gci ON gci.game_slug=p.game_slug AND gci.category_slug=p.category_slug
       WHERE p.game_slug=? ${category ? "AND p.category_slug=?" : ""} AND p.status='active'
       ORDER BY p.base_price`,
     category ? [game, category] : [game]
@@ -971,6 +973,17 @@ export const getGameOfferFields = unstable_cache(
   ["game-offer-fields"],
   { tags: ["catalog", "game-fields"], revalidate: 300 }
 );
+
+
+export const getGameCategoryImage = (gameSlug: string, categorySlug: string) =>
+  one<{ image: string }>(`SELECT image FROM game_category_images WHERE game_slug=? AND category_slug=?`, [gameSlug, categorySlug]);
+
+export const getGameCategoryImages = (gameSlug: string) =>
+  all<{ category_slug: string; image: string }>(`SELECT category_slug, image FROM game_category_images WHERE game_slug=?`, [gameSlug]);
+
+export const getAllGameCategoryImages = () =>
+  all<{ game_slug: string; category_slug: string; image: string }>(`SELECT * FROM game_category_images`);
+
 
 export const getAllGameOfferFields = () =>
   all<{

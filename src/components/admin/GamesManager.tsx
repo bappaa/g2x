@@ -7,7 +7,7 @@ import { Plus, Search, Pencil, Trash2, X, Loader2, Eye, EyeOff, ExternalLink } f
 import { Btn, Tag, Field, inputCls, Empty } from "@/components/ui";
 import { Table, Tr, Td, Toolbar, IconAction } from "@/components/admin/ui";
 import ImagePicker from "@/components/admin/ImagePicker";
-import { saveGameAction, deleteGameAction, toggleGameAction, saveProductAction } from "@/lib/actions/admin";
+import { saveGameAction, deleteGameAction, toggleGameAction } from "@/lib/actions/admin";
 import GameOfferFieldsEditor from "./GameOfferFieldsEditor";
 
 type G = {
@@ -315,19 +315,20 @@ function QuickProductAdder({ gameSlug, categories }: { gameSlug: string; categor
   const submit = (fd: FormData) =>
     start(async () => {
       setErr("");
-      const r = await saveProductAction(fd);
-      if (!r.ok) return setErr(r.error || "Could not save product");
+      // Use new category image action - single logo per game+category
+      const { saveGameCategoryImageAction } = await import("@/lib/actions/admin");
+      const r = await saveGameCategoryImageAction(fd);
+      if (!r.ok) return setErr(r.error || "Could not save category image");
       router.refresh();
-      // clear form
       const form = document.getElementById(`quick-prod-${gameSlug}`) as HTMLFormElement | null;
       form?.reset();
     });
 
   return (
-    <div className="rounded-xl border border-[var(--line)] p-4">
-      <h3 className="mb-2 text-[13px] font-bold">Quick add product image (currency / top-up)</h3>
-      <p className="mb-3 text-[11px] muted">
-        Upload a product image (e.g. UC icon, Gold icon) and choose which category it should appear in. This image shows on game page categories and seller product picker.
+    <div className="rounded-xl border border-[var(--line)] bg-[var(--panel)]/30 p-4">
+      <h3 className="mb-1.5 text-[13px] font-bold">Category logo (currency / top-up) - 1 per category</h3>
+      <p className="mb-3 text-[11px] leading-relaxed muted">
+        Upload <b>one logo per category</b> for this game (e.g., UC icon for Top Up, Gold icon for Currency). This single logo will be used for all products in that category on game pages and seller picker - fixes bandwidth and shows correct product image for specific category (see Image-3). No need to add 60 UC, 1000 UC separately - just 1 logo per full category.
       </p>
       <form
         id={`quick-prod-${gameSlug}`}
@@ -338,14 +339,11 @@ function QuickProductAdder({ gameSlug, categories }: { gameSlug: string; categor
         }}
         className="space-y-3"
       >
-        <input type="hidden" name="game" value={gameSlug} />
-        <Field label="Product name" hint="e.g. 60 UC, 1000 Gold, V-Bucks">
-          <input name="name" required className={inputCls} placeholder="60 UC" />
-        </Field>
+        <input type="hidden" name="gameSlug" value={gameSlug} />
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Category (where this photo appears)">
+          <Field label="Category (where this logo appears)">
             <div className="relative">
-              <select name="category" value={cat} onChange={(e) => setCat(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] font-medium outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" required>
+              <select name="categorySlug" value={cat} onChange={(e) => setCat(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] font-medium outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" required>
                 {categories.map((c) => (
                   <option key={c.slug} value={c.slug}>{c.name}</option>
                 ))}
@@ -353,20 +351,20 @@ function QuickProductAdder({ gameSlug, categories }: { gameSlug: string; categor
               <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
             </div>
           </Field>
-          <Field label="Base price (USD)">
-            <input name="basePrice" type="number" step="0.01" defaultValue={0.99} className={inputCls} required />
+          <Field label="Base price (USD) - optional for fallback product">
+            <input name="basePrice" type="number" step="0.01" defaultValue={0.99} className={inputCls} />
           </Field>
         </div>
         <ImagePicker
-          label="Product image * (shows in product categories)"
+          label="Category image * (shows in product categories for this game)"
           urlName="image"
           fileName="imageFile"
           defaultUrl=""
-          hint="REQUIRED: This logo appears in product categories (e.g. UC icon for BGMI). Game logo shows on homepage, this shows as item photo."
+          hint="REQUIRED: One logo per category (e.g., UC icon for BGMI Top Up). Will be used for all products in that category that don't have specific image. Saves bandwidth vs many product images."
         />
         {err && <div className="text-[11px] text-rose-400">{err}</div>}
         <Btn type="submit" disabled={pending} className="flex items-center gap-2 text-[11px]">
-          {pending && <Loader2 size={12} className="animate-spin" />} Add product image
+          {pending && <Loader2 size={12} className="animate-spin" />} Save category logo
         </Btn>
       </form>
     </div>

@@ -585,14 +585,14 @@ export default function OfferForm({
         )}
 
         {/* Selected server summary from previous step - clean UI */}
-        {Object.keys(initialServerVals).filter(k=>initialServerVals[k] && !/ede/i.test(k) && !/ede/i.test(initialServerVals[k]) && k!=='gg').length > 0 && (
+        {Object.keys(initialServerVals).filter(k=>initialServerVals[k] && !/ede/i.test(k) && !/ede/i.test(initialServerVals[k]) && k!=='gg' && k!=='india' && k!=='abc' && k!=='aa').length > 0 && (
           <div className="mb-4 rounded-xl border border-brand-500/20 bg-gradient-to-br from-brand-600/10 to-violet-600/10 p-4">
             <div className="mb-2.5 flex items-center gap-2">
               <span className="grid h-6 w-6 place-items-center rounded-lg bg-brand-600 text-white text-[11px]">✓</span>
               <span className="text-[11.5px] font-black uppercase tracking-widest text-brand-300">Selected Server Details</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {Object.entries(initialServerVals).filter(([k,v])=>v && !/ede/i.test(k) && !/ede/i.test(String(v)) && k!=='gg' && v!=='gg').map(([k, v]) => {
+              {Object.entries(initialServerVals).filter(([k,v])=>v && !/ede/i.test(k) && !/ede/i.test(String(v)) && k!=='gg' && v!=='gg' && k!=='india' && k!=='abc' && k!=='aa').map(([k, v]) => {
                 const gf = gameFields.find((f) => f.field_key === k);
                 const label = gf?.label || k.charAt(0).toUpperCase()+k.slice(1);
                 return (
@@ -608,7 +608,7 @@ export default function OfferForm({
 
         {/* Game-specific cascading fields - only show those not already selected, clean UI */}
         {(() => {
-          const cleanFields = gameFields.filter(f => !/ede/i.test(f.field_key) && !/ede/i.test(f.label) && f.field_key!=='gg' && f.label!=='gg' && f.field_key.length>=2);
+          const cleanFields = gameFields.filter(f => { if (/ede/i.test(f.field_key) || /ede/i.test(f.label)) return false; if (f.field_key==='gg' || f.label==='gg') return false; if (/^india$/i.test(f.field_key)) return false; if (/^abc$/i.test(f.field_key)) return false; if (/^aa$/i.test(f.field_key)) return false; if (f.field_key.length<2) return false; return true; });
           const remaining = cleanFields.slice().sort((a,b)=>a.sort_order-b.sort_order).filter(gf => !initialServerVals[gf.field_key] && isGameFieldVisible(gf));
           if (remaining.length===0) return null;
           return (
@@ -644,7 +644,7 @@ export default function OfferForm({
 
         {/* Legacy region/platform/login - HIDDEN when cascading fields exist or server already selected, per user request */}
         {(() => {
-          const hasCascading = gameFields.filter(f=>!/ede/i.test(f.field_key) && f.field_key!=='gg').length>0;
+          const hasCascading = gameFields.filter(f=>{ if (/ede/i.test(f.field_key)) return false; if (f.field_key==='gg') return false; if (/^india$/i.test(f.field_key)) return false; if (/^abc$/i.test(f.field_key)) return false; if (/^aa$/i.test(f.field_key)) return false; return true; }).length>0;
           const hasServer = Object.keys(initialServerVals).filter(k=>initialServerVals[k]).length>0;
           // If we have cascading fields or server already selected, don't show legacy dropdowns - they are redundant
           if (hasCascading || hasServer) return null;

@@ -178,6 +178,15 @@ export const PATCHES = [
    )`,
   `CREATE INDEX IF NOT EXISTS idx_game_offer_fields_game ON game_offer_fields(game_slug)`,
   `CREATE INDEX IF NOT EXISTS idx_game_offer_fields_parent ON game_offer_fields(game_slug, parent_field)`,
+  `CREATE TABLE IF NOT EXISTS game_category_images (
+     id TEXT PRIMARY KEY,
+     game_slug TEXT NOT NULL,
+     category_slug TEXT NOT NULL,
+     image TEXT NOT NULL,
+     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+     UNIQUE(game_slug, category_slug)
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_gci_game ON game_category_images(game_slug)`,
 ];
 
 /** Errors that mean "already applied" — expected on every run after the first. */

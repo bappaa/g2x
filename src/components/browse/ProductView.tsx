@@ -464,16 +464,27 @@ export default function ProductView({
               </div>
             </div>
 
-            {gameFields.length > 0 && (
-              <div className="mb-4 rounded-xl soft p-3">
-                <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide muted">
-                  <Globe size={12} /> Filter offers
+            {(() => {
+              const cleanFields = gameFields.filter(f=>{
+                if (/ede/i.test(f.field_key) || /ede/i.test(f.label)) return false;
+                if (f.field_key==='gg' || f.label==='gg') return false;
+                if (/^aa$/i.test(f.field_key) || /^aa$/i.test(f.label)) return false;
+                if (/^india$/i.test(f.field_key)) return false;
+                if (/^abc$/i.test(f.field_key)) return false;
+                if (f.field_key.length<2) return false;
+                return true;
+              });
+              if (cleanFields.length===0) return null;
+              return (
+              <div className="mb-4 rounded-xl border border-[var(--line)] bg-[var(--panel)]/50 p-3.5">
+                <div className="mb-2.5 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide">
+                  <Globe size={12} className="text-brand-400" /> Filter offers
                   {Object.keys(gameFilters).length > 0 && (
-                    <button type="button" onClick={() => setGameFilters({})} className="ml-auto text-[11px] normal-case text-brand-400 hover:underline">Clear</button>
+                    <button type="button" onClick={() => setGameFilters({})} className="ml-auto rounded-full bg-brand-600/10 px-2.5 py-1 text-[11px] font-semibold normal-case text-brand-400 hover:bg-brand-600/20">Clear</button>
                   )}
                 </div>
-                <div className="grid gap-2.5 sm:grid-cols-3">
-                  {gameFields
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {cleanFields
                     .slice()
                     .sort((a, b) => a.sort_order - b.sort_order)
                     .map((gf) => {
@@ -482,23 +493,27 @@ export default function ProductView({
                       if (opts.length === 0) return null;
                       return (
                         <div key={gf.id}>
-                          <label className="mb-1 block text-[11px] font-semibold">{gf.label}</label>
-                          <select
-                            value={gameFilters[gf.field_key] || ""}
-                            onChange={(e) => setGameFilter(gf.field_key, e.target.value)}
-                            className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-2 text-[12.5px] outline-none focus:border-brand-500"
-                          >
-                            <option value="">All {gf.label}</option>
-                            {opts.map((o) => (
-                              <option key={o} value={o}>{o}</option>
-                            ))}
-                          </select>
+                          <label className="mb-1.5 block text-[11px] font-semibold">{gf.label}</label>
+                          <div className="relative">
+                            <select
+                              value={gameFilters[gf.field_key] || ""}
+                              onChange={(e) => setGameFilter(gf.field_key, e.target.value)}
+                              className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] font-medium outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                            >
+                              <option value="">All {gf.label}</option>
+                              {opts.map((o) => (
+                                <option key={o} value={o}>{o}</option>
+                              ))}
+                            </select>
+                            <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
+                          </div>
                         </div>
                       );
                     })}
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {err && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11.5px] text-rose-400">

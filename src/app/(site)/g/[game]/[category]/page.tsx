@@ -10,6 +10,7 @@ import {
   getGames,
   getGameOfferFields,
   getOffersByGameCategory,
+  getGameCategoryImage,
 } from "@/lib/queries";
 import { AnyLogo } from "@/components/BrandIcon";
 import { Breadcrumb, Pill } from "@/components/ui";
@@ -31,13 +32,14 @@ export default async function Page({
 
   const isListing = cat.slug === "accounts" || cat.slug === "boosting";
 
-  const [products, listings, gameCats, allGames, gameFields, offers] = await Promise.all([
+  const [products, listings, gameCats, allGames, gameFields, offers, catImage] = await Promise.all([
     isListing ? Promise.resolve([]) : getProducts(game.slug, cat.slug),
     isListing ? getListings({ game: game.slug, category: cat.slug }) : Promise.resolve([]),
     getGameCategories(game.slug),
     getGames(),
     isListing ? Promise.resolve([]) : getGameOfferFields(game.slug),
     isListing ? Promise.resolve([]) : getOffersByGameCategory(game.slug, cat.slug),
+    isListing ? Promise.resolve(null) : getGameCategoryImage(game.slug, cat.slug),
   ]);
 
   return (
@@ -86,7 +88,7 @@ export default async function Page({
           {isListing ? (
             <ListingGrid listings={listings} category={cat.slug} />
           ) : products.length ? (
-            <GameCategoryProducts products={products as never} gameFields={gameFields as never} offers={offers as never} />
+            <GameCategoryProducts products={products as never} gameFields={gameFields as never} offers={offers as never} categoryImage={catImage?.image ?? null} />
           ) : (
             <div className="grid place-items-center rounded-2xl border border-dashed border-[var(--line)] px-6 py-14 text-center">
               <div className="text-[14px] font-semibold">No products yet</div>

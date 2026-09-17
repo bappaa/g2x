@@ -22,6 +22,7 @@ export type CardProduct = {
   base_price: number;
   min_price?: number | null;
   popular?: number;
+  category_image?: string | null;
 };
 
 export default function ProductCard({
@@ -90,7 +91,7 @@ export default function ProductCard({
       >
         <div className="relative h-[74px] w-[74px] overflow-hidden rounded-xl bg-[var(--panel)]/50">
           <Image
-            src={p.image ? img(p.image) : (p.category_slug==='currency' || p.category_slug==='top-up' ? '/art/coins.png' : gameArt(p.game_slug ?? p.slug, p.name))}
+            src={p.image && !p.image.includes('/art/coins.png') && p.image !== '' ? img(p.image) : (p.category_image ? img(p.category_image) : (p.category_slug==='currency' || p.category_slug==='top-up' ? '/art/coins.png' : gameArt(p.game_slug ?? p.slug, p.name)))}
             alt={p.name}
             fill
             sizes="90px"
