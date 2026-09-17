@@ -8,12 +8,14 @@ import {
   getListings,
   getGameCategories,
   getGames,
+  getGameOfferFields,
+  getOffersByGameCategory,
 } from "@/lib/queries";
 import { AnyLogo } from "@/components/BrandIcon";
 import { Breadcrumb, Pill } from "@/components/ui";
-import ProductCard from "@/components/browse/ProductCard";
 import ListingGrid from "@/components/browse/ListingGrid";
 import GameRail from "@/components/browse/GameRail";
+import GameCategoryProducts from "@/components/browse/GameCategoryProducts";
 
 // Cached and shared by all visitors so navigation is instant. Per-user
 // state (wishlist hearts) hydrates client-side from /api/wishlist.
@@ -29,11 +31,13 @@ export default async function Page({
 
   const isListing = cat.slug === "accounts" || cat.slug === "boosting";
 
-  const [products, listings, gameCats, allGames] = await Promise.all([
+  const [products, listings, gameCats, allGames, gameFields, offers] = await Promise.all([
     isListing ? Promise.resolve([]) : getProducts(game.slug, cat.slug),
     isListing ? getListings({ game: game.slug, category: cat.slug }) : Promise.resolve([]),
     getGameCategories(game.slug),
     getGames(),
+    isListing ? Promise.resolve([]) : getGameOfferFields(game.slug),
+    isListing ? Promise.resolve([]) : getOffersByGameCategory(game.slug, cat.slug),
   ]);
 
   return (
@@ -82,17 +86,7 @@ export default async function Page({
           {isListing ? (
             <ListingGrid listings={listings} category={cat.slug} />
           ) : products.length ? (
-            <div className="rounded-2xl panel p-3.5 sm:p-5">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 sm:mb-4">
-                <h2 className="text-[14px] font-bold">{cat.name} Packages</h2>
-                <span className="text-[11.5px] muted">{products.length} products</span>
-              </div>
-              <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-                {products.map((p, i) => (
-                  <ProductCard key={p.id} p={p} i={i} />
-                ))}
-              </div>
-            </div>
+            <GameCategoryProducts products={products as never} gameFields={gameFields as never} offers={offers as never} />
           ) : (
             <div className="grid place-items-center rounded-2xl border border-dashed border-[var(--line)] px-6 py-14 text-center">
               <div className="text-[14px] font-semibold">No products yet</div>

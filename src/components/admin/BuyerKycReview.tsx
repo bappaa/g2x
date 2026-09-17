@@ -89,7 +89,7 @@ function Modal({ v, onClose }: { v: V; onClose: () => void }) {
             <h2 className="text-[15px] font-black sm:text-[17px]">{v.full_name}</h2>
             <p className="text-[11.5px] muted">{v.email}</p>
           </div>
-          <button onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400">
+          <button type="button" onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400">
             <X size={16} />
           </button>
         </div>

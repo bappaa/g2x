@@ -110,7 +110,7 @@ function ReviewCard({ r }: { r: R }) {
           </Btn>
         </div>
       ) : (
-        <button onClick={() => setOpen(true)} className="mt-2 flex items-center gap-1 text-[11.5px] text-brand-400 hover:underline">
+        <button type="button" onClick={() => setOpen(true)} className="mt-2 flex items-center gap-1 text-[11.5px] text-brand-400 hover:underline">
           <Reply size={12} /> Reply
         </button>
       )}

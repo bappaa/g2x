@@ -156,6 +156,17 @@ export const getOffers = (productId: string) =>
     [productId]
   );
 
+export const getOffersByGameCategory = (gameSlug: string, categorySlug: string) =>
+  all<DbOffer & { product_id: string; product_slug: string }>(
+    `SELECT o.*, p.slug AS product_slug, p.id AS product_id, sp.store_name, sp.slug AS seller_slug, sp.level, sp.verified, sp.rating, sp.total_orders
+       FROM offers o
+       JOIN products p ON p.id=o.product_id
+       JOIN seller_profiles sp ON sp.user_id=o.seller_id
+      WHERE p.game_slug=? AND p.category_slug=? AND o.status='active' AND o.stock>0 AND p.status='active' AND sp.status='active'
+      ORDER BY o.price ASC`,
+    [gameSlug, categorySlug]
+  );
+
 export const getOfferById = (id: string) =>
   one<DbOffer>(
     `SELECT o.*, sp.store_name, sp.slug AS seller_slug, sp.level, sp.verified,

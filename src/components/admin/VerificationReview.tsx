@@ -96,7 +96,7 @@ function Modal({ v, onClose }: { v: V; onClose: () => void }) {
           <BadgeCheck size={17} className="text-brand-400" />
           <h2 className="text-[16px] font-black">Identity review</h2>
           <Tag tone={statusTone(v.status)}>{label(v.status)}</Tag>
-          <button onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400">
+          <button type="button" onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400">
             <X size={15} />
           </button>
         </div>
@@ -118,7 +118,7 @@ function Modal({ v, onClose }: { v: V; onClose: () => void }) {
             <div className="text-[11.5px] font-semibold muted">Documents</div>
             <div className="grid grid-cols-2 gap-2">
               {docs.map((d) => (
-                <button
+                <button type="button"
                   key={d.key}
                   onClick={() => setZoom(`/api/kyc/${d.key}`)}
                   className="group relative overflow-hidden rounded-xl border border-[var(--line)] soft"
@@ -171,7 +171,7 @@ function Modal({ v, onClose }: { v: V; onClose: () => void }) {
               <Btn variant="ghost" disabled={pending} onClick={() => decide("resubmit")}>
                 Ask to resubmit
               </Btn>
-              <button
+              <button type="button"
                 onClick={() => decide("rejected")}
                 disabled={pending}
                 className="rounded-lg px-4 py-2.5 text-[12.5px] font-semibold text-rose-400 hover:bg-rose-500/10 disabled:opacity-50"
@@ -212,7 +212,7 @@ function Row({ l, v, copy }: { l: string; v: string; copy?: boolean }) {
       <span className="w-[104px] shrink-0 text-[10.5px] muted">{l}</span>
       <span className="min-w-0 flex-1 break-words text-[12px] font-medium">{v}</span>
       {copy && (
-        <button
+        <button type="button"
           onClick={() => {
             navigator.clipboard?.writeText(v);
             setDone(true);

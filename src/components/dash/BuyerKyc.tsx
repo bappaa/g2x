@@ -128,7 +128,7 @@ export default function BuyerKyc({
 
       {/* ----------------------------- form ----------------------------- */}
       {!locked && (
-        <form action={submit} className="space-y-4">
+        <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); submit(fd); }} className="space-y-4">
           <div className="rounded-2xl panel p-4 sm:p-5">
             <h3 className="text-[14px] font-bold">1. Your details</h3>
             <p className="mt-1 text-[11.5px] muted">

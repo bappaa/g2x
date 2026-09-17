@@ -128,7 +128,7 @@ export default function SettingsForm({
     });
 
   return (
-    <form action={submit} className="space-y-4">
+    <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); submit(fd); }} className="space-y-4">
       {GROUPS.map((g) => (
         <div key={g.title} className="rounded-2xl panel p-5">
           <h3 className="mb-3 text-[14px] font-bold">{g.title}</h3>

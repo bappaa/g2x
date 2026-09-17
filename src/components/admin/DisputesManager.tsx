@@ -32,7 +32,7 @@ export default function DisputesManager({
     <div className="grid gap-3 lg:grid-cols-[280px_1fr]">
       <div className="space-y-1.5">
         {rows.map((d) => (
-          <button
+          <button type="button"
             key={d.code}
             onClick={() => router.push(`/admin/disputes?status=${d.status}&code=${d.code}`)}
             className={`w-full rounded-xl border p-2.5 text-left transition-all ${
@@ -108,7 +108,7 @@ function Detail({ d, messages }: { d: D; messages: M[] }) {
 
       <div className="flex gap-1.5">
         {(["chat", "decide"] as const).map((t) => (
-          <button
+          <button type="button"
             key={t}
             onClick={() => setTab(t)}
             className={`rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all ${

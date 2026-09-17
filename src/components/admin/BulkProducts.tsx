@@ -53,7 +53,7 @@ export default function BulkProducts({ games, categories }: { games: G[]; catego
     });
 
   return (
-    <form action={submit} className="space-y-4">
+    <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); submit(fd); }} className="space-y-4">
       <div className="rounded-2xl panel p-4 sm:p-5">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Category">

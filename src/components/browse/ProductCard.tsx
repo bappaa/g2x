@@ -59,7 +59,7 @@ export default function ProductCard({
           Popular
         </span>
       )}
-      <button
+      <button type="button"
         onClick={(e) => {
           e.preventDefault();
           const nextState = !on;

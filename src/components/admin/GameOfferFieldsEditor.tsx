@@ -176,7 +176,11 @@ function FieldForm({
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
       <form
-        action={submit}
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget as HTMLFormElement);
+          submit(fd);
+        }}
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-[520px] space-y-3 rounded-2xl panel p-5"
       >

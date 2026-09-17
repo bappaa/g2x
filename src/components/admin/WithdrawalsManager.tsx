@@ -95,7 +95,7 @@ function Modal({ w, d, onClose }: { w: W; d: "approved" | "paid" | "rejected"; o
         <div className="flex items-center gap-2">
           <Banknote size={16} className="text-emerald-400" />
           <h2 className="text-[15px] font-black capitalize">{d === "paid" ? "Mark as paid" : d}</h2>
-          <button onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400"><X size={15} /></button>
+          <button type="button" onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400"><X size={15} /></button>
         </div>
         <p className="text-[11.5px] muted">{copy}</p>
         <div className="rounded-lg soft p-2.5 text-[11.5px]">

@@ -106,7 +106,7 @@ export function IconAction({
   danger?: boolean; disabled?: boolean;
 }) {
   return (
-    <button
+    <button type="button"
       title={title}
       onClick={onClick}
       disabled={disabled}

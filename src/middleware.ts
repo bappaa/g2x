@@ -128,7 +128,7 @@ export async function middleware(req: NextRequest) {
     "font-src 'self' data: https://fonts.gstatic.com",
     "connect-src 'self' https://api.exchangerate-api.com https://api.frankfurter.app",
     "frame-ancestors 'none'",
-    "form-action 'self'",
+    "form-action 'self' javascript: blob:",
     "base-uri 'self'",
     "object-src 'none'",
     "media-src 'self' blob:",

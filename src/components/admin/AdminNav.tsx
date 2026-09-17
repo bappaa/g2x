@@ -166,7 +166,7 @@ export default function AdminNav({
     <>
       {/* mobile bar */}
       <div className="sticky top-0 z-40 flex items-center gap-3 border-b border-[var(--line)] bg-[var(--bg)] px-4 py-3 lg:hidden">
-        <button onClick={() => setOpen(true)} className="rounded-lg p-1.5 soft">
+        <button type="button" onClick={() => setOpen(true)} className="rounded-lg p-1.5 soft">
           <Menu size={17} />
         </button>
         <span className="text-[14px] font-black">
@@ -190,7 +190,7 @@ export default function AdminNav({
               onClick={(e) => e.stopPropagation()}
               className="h-full w-[240px] overflow-y-auto border-r border-[var(--line)] bg-[var(--panel)] p-3"
             >
-              <button onClick={() => setOpen(false)} className="mb-3 rounded-lg p-1.5 soft">
+              <button type="button" onClick={() => setOpen(false)} className="mb-3 rounded-lg p-1.5 soft">
                 <X size={16} />
               </button>
               {nav}

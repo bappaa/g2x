@@ -180,7 +180,7 @@ export default function AuthForm({
             <span className="h-px flex-1 bg-[var(--line)]" />
           </div>
 
-          <form action={submit} className="space-y-3.5">
+          <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); submit(fd); }} className="space-y-3.5">
             {!isLogin && (
               <IconInput icon={UserIcon} name="name" placeholder="Full name" autoComplete="name" />
             )}

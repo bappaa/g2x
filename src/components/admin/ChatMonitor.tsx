@@ -53,7 +53,7 @@ export default function ChatMonitor({
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex gap-1.5">
           {(["flagged", "all"] as const).map((v) => (
-            <button
+            <button type="button"
               key={v}
               onClick={() => router.push(`/admin/messages?view=${v}`)}
               className={`rounded-lg px-3 py-1.5 text-[12px] font-medium capitalize transition-all ${
@@ -81,7 +81,7 @@ export default function ChatMonitor({
         </form>
         <div className="flex gap-1.5 lg:hidden">
           {(["threads", "queue"] as const).map((t) => (
-            <button
+            <button type="button"
               key={t}
               onClick={() => setTab(t)}
               className={`rounded-lg px-3 py-1.5 text-[12px] capitalize ${tab === t ? "bg-brand-600 text-white" : "soft muted"}`}
@@ -97,7 +97,7 @@ export default function ChatMonitor({
         <div className={`space-y-1.5 lg:block ${tab === "threads" ? "" : "hidden"}`}>
           {threads.length === 0 && <Empty title="No chats" sub="Nothing matches this filter." />}
           {threads.map((t) => (
-            <button
+            <button type="button"
               key={t.id}
               onClick={() => go({ thread: t.id })}
               className={`w-full rounded-xl border p-2.5 text-left transition-all ${
@@ -203,7 +203,7 @@ export default function ChatMonitor({
                 f.admin_reviewed ? "border-[var(--line)] panel opacity-60" : "border-rose-500/35 bg-rose-500/[.06]"
               }`}
             >
-              <button onClick={() => go({ thread: f.thread_id })} className="w-full text-left">
+              <button type="button" onClick={() => go({ thread: f.thread_id })} className="w-full text-left">
                 <div className="text-[11px] font-bold">{f.sender_name}</div>
                 <div className="text-[9.5px] muted">{f.sender_email} · <LocalTime at={f.created_at} /></div>
                 <div className="mt-1 line-clamp-2 text-[11px]">{f.body}</div>
@@ -242,15 +242,15 @@ function MsgActions({ id, reviewed }: { id: string; reviewed: boolean }) {
   return (
     <div className="flex items-center gap-1">
       {pending && <Loader2 size={10} className="animate-spin muted" />}
-      <button onClick={() => act("clear")} disabled={pending} title="False positive"
+      <button type="button" onClick={() => act("clear")} disabled={pending} title="False positive"
         className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9.5px] soft hover:text-emerald-400">
         <Check size={9} /> Clear
       </button>
-      <button onClick={() => act("warn")} disabled={pending} title="Send a policy warning"
+      <button type="button" onClick={() => act("warn")} disabled={pending} title="Send a policy warning"
         className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9.5px] soft hover:text-amber-400">
         <AlertTriangle size={9} /> Warn
       </button>
-      <button onClick={() => act("ban")} disabled={pending} title="Suspend the account"
+      <button type="button" onClick={() => act("ban")} disabled={pending} title="Suspend the account"
         className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9.5px] soft hover:text-rose-400">
         <Ban size={9} /> Ban
       </button>

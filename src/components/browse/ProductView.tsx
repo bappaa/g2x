@@ -271,14 +271,14 @@ export default function ProductView({
 
       <Btn
         className="mt-3 w-full"
-        onClick={() => buy([...offers].sort((a, b) => a.price - b.price)[0], true)}
+        onClick={() => buy([...filteredOffers].sort((a, b) => a.price - b.price)[0], true)}
       >
         {tr("prod.buyCheapest")}
       </Btn>
       <Btn
         variant="ghost"
         className="mt-2 w-full"
-        onClick={() => buy([...offers].sort((a, b) => a.price - b.price)[0], false)}
+        onClick={() => buy([...filteredOffers].sort((a, b) => a.price - b.price)[0], false)}
       >
         {tr("common.addToCart")}
       </Btn>
@@ -340,7 +340,7 @@ export default function ProductView({
               <div className="min-w-0 flex-1">
                 <div className="flex items-start gap-3">
                   <h1 className="min-w-0 flex-1 text-[19px] font-black leading-tight tracking-tight sm:text-[26px]">{product.name}</h1>
-                  <button
+                  <button type="button"
                     onClick={() => {
                       const n = !heart;
                       setHeart(n);
@@ -395,7 +395,7 @@ export default function ProductView({
                   />
                 )}
 
-                <button
+                <button type="button"
                   onClick={() => setHowOpen((o) => !o)}
                   className="mt-4 flex items-center gap-1.5 text-[12px] font-medium text-brand-500"
                 >
@@ -469,7 +469,7 @@ export default function ProductView({
                 <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide muted">
                   <Globe size={12} /> Filter offers
                   {Object.keys(gameFilters).length > 0 && (
-                    <button onClick={() => setGameFilters({})} className="ml-auto text-[11px] normal-case text-brand-400 hover:underline">Clear</button>
+                    <button type="button" onClick={() => setGameFilters({})} className="ml-auto text-[11px] normal-case text-brand-400 hover:underline">Clear</button>
                   )}
                 </div>
                 <div className="grid gap-2.5 sm:grid-cols-3">
@@ -575,7 +575,7 @@ export default function ProductView({
                           </td>
                           <td className="py-3">
                             <div className="flex justify-end gap-2">
-                              <button
+                              <button type="button"
                                 onClick={() => buy(o, false)}
                                 disabled={busy === o.id}
                                 className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--line)] transition-all hover:border-brand-500 hover:text-brand-500 disabled:opacity-50"
@@ -589,7 +589,7 @@ export default function ProductView({
                                   <ShoppingCart size={14} />
                                 )}
                               </button>
-                              <button
+                              <button type="button"
                                 onClick={() => buy(o, true)}
                                 disabled={busy === o.id}
                                 className="rounded-lg bg-brand-600 px-3.5 py-1.5 text-[12px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-brand-500 disabled:opacity-50"
@@ -659,7 +659,7 @@ export default function ProductView({
                       </div>
 
                       <div className="mt-2.5 flex gap-2">
-                        <button
+                        <button type="button"
                           onClick={() => buy(o, false)}
                           disabled={busy === o.id}
                           className="grid h-9 w-10 shrink-0 place-items-center rounded-lg border border-[var(--line)] transition active:scale-95 disabled:opacity-50"
@@ -673,7 +673,7 @@ export default function ProductView({
                             <ShoppingCart size={15} />
                           )}
                         </button>
-                        <button
+                        <button type="button"
                           onClick={() => buy(o, true)}
                           disabled={busy === o.id}
                           className="h-9 flex-1 rounded-lg bg-brand-600 text-[12.5px] font-semibold text-white transition active:scale-[.98] disabled:opacity-50"
@@ -754,7 +754,7 @@ function ChipRow({
         {options.map((o) => {
           const on = o === value;
           return (
-            <button
+            <button type="button"
               key={o}
               onClick={() => onChange(o)}
               className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11.5px] font-semibold transition-all active:scale-95 sm:px-3 sm:py-2 sm:text-[12px] ${

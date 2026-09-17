@@ -300,7 +300,7 @@ function IconBtn({
   children: React.ReactNode; onClick: () => void; title: string; danger?: boolean;
 }) {
   return (
-    <button
+    <button type="button"
       title={title}
       onClick={onClick}
       className={`grid h-8 w-8 place-items-center rounded-lg soft transition-colors ${

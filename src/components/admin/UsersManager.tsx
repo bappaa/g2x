@@ -124,7 +124,7 @@ function WalletModal({ u, onClose }: { u: U; onClose: () => void }) {
       >
         <div className="flex items-center">
           <h2 className="text-[15px] font-black">Adjust wallet</h2>
-          <button onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400"><X size={15} /></button>
+          <button type="button" onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400"><X size={15} /></button>
         </div>
         <div className="rounded-lg soft p-2.5 text-[11.5px]">
           {u.email} · current balance <span className="font-bold">{money(u.balance)}</span>

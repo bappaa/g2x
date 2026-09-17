@@ -88,7 +88,7 @@ export default function ListingsView({
               <div className="text-[15px] font-black text-brand-500">{money(l.price)}</div>
               <Tag tone={statusTone(l.status)}>{label(l.status)}</Tag>
               <div className="flex gap-1">
-                <button
+                <button type="button"
                   onClick={() => act(() => listingStatusAction(l.id, l.status === "active" ? "paused" : "active"))}
                   className="grid h-8 w-8 place-items-center rounded-lg soft hover:bg-brand-500/15 hover:text-brand-400"
                   title={l.status === "active" ? "Pause" : "Activate"}
@@ -103,14 +103,14 @@ export default function ListingsView({
                 >
                   <Pencil size={13} />
                 </Link>
-                <button
+                <button type="button"
                   onClick={() => copyLink(l)}
                   className="grid h-8 w-8 place-items-center rounded-lg soft hover:bg-brand-500/15 hover:text-brand-400"
                   title={copiedId === l.id ? "Copied!" : "Copy product link"}
                 >
                   {copiedId === l.id ? <Check size={13} className="text-emerald-400" /> : <Link2 size={13} />}
                 </button>
-                <button
+                <button type="button"
                   onClick={() => act(() => deleteListingAction(l.id))}
                   className="grid h-8 w-8 place-items-center rounded-lg soft hover:bg-rose-500/15 hover:text-rose-400"
                   title="Delete"
@@ -164,7 +164,7 @@ function Modal({
       >
         <div className="mb-4 flex items-center gap-2">
           <h2 className="text-[16px] font-black">{listing ? "Edit listing" : "New listing"}</h2>
-          <button onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400">
+          <button type="button" onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400">
             <X size={15} />
           </button>
         </div>

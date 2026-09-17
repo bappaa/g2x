@@ -41,7 +41,7 @@ export default function GameRail({
     <>
       {/* ---------------------------- mobile ---------------------------- */}
       <div className="min-w-0 space-y-2.5 lg:hidden">
-        <button
+        <button type="button"
           onClick={() => setOpen(true)}
           className="flex w-full min-w-0 items-center gap-2.5 rounded-xl panel px-3 py-2.5 text-left active:scale-[.99]"
         >
@@ -135,7 +135,7 @@ function GameSheet({
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--line)]" />
         <div className="mb-3 flex items-center">
           <div className="text-[14px] font-black">Choose a game</div>
-          <button onClick={onClose} className="ml-auto rounded-lg p-1.5 soft" aria-label="Close">
+          <button type="button" onClick={onClose} className="ml-auto rounded-lg p-1.5 soft" aria-label="Close">
             <X size={15} />
           </button>
         </div>

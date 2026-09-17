@@ -21,7 +21,7 @@ export default function TicketsManager({ rows }: { rows: T[] }) {
     <div className="space-y-2.5">
       {rows.map((t) => (
         <div key={t.id} className="rounded-2xl panel p-4">
-          <button
+          <button type="button"
             onClick={() => setOpen(open === t.code ? null : t.code)}
             className="flex w-full flex-wrap items-center gap-2 text-left"
           >

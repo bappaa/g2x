@@ -49,7 +49,7 @@ function OrderRow({ o }: { o: OI }) {
 
   return (
     <motion.div layout className="rounded-2xl panel p-4">
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full flex-wrap items-center gap-3 text-left">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full flex-wrap items-center gap-3 text-left">
         <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg soft">
           <Image src={img(o.image)} alt="" fill sizes="48px" className="object-cover" />
         </div>
@@ -73,7 +73,7 @@ function OrderRow({ o }: { o: OI }) {
             <Info l="Delivery UID" v={o.delivery_uid} />
             <div className="rounded-lg soft px-3 py-2 flex items-center justify-between gap-2">
               <div><div className="text-[10.5px] muted">Order ID</div><div className="text-[12px] font-medium">{o.code}</div></div>
-              <button onClick={() => navigator.clipboard.writeText(o.code)} className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10.5px] font-bold text-white hover:bg-brand-500">Copy</button>
+              <button type="button" onClick={() => navigator.clipboard.writeText(o.code)} className="rounded-lg bg-brand-600 px-2.5 py-1 text-[10.5px] font-bold text-white hover:bg-brand-500">Copy</button>
             </div>
             <Info l="Quantity" v={`${o.qty} × ${money(o.unit_price)}`} />
             {o.opt_region && <Info l="Game server" v={o.opt_region} />}
@@ -97,7 +97,7 @@ function OrderRow({ o }: { o: OI }) {
               >
                 <MessageSquare size={13} /> Message buyer
               </Btn>
-              <button
+              <button type="button"
                 onClick={() => setMode("cancel")}
                 className="flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-[12.5px] font-semibold text-rose-400 hover:bg-rose-500/10"
               >
@@ -223,7 +223,7 @@ function OrderRow({ o }: { o: OI }) {
                   </div>
                 ))}
               </div>
-              <button
+              <button type="button"
                 onClick={() => setFields((f) => [...f, { label: "", value: "" }])}
                 className="mt-2 flex items-center gap-1 text-[11.5px] text-brand-400 hover:underline"
               >

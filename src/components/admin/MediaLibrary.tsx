@@ -178,7 +178,7 @@ function AssignModal({ m, games, onClose }: { m: M; games: G[]; onClose: () => v
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={`/api/media/${m.id}`} alt="" className="h-9 w-9 rounded-lg object-cover" />
           <h2 className="text-[15px] font-black">Set as game icon</h2>
-          <button onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400"><X size={15} /></button>
+          <button type="button" onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400"><X size={15} /></button>
         </div>
 
         <input
@@ -190,7 +190,7 @@ function AssignModal({ m, games, onClose }: { m: M; games: G[]; onClose: () => v
 
         <div className="mt-2 space-y-1">
           {list.map((g) => (
-            <button
+            <button type="button"
               key={g.slug}
               disabled={pending}
               onClick={() =>

@@ -280,7 +280,7 @@ export default function SellerDisputes({
     <div className="flex h-[calc(100dvh-140px)] min-h-[460px] flex-col gap-3 sm:h-[calc(100dvh-150px)]">
       <div className="flex shrink-0 items-center gap-2">
         {activeCode && (
-          <button
+          <button type="button"
             onClick={() => router.push("/seller/disputes")}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-[var(--line)] md:hidden"
           >
@@ -305,7 +305,7 @@ export default function SellerDisputes({
         {/* List */}
         <div className={`min-h-0 overflow-y-auto border-[var(--line)] md:block md:border-r ${showListOnMobile ? "block" : "hidden"}`}>
           {disputes.map((d) => (
-            <button
+            <button type="button"
               key={d.code}
               onClick={() => router.push(`/seller/disputes?d=${d.code}`)}
               className={`flex w-full items-center gap-2.5 border-b border-[var(--line)] p-3 text-left transition-colors last:border-0 ${

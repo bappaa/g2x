@@ -114,7 +114,7 @@ function OrderModal({ o, mode, onClose }: { o: O; mode: "status" | "refund"; onC
           <h2 className="text-[15px] font-black">
             {mode === "status" ? "Update order status" : "Issue a refund"}
           </h2>
-          <button onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400"><X size={15} /></button>
+          <button type="button" onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400"><X size={15} /></button>
         </div>
         <div className="rounded-lg soft p-2.5 text-[11.5px]">
           <span className="font-mono font-bold">{o.code}</span> · {o.buyer_name} · {money(o.total)}

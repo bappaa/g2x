@@ -201,8 +201,7 @@ function GameForm({ game, categories, allFields, onClose }: { game: G | null; ca
       onClick={onClose}
       className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
     >
-      <motion.form
-        action={submit}
+      <motion.div
         initial={{ opacity: 0, y: 18, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 10, scale: 0.98 }}
@@ -216,67 +215,77 @@ function GameForm({ game, categories, allFields, onClose }: { game: G | null; ca
           </button>
         </div>
 
-        <input type="hidden" name="original" value={game?.slug ?? ""} />
+        <form
+          id="game-main-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget as HTMLFormElement);
+            submit(fd);
+          }}
+          className="space-y-3"
+        >
+          <input type="hidden" name="original" value={game?.slug ?? ""} />
 
-        <Field label="Game name">
-          <input name="name" required defaultValue={game?.name} className={inputCls} placeholder="Valorant" />
-        </Field>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="URL slug" hint="Leave blank to generate from the name">
-            <input name="slug" defaultValue={game?.slug} className={inputCls} placeholder="valorant" />
+          <Field label="Game name">
+            <input name="name" required defaultValue={game?.name} className={inputCls} placeholder="Valorant" />
           </Field>
-          <Field label="Sort order">
-            <input name="sortOrder" type="number" defaultValue={game?.sort_order ?? 0} className={inputCls} />
-          </Field>
-        </div>
-        <ImagePicker
-          label="Game logo * (shows on homepage)"
-          urlName="logo"
-          fileName="logoFile"
-          defaultUrl={game?.logo ?? ""}
-          square
-          hint={game ? "Shows on homepage and as fallback for products. Edit anytime." : "REQUIRED: Upload game logo (e.g., Valorant icon) - shows on homepage. You will add currency/top-up images when creating products."}
-        />
-
-        <Field label="Accent colour">
-          <input name="accent" type="color" defaultValue={game?.accent || "#8b3dff"} className={`${inputCls} h-[38px] p-1`} />
-        </Field>
-
-        <Field label="Appears in these categories" hint="Controls which category pages list this game">
-          <div className="flex flex-wrap gap-1.5">
-            {categories.map((c) => {
-              const on = picked.includes(c.slug);
-              return (
-                <button
-                  key={c.slug}
-                  type="button"
-                  onClick={() => setPicked((p) => (on ? p.filter((x) => x !== c.slug) : [...p, c.slug]))}
-                  className={`rounded-lg px-2.5 py-1.5 text-[11.5px] font-medium transition-all ${
-                    on ? "bg-brand-600 text-white" : "soft muted hover:text-brand-400"
-                  }`}
-                >
-                  {c.name}
-                </button>
-              );
-            })}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="URL slug" hint="Leave blank to generate from the name">
+              <input name="slug" defaultValue={game?.slug} className={inputCls} placeholder="valorant" />
+            </Field>
+            <Field label="Sort order">
+              <input name="sortOrder" type="number" defaultValue={game?.sort_order ?? 0} className={inputCls} />
+            </Field>
           </div>
-        </Field>
+          <ImagePicker
+            label="Game logo * (shows on homepage)"
+            urlName="logo"
+            fileName="logoFile"
+            defaultUrl={game?.logo ?? ""}
+            square
+            hint={game ? "Shows on homepage and as fallback for products. Edit anytime." : "REQUIRED: Upload game logo (e.g., Valorant icon) - shows on homepage. You will add currency/top-up images when creating products."}
+          />
 
-        <Field label="Status">
-          <select name="status" defaultValue={game?.status ?? "active"} className={inputCls}>
-            <option value="active">Live on site</option>
-            <option value="hidden">Hidden</option>
-          </select>
-        </Field>
+          <Field label="Accent colour">
+            <input name="accent" type="color" defaultValue={game?.accent || "#8b3dff"} className={`${inputCls} h-[38px] p-1`} />
+          </Field>
 
-        {err && <div className="text-[11.5px] text-rose-400">{err}</div>}
+          <Field label="Appears in these categories" hint="Controls which category pages list this game">
+            <div className="flex flex-wrap gap-1.5">
+              {categories.map((c) => {
+                const on = picked.includes(c.slug);
+                return (
+                  <button
+                    key={c.slug}
+                    type="button"
+                    onClick={() => setPicked((p) => (on ? p.filter((x) => x !== c.slug) : [...p, c.slug]))}
+                    className={`rounded-lg px-2.5 py-1.5 text-[11.5px] font-medium transition-all ${
+                      on ? "bg-brand-600 text-white" : "soft muted hover:text-brand-400"
+                    }`}
+                  >
+                    {c.name}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
 
-        <div className="flex gap-2 pt-1">
-          <Btn className="flex items-center gap-2" disabled={pending}>
-            {pending && <Loader2 size={13} className="animate-spin" />} Save game
-          </Btn>
-          <Btn variant="ghost" type="button" onClick={onClose}>Cancel</Btn>
-        </div>
+          <Field label="Status">
+            <select name="status" defaultValue={game?.status ?? "active"} className={inputCls}>
+              <option value="active">Live on site</option>
+              <option value="hidden">Hidden</option>
+            </select>
+          </Field>
+
+          {err && <div className="text-[11.5px] text-rose-400">{err}</div>}
+
+          <div className="flex gap-2 pt-1">
+            <Btn type="submit" className="flex items-center gap-2" disabled={pending}>
+              {pending && <Loader2 size={13} className="animate-spin" />} Save game
+            </Btn>
+            <Btn variant="ghost" type="button" onClick={onClose}>Cancel</Btn>
+          </div>
+        </form>
 
         {game && (
           <>
@@ -292,7 +301,7 @@ function GameForm({ game, categories, allFields, onClose }: { game: G | null; ca
             Save the game first, then edit it to configure product images and cascading offer fields (Region → Realm → Faction).
           </div>
         )}
-      </motion.form>
+      </motion.div>
     </motion.div>
   );
 }
@@ -320,7 +329,15 @@ function QuickProductAdder({ gameSlug, categories }: { gameSlug: string; categor
       <p className="mb-3 text-[11px] muted">
         Upload a product image (e.g. UC icon, Gold icon) and choose which category it should appear in. This image shows on game page categories and seller product picker.
       </p>
-      <form id={`quick-prod-${gameSlug}`} action={submit} className="space-y-3">
+      <form
+        id={`quick-prod-${gameSlug}`}
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget as HTMLFormElement);
+          submit(fd);
+        }}
+        className="space-y-3"
+      >
         <input type="hidden" name="game" value={gameSlug} />
         <Field label="Product name" hint="e.g. 60 UC, 1000 Gold, V-Bucks">
           <input name="name" required className={inputCls} placeholder="60 UC" />

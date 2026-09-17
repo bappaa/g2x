@@ -122,7 +122,7 @@ function Form({ b, count, onClose }: { b: B | null; count: number; onClose: () =
       className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
     >
       <motion.form
-        action={submit}
+        onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); submit(fd); }}
         initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
         onClick={(e) => e.stopPropagation()}
         className="max-h-[90vh] w-full max-w-[520px] space-y-3 overflow-y-auto rounded-2xl panel p-5"
