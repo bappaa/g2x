@@ -67,9 +67,13 @@ export default function GameCategoryProducts({
 
   const offerCF = useMemo(() => offers.map((o) => ({ product_id: o.product_id, cf: parseCF(o), region: o.region })), [offers]);
 
+  // Filter out test fields like 'ede'
+  const cleanGameFields = gameFields.filter(f => !/ede/i.test(f.field_key) && !/ede/i.test(f.label) && f.field_key!=='gg' && f.label!=='gg' && f.field_key.length>=2);
+
   const filterOptions = useMemo(() => {
     const map: Record<string, string[]> = {};
-    for (const gf of gameFields) {
+    const fieldsForOptions = cleanGameFields;
+    for (const gf of fieldsForOptions) {
       const vals = new Set<string>();
       for (const { cf, region } of offerCF) {
         const v = cf[gf.field_key] || (gf.field_key === "region" ? region || "" : "");
@@ -93,10 +97,10 @@ export default function GameCategoryProducts({
       map[gf.field_key] = Array.from(vals).sort();
     }
     return map;
-  }, [gameFields, offerCF]);
+  }, [cleanGameFields, offerCF]);
 
   const filteredProducts = useMemo(() => {
-    if (gameFields.length === 0 || Object.keys(filters).length === 0) return products;
+    if (cleanGameFields.length === 0 || Object.keys(filters).length === 0) return products;
     // Keep products that have at least one offer matching filters
     return products.filter((p) => {
       const relevantOffers = offerCF.filter((o) => o.product_id === p.id);
@@ -109,9 +113,9 @@ export default function GameCategoryProducts({
         return true;
       });
     });
-  }, [products, filters, gameFields, offerCF]);
+  }, [products, filters, cleanGameFields, offerCF]);
 
-  const hasFilters = gameFields.length > 0 && Object.values(filterOptions).some((arr) => arr.length > 0);
+  const hasFilters = cleanGameFields.length > 0 && Object.values(filterOptions).some((arr) => arr.length > 0);
 
   return (
     <div className="rounded-2xl panel p-3.5 sm:p-5">
@@ -124,7 +128,7 @@ export default function GameCategoryProducts({
       </div>
 
       {hasFilters && (
-        <div className="mb-4 rounded-xl soft p-3">
+        <div className="mb-4 rounded-xl border border-[var(--line)] bg-[var(--panel)]/50 p-4 shadow-sm">
           <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide muted">
             <Globe size={12} /> Select Server
             {Object.keys(filters).length > 0 && (
@@ -134,7 +138,7 @@ export default function GameCategoryProducts({
             )}
           </div>
           <div className="grid gap-2.5 sm:grid-cols-3">
-            {gameFields
+            {cleanGameFields
               .slice()
               .sort((a, b) => a.sort_order - b.sort_order)
               .map((gf) => {
@@ -144,18 +148,21 @@ export default function GameCategoryProducts({
                 return (
                   <div key={gf.id}>
                     <label className="mb-1 block text-[11px] font-semibold">{gf.label}</label>
-                    <select
-                      value={filters[gf.field_key] || ""}
-                      onChange={(e) => setFilter(gf.field_key, e.target.value)}
-                      className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-2 text-[12.5px] outline-none focus:border-brand-500"
-                    >
-                      <option value="">All {gf.label}</option>
-                      {opts.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={filters[gf.field_key] || ""}
+                        onChange={(e) => setFilter(gf.field_key, e.target.value)}
+                        className="w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 py-2.5 pr-8 text-[13px] font-medium outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                      >
+                        <option value="">All {gf.label}</option>
+                        {opts.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
+                    </div>
                   </div>
                 );
               })}

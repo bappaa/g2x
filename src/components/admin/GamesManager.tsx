@@ -344,11 +344,14 @@ function QuickProductAdder({ gameSlug, categories }: { gameSlug: string; categor
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Category (where this photo appears)">
-            <select name="category" value={cat} onChange={(e) => setCat(e.target.value)} className={inputCls} required>
-              {categories.map((c) => (
-                <option key={c.slug} value={c.slug}>{c.name}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select name="category" value={cat} onChange={(e) => setCat(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] font-medium outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" required>
+                {categories.map((c) => (
+                  <option key={c.slug} value={c.slug}>{c.name}</option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
+            </div>
           </Field>
           <Field label="Base price (USD)">
             <input name="basePrice" type="number" step="0.01" defaultValue={0.99} className={inputCls} required />

@@ -88,16 +88,13 @@ export default function ProductCard({
         href={href}
         className="card-hover group flex h-full min-w-0 flex-col items-center rounded-2xl panel px-3 py-5 text-center sm:px-4 sm:py-6"
       >
-        <div className="relative h-[74px] w-[74px] overflow-hidden rounded-xl">
+        <div className="relative h-[74px] w-[74px] overflow-hidden rounded-xl bg-[var(--panel)]/50">
           <Image
-            /* Bulk-created products inherit the game logo, which is empty for
-               generated tiles — fall back to the same art the game uses so the
-               grid never shows a blank square. */
-            src={p.image ? img(p.image) : gameArt(p.game_slug ?? p.slug, p.name)}
+            src={p.image ? img(p.image) : (p.category_slug==='currency' || p.category_slug==='top-up' ? '/art/coins.png' : gameArt(p.game_slug ?? p.slug, p.name))}
             alt={p.name}
             fill
             sizes="90px"
-            className="object-contain transition-transform duration-500 group-hover:scale-110"
+            className="object-contain p-1 transition-transform duration-500 group-hover:scale-110"
           />
         </div>
         <div className="mt-3 line-clamp-2 w-full break-words text-[12.5px] font-semibold leading-tight sm:text-[13px]">

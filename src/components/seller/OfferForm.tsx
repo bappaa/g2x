@@ -162,7 +162,7 @@ export default function OfferForm({
   const [deliveryMethod, setDeliveryMethod] = useState(deliveryMethods[0]?.value ?? "");
   const [region, setRegion] = useState(initialServerVals["region"] || "");
   const [platform, setPlatform] = useState(initialServerVals["platform"] || "");
-  const [loginMethod, setLoginMethod] = useState(initialServerVals["loginMethod"] || "");
+  const [loginMethod] = useState(initialServerVals["loginMethod"] || "");
   const [gameVals, setGameVals] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const [k, v] of Object.entries(initialServerVals)) {
@@ -200,6 +200,7 @@ export default function OfferForm({
   const [err, setErr] = useState("");
 
   const priceNum = Number(price) || 0;
+  void loginMethods; // kept for compatibility, hidden per user request
 
   // --- Game-specific cascading fields helpers ---
   const getGameFieldOptions = (f: GameField): string[] => {
@@ -531,26 +532,21 @@ export default function OfferForm({
         </Hint>
       </Card>
 
-      {/* ---------- delivery ---------- */}
+            {/* ---------- delivery ---------- */}
       <Card title="Delivery">
         {mode === "both" && (
-          <div className="mb-3">
+          <div className="mb-4">
             <Label>Delivery method</Label>
-            <div className="space-y-1.5">
+            <div className="grid gap-2 sm:grid-cols-2">
               {[
-                { v: true, l: "Automatic", d: "When the buyer purchases your account, G2X instantly delivers the details so you don't even have to be online." },
-                { v: false, l: "Manual", d: "When this offer is sold, you will have to manually send the required account details to the buyer through G2X chat." },
+                { v: true, l: "Automatic", d: "G2X delivers instantly after payment — you don't need to be online." },
+                { v: false, l: "Manual", d: "You will manually send details via G2X chat within guaranteed time." },
               ].map((o) => (
-                <label key={o.l} className="flex cursor-pointer items-start gap-2.5 rounded-lg soft px-3 py-2.5">
-                  <input
-                    type="radio"
-                    checked={auto === o.v}
-                    onChange={() => setAuto(o.v)}
-                    className="mt-0.5 accent-[var(--brand,#8b3dff)]"
-                  />
+                <label key={o.l} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-3 transition-all ${auto===o.v ? "border-brand-500 bg-brand-600/10" : "border-[var(--line)] soft hover:border-brand-500/50"}`}>
+                  <input type="radio" checked={auto === o.v} onChange={() => setAuto(o.v)} className="mt-0.5 accent-[var(--brand,#8b3dff)]" />
                   <span className="min-w-0">
-                    <span className="block text-[12.5px] font-semibold">{o.l}</span>
-                    <span className="mt-0.5 block text-[11px] muted">{o.d}</span>
+                    <span className="block text-[12.5px] font-bold">{o.l}</span>
+                    <span className="mt-0.5 block text-[11px] leading-snug muted">{o.d}</span>
                   </span>
                 </label>
               ))}
@@ -558,46 +554,29 @@ export default function OfferForm({
           </div>
         )}
 
-        {/*
-          Guaranteed delivery time.
-
-          Automatic fulfilment is instant by definition — the buyer gets the
-          pre-filled details the moment they pay — so the field only appears
-          when the seller is delivering by hand, exactly as in the approved
-          design. It stays required in that case.
-        */}
         {!auto && (
-          <>
+          <div className="mb-4">
             <Label req>Guaranteed Delivery Time</Label>
-            <select value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} className={field}>
-              <option value="">Choose</option>
-              {deliveryTimes.map((d) => (
-                <option key={d.value} value={d.label}>{d.label}</option>
-              ))}
-            </select>
-            <Hint>Faster delivery time improves your offer&apos;s ranking in the offer list.</Hint>
-          </>
+            <div className="relative">
+              <select value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                <option value="">Choose delivery time</option>
+                {deliveryTimes.map((d) => (
+                  <option key={d.value} value={d.label}>{d.label}</option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 muted">▼</span>
+            </div>
+            <Hint>Faster delivery improves your ranking.</Hint>
+          </div>
         )}
 
-        {/*
-          "How the goods change hands" (in-game trade, mail, auction house…) is
-          a different question from "who types the details in" (automatic vs
-          manual). Currency is manually fulfilled yet still needs this list, so
-          it is driven purely by the admin's `show_delivery_method` switch.
-        */}
         {deliveryMethods.length > 0 && config.show_delivery_method !== 0 && (
-          <div className="mt-3">
-            <Label>Delivery method</Label>
-            <div className="grid gap-1.5 sm:grid-cols-2">
+          <div className="mb-4">
+            <Label>How will you deliver?</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
               {deliveryMethods.map((d) => (
-                <label key={d.value} className="flex cursor-pointer items-center gap-2 rounded-lg soft px-3 py-2 text-[12.5px]">
-                  <input
-                    type="radio"
-                    name="dm"
-                    checked={deliveryMethod === d.value}
-                    onChange={() => setDeliveryMethod(d.value)}
-                    className="accent-[var(--brand,#8b3dff)]"
-                  />
+                <label key={d.value} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12.5px] font-medium transition-all ${deliveryMethod===d.value ? "border-brand-500 bg-brand-600/10 text-white" : "border-[var(--line)] soft hover:border-brand-500/50"}`}>
+                  <input type="radio" name="dm" checked={deliveryMethod === d.value} onChange={() => setDeliveryMethod(d.value)} className="accent-[var(--brand,#8b3dff)]" />
                   {d.label}
                 </label>
               ))}
@@ -605,102 +584,103 @@ export default function OfferForm({
           </div>
         )}
 
-        {/* Selected server summary from previous step */}
-        {Object.keys(initialServerVals).length > 0 && (
-          <div className="mt-3 rounded-xl bg-brand-600/10 p-3">
-            <div className="mb-2 text-[11px] font-bold uppercase tracking-wide text-brand-300">Selected Server Details</div>
+        {/* Selected server summary from previous step - clean UI */}
+        {Object.keys(initialServerVals).filter(k=>initialServerVals[k] && !/ede/i.test(k) && !/ede/i.test(initialServerVals[k]) && k!=='gg').length > 0 && (
+          <div className="mb-4 rounded-xl border border-brand-500/20 bg-gradient-to-br from-brand-600/10 to-violet-600/10 p-4">
+            <div className="mb-2.5 flex items-center gap-2">
+              <span className="grid h-6 w-6 place-items-center rounded-lg bg-brand-600 text-white text-[11px]">✓</span>
+              <span className="text-[11.5px] font-black uppercase tracking-widest text-brand-300">Selected Server Details</span>
+            </div>
             <div className="flex flex-wrap gap-2">
-              {Object.entries(initialServerVals).map(([k, v]) => {
-                if (!v) return null;
+              {Object.entries(initialServerVals).filter(([k,v])=>v && !/ede/i.test(k) && !/ede/i.test(String(v)) && k!=='gg' && v!=='gg').map(([k, v]) => {
                 const gf = gameFields.find((f) => f.field_key === k);
-                const label = gf?.label || k;
+                const label = gf?.label || k.charAt(0).toUpperCase()+k.slice(1);
                 return (
-                  <span key={k} className="rounded-lg bg-[var(--panel)] px-2.5 py-1 text-[11.5px]">
-                    <span className="muted">{label}:</span> <b>{v}</b>
+                  <span key={k} className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/20 bg-[var(--panel)] px-3 py-1.5 text-[12px] shadow-sm">
+                    <span className="text-[11px] font-semibold muted">{label}:</span> <b className="text-white">{v}</b>
                   </span>
                 );
               })}
             </div>
-            <div className="mt-2 text-[10.5px] muted">These were selected in the game selection step and will be saved with your offer.</div>
+            <div className="mt-2.5 text-[11px] leading-relaxed muted">These were selected in game selection and will be saved with your offer. No need to select again.</div>
           </div>
         )}
 
-        {/* Game-specific cascading fields from admin (Region -> Realm -> Faction etc) - only show those not already selected */}
-        {gameFields.length > 0 && (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {gameFields
-              .slice()
-              .sort((a, b) => a.sort_order - b.sort_order)
-              .filter((gf) => !initialServerVals[gf.field_key])
-              .map((gf) => {
-                if (!isGameFieldVisible(gf)) return null;
+        {/* Game-specific cascading fields - only show those not already selected, clean UI */}
+        {(() => {
+          const cleanFields = gameFields.filter(f => !/ede/i.test(f.field_key) && !/ede/i.test(f.label) && f.field_key!=='gg' && f.label!=='gg' && f.field_key.length>=2);
+          const remaining = cleanFields.slice().sort((a,b)=>a.sort_order-b.sort_order).filter(gf => !initialServerVals[gf.field_key] && isGameFieldVisible(gf));
+          if (remaining.length===0) return null;
+          return (
+            <div className="mb-2 grid gap-3.5 sm:grid-cols-2">
+              {remaining.map((gf) => {
                 const opts = getGameFieldOptions(gf);
                 const isRegionKey = gf.field_key === "region";
                 const fallbackOpts = isRegionKey && opts.length === 0 ? regions.map((r) => r.label) : [];
                 const finalOpts = opts.length > 0 ? opts : fallbackOpts;
+                if (finalOpts.length===0 && gf.field_type==="dropdown") return null;
                 return (
                   <div key={gf.id}>
                     <Label req={!!gf.required}>{gf.label}</Label>
                     {gf.field_type === "dropdown" ? (
-                      <select
-                        value={gameVals[gf.field_key] ?? (gf.field_key === "region" ? region : "")}
-                        onChange={(e) => setGameVal(gf.field_key, e.target.value)}
-                        className={field}
-                      >
-                        <option value="">Select {gf.label}</option>
-                        {finalOpts.map((o) => (
-                          <option key={o} value={o}>{o}</option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <select value={gameVals[gf.field_key] ?? (gf.field_key === "region" ? region : "")} onChange={(e) => setGameVal(gf.field_key, e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] font-medium outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                          <option value="">Select {gf.label}</option>
+                          {finalOpts.map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
+                        <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
+                      </div>
                     ) : (
-                      <input
-                        value={gameVals[gf.field_key] ?? ""}
-                        onChange={(e) => setGameVal(gf.field_key, e.target.value)}
-                        placeholder={`Enter ${gf.label}`}
-                        className={field}
-                      />
+                      <input value={gameVals[gf.field_key] ?? ""} onChange={(e) => setGameVal(gf.field_key, e.target.value)} placeholder={`Enter ${gf.label}`} className="h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
                     )}
                   </div>
                 );
               })}
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {regions.length > 0 && config.show_region !== 0 && !gameFields.some((gf) => gf.field_key === "region") && !initialServerVals["region"] && (
-            <div>
-              <Label>Region</Label>
-              <select value={region} onChange={(e) => setRegion(e.target.value)} className={field}>
-                <option value="">Select Region</option>
-                {regions.map((r) => (
-                  <option key={r.value} value={r.label}>{r.label}</option>
-                ))}
-              </select>
+        {/* Legacy region/platform/login - HIDDEN when cascading fields exist or server already selected, per user request */}
+        {(() => {
+          const hasCascading = gameFields.filter(f=>!/ede/i.test(f.field_key) && f.field_key!=='gg').length>0;
+          const hasServer = Object.keys(initialServerVals).filter(k=>initialServerVals[k]).length>0;
+          // If we have cascading fields or server already selected, don't show legacy dropdowns - they are redundant
+          if (hasCascading || hasServer) return null;
+          return (
+            <div className="grid gap-3.5 sm:grid-cols-2">
+              {regions.length > 0 && config.show_region !== 0 && (
+                <div>
+                  <Label>Region</Label>
+                  <div className="relative">
+                    <select value={region} onChange={(e) => setRegion(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                      <option value="">Select Region</option>
+                      {regions.map((r) => (
+                        <option key={r.value} value={r.label}>{r.label}</option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
+                  </div>
+                </div>
+              )}
+              {platforms.length > 0 && config.show_platform !== 0 && (
+                <div>
+                  <Label>Platform</Label>
+                  <div className="relative">
+                    <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
+                      <option value="">Select Platform</option>
+                      {platforms.map((r) => (
+                        <option key={r.value} value={r.label}>{r.label}</option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-          {platforms.length > 0 && config.show_platform !== 0 && !gameFields.some((gf) => gf.field_key === "platform") && !initialServerVals["platform"] && (
-            <div>
-              <Label>Platform</Label>
-              <select value={platform} onChange={(e) => setPlatform(e.target.value)} className={field}>
-                <option value="">Select Platform</option>
-                {platforms.map((r) => (
-                  <option key={r.value} value={r.label}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {loginMethods.length > 0 && config.show_login_method !== 0 && !initialServerVals["loginMethod"] && (
-            <div>
-              <Label>Login method</Label>
-              <select value={loginMethod} onChange={(e) => setLoginMethod(e.target.value)} className={field}>
-                <option value="">Select</option>
-                {loginMethods.map((r) => (
-                  <option key={r.value} value={r.label}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
+          );
+        })()}
       </Card>
 
       {/* ---------- account credential vault ---------- */}

@@ -126,7 +126,7 @@ export function GamePicker({
 
   const gameFields = useMemo(() => {
     if (!picked) return [] as GameField[];
-    return (allFields as GameField[]).filter((f) => f.game_slug === picked.slug).sort((a, b) => a.sort_order - b.sort_order);
+    return (allFields as GameField[]).filter((f) => f.game_slug === picked.slug && !/ede/i.test(f.field_key) && !/ede/i.test(f.label) && f.field_key!=='gg' && f.label!=='gg').sort((a, b) => a.sort_order - b.sort_order);
   }, [picked, allFields]);
 
   const getOptions = (f: GameField): string[] => {
@@ -269,7 +269,7 @@ export function GamePicker({
         </div>
 
         {picked && gameFields.length > 0 && (
-          <div className="mt-5 rounded-xl soft p-3">
+          <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--panel)]/50 p-4 shadow-sm">
             <div className="mb-2 text-[12px] font-bold">Select {picked.name} Server Details</div>
             <p className="mb-3 text-[11px] muted">Admin configured fields for this game. Choose server/region to continue.</p>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -282,22 +282,25 @@ export function GamePicker({
                       {f.label} {f.required ? <span className="text-rose-400">*</span> : null}
                     </label>
                     {f.field_type === "dropdown" ? (
-                      <select
-                        value={serverVals[f.field_key] || ""}
-                        onChange={(e) => setServerVal(f.field_key, e.target.value)}
-                        className="h-10 w-full rounded-lg border border-[var(--line)] bg-transparent px-3 text-[12.5px] outline-none focus:border-brand-500"
-                      >
-                        <option value="">Select {f.label}</option>
-                        {opts.map((o) => (
-                          <option key={o} value={o}>{o}</option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <select
+                          value={serverVals[f.field_key] || ""}
+                          onChange={(e) => setServerVal(f.field_key, e.target.value)}
+                          className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] font-medium outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                        >
+                          <option value="">Select {f.label}</option>
+                          {opts.map((o) => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                        </select>
+                        <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
+                      </div>
                     ) : (
                       <input
                         value={serverVals[f.field_key] || ""}
                         onChange={(e) => setServerVal(f.field_key, e.target.value)}
                         placeholder={`Enter ${f.label}`}
-                        className="h-10 w-full rounded-lg border border-[var(--line)] bg-transparent px-3 text-[12.5px] outline-none focus:border-brand-500"
+                        className="h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                       />
                     )}
                   </div>
