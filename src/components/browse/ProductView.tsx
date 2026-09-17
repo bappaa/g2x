@@ -58,6 +58,7 @@ function offerPhoto(o: { images?: string | null }): string | null {
   }
 }
 
+type GameField = { id: string; game_slug: string; field_key: string; label: string; field_type: string; options: string | null; parent_field: string | null; parent_value: string | null; sort_order: number; required: number };
 export default function ProductView({
   game,
   category,
@@ -65,6 +66,7 @@ export default function ProductView({
   offers,
   related,
   wished = false,
+  gameFields = [],
 }: {
   game: DbGame;
   category: DbCategory;
@@ -72,6 +74,7 @@ export default function ProductView({
   offers: DbOffer[];
   related: CardProduct[];
   wished?: boolean;
+  gameFields?: GameField[];
 }) {
   const money = useMoney();
   const tr = useT();
@@ -82,6 +85,89 @@ export default function ProductView({
   const methods = useMemo(() => splitOpts(product.delivery_method), [product.delivery_method]);
   const [region, setRegion] = useState(regions[0] ?? "");
   const [method, setMethod] = useState(methods[0] ?? "");
+
+  // ---- Game-specific cascading fields (Region -> Realm -> Faction) filtering ----
+  const parseCF = (o: DbOffer): Record<string, string> => {
+    try {
+      const v = o.custom_fields ? JSON.parse(o.custom_fields) : {};
+      return typeof v === "object" && v !== null ? (v as Record<string, string>) : {};
+    } catch { return {}; }
+  };
+  const offerCF = useMemo(() => offers.map((o) => ({ id: o.id, cf: parseCF(o) })), [offers]);
+  const [gameFilters, setGameFilters] = useState<Record<string, string>>({});
+
+  const setGameFilter = (key: string, val: string) => {
+    setGameFilters((prev) => {
+      const next = { ...prev };
+      if (!val) delete next[key];
+      else next[key] = val;
+      // clear children when parent changes
+      const clearChildren = (parentKey: string) => {
+        for (const gf of gameFields) {
+          if (gf.parent_field === parentKey) {
+            delete next[gf.field_key];
+            clearChildren(gf.field_key);
+          }
+        }
+      };
+      clearChildren(key);
+      return next;
+    });
+  };
+
+  const isGFVisible = (gf: GameField, filters: Record<string, string>) => {
+    if (!gf.parent_field) return true;
+    const pv = filters[gf.parent_field] || "";
+    if (!pv) return false;
+    if (gf.parent_value && pv !== gf.parent_value) return false;
+    return true;
+  };
+
+  const gameFilterOptions = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const gf of gameFields) {
+      const vals = new Set<string>();
+      for (const { cf } of offerCF) {
+        const v = cf[gf.field_key];
+        if (v) vals.add(String(v));
+      }
+      // also include options defined in field itself if no offers yet
+      if (vals.size === 0 && gf.options) {
+        try {
+          const parsed = JSON.parse(gf.options) as unknown;
+          if (Array.isArray(parsed)) {
+            (parsed as unknown[]).forEach((x) => vals.add(String(x)));
+          } else if (typeof parsed === "object" && parsed !== null) {
+            // if object mapping, collect keys or values depending
+            Object.keys(parsed as Record<string, unknown>).forEach((k) => vals.add(k));
+            Object.values(parsed as Record<string, unknown>).forEach((v) => {
+              if (Array.isArray(v)) (v as unknown[]).forEach((vv) => vals.add(String(vv)));
+              else if (v) vals.add(String(v as string));
+            });
+          }
+        } catch {
+          gf.options.split(",").map((x) => x.trim()).filter(Boolean).forEach((x) => vals.add(x));
+        }
+      }
+      map[gf.field_key] = Array.from(vals);
+    }
+    return map;
+  }, [gameFields, offerCF]);
+
+  const filteredOffers = useMemo(() => {
+    if (gameFields.length === 0) return offers;
+    return offers.filter((o) => {
+      const cf = parseCF(o);
+      for (const [k, v] of Object.entries(gameFilters)) {
+        if (!v) continue;
+        const ov = cf[k] || (k === "region" ? o.region || "" : "");
+        if (ov !== v) return false;
+      }
+      return true;
+    });
+  }, [offers, gameFilters, gameFields]);
+
+
 
   const [sort, setSort] = useState<(typeof sorts)[number]>("Recommended");
   const [show, setShow] = useState(5);
@@ -98,14 +184,14 @@ export default function ProductView({
   const href = `/g/${game.slug}/${category.slug}/${product.slug}`;
 
   const sorted = useMemo(() => {
-    const l = [...offers];
+    const l = [...filteredOffers];
     if (sort === "Cheapest First") l.sort((a, b) => a.price - b.price);
     if (sort === "Highest Rated") l.sort((a, b) => b.rating - a.rating);
     if (sort === "Fastest Delivery") l.sort((a, b) => mins(a.delivery_time) - mins(b.delivery_time));
     if (sort === "Recommended")
       l.sort((a, b) => b.verified - a.verified || b.rating - a.rating || a.price - b.price);
     return l;
-  }, [offers, sort]);
+  }, [filteredOffers, sort]);
 
   const buy = (o: DbOffer, go: boolean) => {
     // Do NOT pre-judge auth from client state here. `signedIn` arrives from an
@@ -137,7 +223,7 @@ export default function ProductView({
     });
   };
 
-  const cheapest = offers.length ? Math.min(...offers.map((o) => o.price)) : product.base_price;
+  const cheapest = filteredOffers.length ? Math.min(...filteredOffers.map((o) => o.price)) : product.base_price;
 
   /**
    * "Best price" and "Buyer protection" live in the right sidebar on desktop,
@@ -151,9 +237,9 @@ export default function ProductView({
    * with no idea who they were buying from, so the seller, their rating and
    * their review count are surfaced right next to the action.
    */
-  const cheapestOffer = offers.length > 0 ? [...offers].sort((a, b) => a.price - b.price)[0] : null;
+  const cheapestOffer = filteredOffers.length > 0 ? [...filteredOffers].sort((a, b) => a.price - b.price)[0] : null;
 
-  const bestPriceCard = offers.length > 0 && cheapestOffer && (
+  const bestPriceCard = filteredOffers.length > 0 && cheapestOffer && (
     <div className="rounded-2xl panel p-4 sm:p-5">
       <div className="text-[11.5px] muted">{tr("prod.bestPrice")}</div>
       <div className="mt-1 text-[18px] font-black text-brand-500 sm:text-[28px]">{money(cheapest)}</div>
@@ -366,7 +452,7 @@ export default function ProductView({
           <div className="rounded-2xl panel p-4 sm:p-5">
             <div className="mb-3.5 sm:mb-4">
               <div className="flex items-center gap-3">
-                <h2 className="text-[14px] font-bold">{tr("prod.bestOffers")} ({offers.length})</h2>
+                <h2 className="text-[14px] font-bold">{tr("prod.bestOffers")} ({filteredOffers.length}{filteredOffers.length !== offers.length ? ` / ${offers.length}` : ""})</h2>
                 <span className="ml-auto hidden text-[11.5px] muted sm:block">{tr("prod.sortBy")}:</span>
               </div>
               <div className="no-scrollbar -mx-4 mt-2.5 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:mt-2 sm:flex-wrap sm:justify-end sm:px-0">
@@ -378,15 +464,51 @@ export default function ProductView({
               </div>
             </div>
 
+            {gameFields.length > 0 && (
+              <div className="mb-4 rounded-xl soft p-3">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide muted">
+                  <Globe size={12} /> Filter offers
+                  {Object.keys(gameFilters).length > 0 && (
+                    <button onClick={() => setGameFilters({})} className="ml-auto text-[11px] normal-case text-brand-400 hover:underline">Clear</button>
+                  )}
+                </div>
+                <div className="grid gap-2.5 sm:grid-cols-3">
+                  {gameFields
+                    .slice()
+                    .sort((a, b) => a.sort_order - b.sort_order)
+                    .map((gf) => {
+                      if (!isGFVisible(gf, gameFilters)) return null;
+                      const opts = gameFilterOptions[gf.field_key] || [];
+                      if (opts.length === 0) return null;
+                      return (
+                        <div key={gf.id}>
+                          <label className="mb-1 block text-[11px] font-semibold">{gf.label}</label>
+                          <select
+                            value={gameFilters[gf.field_key] || ""}
+                            onChange={(e) => setGameFilter(gf.field_key, e.target.value)}
+                            className="w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-2.5 py-2 text-[12.5px] outline-none focus:border-brand-500"
+                          >
+                            <option value="">All {gf.label}</option>
+                            {opts.map((o) => (
+                              <option key={o} value={o}>{o}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
             {err && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11.5px] text-rose-400">
                 <AlertCircle size={13} /> {err}
               </div>
             )}
 
-            {offers.length === 0 ? (
+            {filteredOffers.length === 0 ? (
               <div className="py-10 text-center text-[12.5px] muted">
-                No seller is currently offering this product. Check back soon.
+                {offers.length === 0 ? "No seller is currently offering this product. Check back soon." : "No offers match the selected filters. Try clearing filters."}
               </div>
             ) : (
               <div className="hidden overflow-x-auto md:block">
@@ -426,12 +548,13 @@ export default function ProductView({
                                   {o.store_name.slice(0, 2).toUpperCase()}
                                 </span>
                               )}
-                              <div>
+                              <div className="min-w-0">
                                 <div className="flex items-center gap-1 font-semibold">
                                   {o.store_name}
                                   {o.verified === 1 && <BadgeCheck size={12} className="text-brand-400" />}
                                 </div>
                                 <div className="text-[9.5px] text-brand-400">{o.level}</div>
+                                {(() => { const cf = parseCF(o); const keys = Object.keys(cf).slice(0,3); if (keys.length===0) return null; return <div className="mt-1 flex flex-wrap gap-1">{keys.map((k)=>{ const gf = gameFields.find((f)=>f.field_key===k); const label = gf?.label || k; return <span key={k} className="rounded bg-[var(--bg)] px-1 py-0.5 text-[9px] muted">{label}: <b className="text-[10px] text-[var(--fg)]">{cf[k]}</b></span>; })}</div>; })()}
                               </div>
                             </div>
                           </td>
@@ -484,7 +607,7 @@ export default function ProductView({
             )}
 
             {/* mobile: the same offers as tap-friendly cards */}
-            {offers.length > 0 && (
+            {filteredOffers.length > 0 && (
               <div className="space-y-2.5 md:hidden">
                 <AnimatePresence initial={false}>
                   {sorted.slice(0, show).map((o, i) => (
@@ -528,9 +651,11 @@ export default function ProductView({
                         </div>
                       </div>
 
+                      {(() => { const cf = parseCF(o); const entries = Object.entries(cf); if (entries.length===0) return null; return <div className="mt-2 flex flex-wrap gap-1.5">{entries.slice(0,4).map(([k,v])=>{ const gf = gameFields.find((f)=>f.field_key===k); const label = gf?.label || k; return <span key={k} className="rounded-md bg-[var(--bg)] px-1.5 py-0.5 text-[10px]"><span className="muted">{label}:</span> <b>{v}</b></span>; })}</div>; })()}
                       <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] muted">
                         <span className="flex items-center gap-1"><Clock size={10} /> {o.delivery_time}</span>
                         <span>{o.stock} in stock</span>
+                        <span className="text-[10px]">Price per unit: {money(o.price)}</span>
                       </div>
 
                       <div className="mt-2.5 flex gap-2">

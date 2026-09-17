@@ -50,7 +50,7 @@ export default function GameOfferFieldsEditor({
     <div className="mt-6 rounded-xl border border-[var(--line)] p-4">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-[13px] font-bold">Offer Details Fields (cascading dropdowns)</h3>
-        <Btn className="flex items-center gap-1.5 text-[11px]" onClick={() => setEdit("new")}>
+        <Btn type="button" className="flex items-center gap-1.5 text-[11px]" onClick={() => setEdit("new")}>
           <Plus size={12} /> Add field
         </Btn>
       </div>

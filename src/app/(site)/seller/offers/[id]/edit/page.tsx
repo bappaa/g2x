@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireSeller } from "@/lib/session";
 import { one } from "@/lib/db";
-import { getSellConfig, getFieldTemplates, getOptionLists, mergeSellConfig } from "@/lib/queries";
+import { getSellConfig, getFieldTemplates, getOptionLists, mergeSellConfig, getGameOfferFields } from "@/lib/queries";
 import EditOfferForm from "@/components/seller/EditOfferForm";
 import Image from "next/image";
 import { img } from "@/lib/img";
@@ -68,9 +68,10 @@ export default async function Page({ params }: { params: { id: string } }) {
 
   const sell = mergeSellConfig(cfg, { category_slug: offer.category_slug } as unknown as Record<string, unknown>);
 
-  const [fields, opts] = await Promise.all([
+  const [fields, opts, gameFields] = await Promise.all([
     getFieldTemplates(cfg.slug),
     getOptionLists(["region", "platform", "delivery_method", "delivery_time", "login_method"]),
+    offer.game_slug ? getGameOfferFields(offer.game_slug) : Promise.resolve([]),
   ]);
 
   return (
@@ -104,6 +105,8 @@ export default async function Page({ params }: { params: { id: string } }) {
         deliveryMethods={opts.delivery_method ?? []}
         deliveryTimes={opts.delivery_time ?? []}
         loginMethods={opts.login_method ?? []}
+        gameFields={gameFields as never}
+        gameSlug={offer.game_slug || ""}
       />
     </div>
   );

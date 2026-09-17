@@ -24,6 +24,9 @@ export type DbOffer = {
   rating: number; total_orders: number;
   /** JSON array of data URIs uploaded by the seller with this offer. */
   images: string | null;
+  custom_fields?: string | null;
+  region?: string | null;
+  platform?: string | null;
 };
 export type DbListing = {
   id: string; seller_id: string; game_slug: string; category_slug: string; title: string;

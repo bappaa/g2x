@@ -64,7 +64,7 @@ export default function TemplatesManager({
               <Td className="font-mono text-[11px] muted">{f.field_key}</Td>
               <Td className="capitalize muted">{f.field_type}</Td>
               <Td className="max-w-[180px] truncate text-[11px] muted">
-                {f.options ? (JSON.parse(f.options) as string[]).join(", ") : "—"}
+                {(() => { try { const v = f.options ? JSON.parse(f.options) : null; if (Array.isArray(v)) return v.join(", "); if (v && typeof v === "object") return Object.keys(v).join(", "); return f.options || "—"; } catch { return f.options || "—"; } })()}
               </Td>
               <Td>
                 {f.required === 1
@@ -156,7 +156,7 @@ function FieldForm({ f, category, onClose }: { f: F | null; category: string; on
             <textarea
               name="options"
               rows={3}
-              defaultValue={f?.options ? (JSON.parse(f.options) as string[]).join("\n") : ""}
+              defaultValue={(() => { try { const v = f?.options ? JSON.parse(f.options) : null; if (Array.isArray(v)) return v.join("\n"); if (v && typeof v === "object") return JSON.stringify(v, null, 2); return f?.options || ""; } catch { return f?.options || ""; } })()}
               className={inputCls}
               placeholder={"Asia\nEurope\nNorth America"}
             />

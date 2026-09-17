@@ -104,6 +104,7 @@ type OfferRow = {
   custom_fields: string | null;
 };
 
+type GameField = { id: string; game_slug: string; field_key: string; label: string; field_type: string; options: string | null; parent_field: string | null; parent_value: string | null; sort_order: number; required: number };
 export default function EditOfferForm({
   offer,
   config,
@@ -114,6 +115,8 @@ export default function EditOfferForm({
   deliveryMethods,
   deliveryTimes,
   loginMethods,
+  gameFields = [],
+  gameSlug: _gameSlug = "",
 }: {
   offer: OfferRow;
   config: SellConfig;
@@ -124,9 +127,12 @@ export default function EditOfferForm({
   deliveryMethods: Opt[];
   deliveryTimes: Opt[];
   loginMethods: Opt[];
+  gameFields?: GameField[];
+  gameSlug?: string;
 }) {
   const router = useRouter();
   const money = useMoney();
+  void _gameSlug;
   const [pending, start] = useTransition();
   const busy = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -164,7 +170,15 @@ export default function EditOfferForm({
   const [loginMethod, setLoginMethod] = useState(offer.login_method || "");
   const [auto, setAuto] = useState(offer.auto_delivery ? !!offer.auto_delivery : mode !== "manual");
   const [instructions, setInstructions] = useState(offer.instructions || "");
-  const [custom, setCustom] = useState<Record<string, string>>(existingCustom);
+  // Separate game-specific fields from regular custom fields
+  const initialGameVals: Record<string, string> = {};
+  const initialCustom: Record<string, string> = {};
+  for (const [k,v] of Object.entries(existingCustom)) {
+    if (gameFields.some(gf=>gf.field_key===k)) initialGameVals[k]=v;
+    else initialCustom[k]=v;
+  }
+  const [custom, setCustom] = useState<Record<string, string>>(initialCustom);
+  const [gameVals, setGameVals] = useState<Record<string, string>>(initialGameVals);
   const [volume, setVolume] = useState<{ qty: string; pct: string }[]>(
     existingVolume.length ? existingVolume.map(v => ({ qty: String(v.qty), pct: String(v.pct) })) : [{ qty: "", pct: "" }]
   );
@@ -174,6 +188,59 @@ export default function EditOfferForm({
   const [err, setErr] = useState("");
 
   const priceNum = Number(price) || 0;
+
+  const getGameFieldOptions = (f: GameField): string[] => {
+    if (!f.options) return [];
+    try {
+      const parsed = JSON.parse(f.options) as unknown;
+      if (Array.isArray(parsed)) return (parsed as unknown[]).map(String);
+      if (typeof parsed === "object" && parsed !== null) {
+        const rec = parsed as Record<string, unknown>;
+        if (f.parent_field) {
+          const parentVal = gameVals[f.parent_field] || (f.parent_field === "region" ? region : f.parent_field === "platform" ? platform : "");
+          if (parentVal && rec[parentVal] !== undefined) {
+            const v = rec[parentVal];
+            return Array.isArray(v) ? (v as unknown[]).map(String) : [String(v as string)];
+          }
+          if (f.parent_value && rec[f.parent_value] !== undefined) {
+            const v = rec[f.parent_value];
+            return Array.isArray(v) ? (v as unknown[]).map(String) : [String(v as string)];
+          }
+          return [];
+        }
+        return Object.keys(rec);
+      }
+      return [];
+    } catch {
+      return f.options.split(",").map((x) => x.trim()).filter(Boolean);
+    }
+  };
+  const isGameFieldVisible = (f: GameField): boolean => {
+    if (!f.parent_field) return true;
+    const parentVal = gameVals[f.parent_field] || (f.parent_field === "region" ? region : f.parent_field === "platform" ? platform : "");
+    if (!parentVal) return false;
+    if (f.parent_value && parentVal !== f.parent_value) return false;
+    return true;
+  };
+  const setGameVal = (key: string, val: string) => {
+    setGameVals((prev) => {
+      const next = { ...prev, [key]: val };
+      const toClear: string[] = [];
+      const findChildren = (parentKey: string) => {
+        for (const gf of gameFields) {
+          if (gf.parent_field === parentKey) {
+            toClear.push(gf.field_key);
+            findChildren(gf.field_key);
+          }
+        }
+      };
+      findChildren(key);
+      for (const c of toClear) delete next[c];
+      return next;
+    });
+    if (key === "region") setRegion(val);
+    if (key === "platform") setPlatform(val);
+  };
 
   const setAcc = (i: number, k: keyof AccountSet, v: string) =>
     setAccounts((a) => a.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
@@ -217,6 +284,13 @@ export default function EditOfferForm({
       if (f.required && !String(custom[f.field_key] ?? "").trim())
         return setErr(`${f.label} is required.`);
     }
+    for (const gf of gameFields) {
+      if (!isGameFieldVisible(gf)) continue;
+      if (gf.required && !String(gameVals[gf.field_key] ?? "").trim()) {
+        if (gf.field_key === "region" && region) continue;
+        return setErr(`${gf.label} is required.`);
+      }
+    }
     if (!agreeTos || !agreeRules) return setErr("Please accept the Terms and Rules.");
 
     busy.current = true;
@@ -247,6 +321,9 @@ export default function EditOfferForm({
         );
         if (config.needs_credentials) fd.set("accounts", JSON.stringify(accounts));
         Object.entries(custom).forEach(([k, v]) => fd.set("cf_" + k, v));
+        Object.entries(gameVals).forEach(([k, v]) => fd.set("cf_" + k, v));
+        if (gameVals["region"]) fd.set("region", gameVals["region"]);
+        if (gameVals["platform"]) fd.set("platform", gameVals["platform"]);
 
         const r = await updateOfferFullAction(fd).catch(() => null);
         if (!r || !r.ok) {
@@ -448,8 +525,46 @@ export default function EditOfferForm({
           </div>
         )}
 
+        {gameFields.length > 0 && (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {gameFields
+              .slice()
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map((gf) => {
+                if (!isGameFieldVisible(gf)) return null;
+                const opts = getGameFieldOptions(gf);
+                const fallback = gf.field_key === "region" && opts.length === 0 ? regions.map((r) => r.label) : [];
+                const finalOpts = opts.length > 0 ? opts : fallback;
+                return (
+                  <div key={gf.id}>
+                    <Label req={!!gf.required}>{gf.label}</Label>
+                    {gf.field_type === "dropdown" ? (
+                      <select
+                        value={gameVals[gf.field_key] ?? (gf.field_key === "region" ? region : "")}
+                        onChange={(e) => setGameVal(gf.field_key, e.target.value)}
+                        className={fieldCls}
+                      >
+                        <option value="">Select {gf.label}</option>
+                        {finalOpts.map((o) => (
+                          <option key={o} value={o}>{o}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={gameVals[gf.field_key] ?? ""}
+                        onChange={(e) => setGameVal(gf.field_key, e.target.value)}
+                        placeholder={`Enter ${gf.label}`}
+                        className={fieldCls}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        )}
+
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {regions.length > 0 && config.show_region !== 0 && (
+          {regions.length > 0 && config.show_region !== 0 && !gameFields.some((gf) => gf.field_key === "region") && (
             <div>
               <Label>Region</Label>
               <select value={region} onChange={(e) => setRegion(e.target.value)} className={fieldCls}>
@@ -460,7 +575,7 @@ export default function EditOfferForm({
               </select>
             </div>
           )}
-          {platforms.length > 0 && config.show_platform !== 0 && (
+          {platforms.length > 0 && config.show_platform !== 0 && !gameFields.some((gf) => gf.field_key === "platform") && (
             <div>
               <Label>Platform</Label>
               <select value={platform} onChange={(e) => setPlatform(e.target.value)} className={fieldCls}>

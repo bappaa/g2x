@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useTransition } from "react";
+import React, { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,7 +7,7 @@ import { Plus, Search, Pencil, Trash2, X, Loader2, Eye, EyeOff, ExternalLink } f
 import { Btn, Tag, Field, inputCls, Empty } from "@/components/ui";
 import { Table, Tr, Td, Toolbar, IconAction } from "@/components/admin/ui";
 import ImagePicker from "@/components/admin/ImagePicker";
-import { saveGameAction, deleteGameAction, toggleGameAction } from "@/lib/actions/admin";
+import { saveGameAction, deleteGameAction, toggleGameAction, saveProductAction } from "@/lib/actions/admin";
 import GameOfferFieldsEditor from "./GameOfferFieldsEditor";
 
 type G = {
@@ -87,10 +87,15 @@ export default function GamesManager({
               <Td>
                 <div className="flex items-center gap-2.5">
                   <span
-                    className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[11px] font-black text-white"
+                    className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-lg text-[11px] font-black text-white"
                     style={{ background: g.accent || "#8b3dff" }}
                   >
-                    {g.name.slice(0, 1)}
+                    {g.logo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={g.logo} alt={g.name} className="h-full w-full object-cover" />
+                    ) : (
+                      g.name.slice(0, 1)
+                    )}
                   </span>
                   <span className="font-semibold">{g.name}</span>
                 </div>
@@ -274,20 +279,80 @@ function GameForm({ game, categories, allFields, onClose }: { game: G | null; ca
         </div>
 
         {game && (
-          <GameOfferFieldsEditor
-            gameSlug={game.slug}
-            initialFields={allFields.filter((f) => f.game_slug === game.slug)}
-          />
+          <>
+            <QuickProductAdder gameSlug={game.slug} categories={categories} />
+            <GameOfferFieldsEditor
+              gameSlug={game.slug}
+              initialFields={allFields.filter((f) => f.game_slug === game.slug)}
+            />
+          </>
         )}
         {!game && (
           <div className="rounded-xl border border-dashed border-[var(--line)] p-3 text-center text-[11px] muted">
-            Save the game first, then edit it to configure cascading offer fields (Region → Realm → Faction).
+            Save the game first, then edit it to configure product images and cascading offer fields (Region → Realm → Faction).
           </div>
         )}
       </motion.form>
     </motion.div>
   );
 }
+
+function QuickProductAdder({ gameSlug, categories }: { gameSlug: string; categories: { slug: string; name: string }[] }) {
+  const router = useRouter();
+  const [err, setErr] = React.useState("");
+  const [pending, start] = React.useTransition();
+  const [cat, setCat] = React.useState(categories[0]?.slug || "currency");
+
+  const submit = (fd: FormData) =>
+    start(async () => {
+      setErr("");
+      const r = await saveProductAction(fd);
+      if (!r.ok) return setErr(r.error || "Could not save product");
+      router.refresh();
+      // clear form
+      const form = document.getElementById(`quick-prod-${gameSlug}`) as HTMLFormElement | null;
+      form?.reset();
+    });
+
+  return (
+    <div className="rounded-xl border border-[var(--line)] p-4">
+      <h3 className="mb-2 text-[13px] font-bold">Quick add product image (currency / top-up)</h3>
+      <p className="mb-3 text-[11px] muted">
+        Upload a product image (e.g. UC icon, Gold icon) and choose which category it should appear in. This image shows on game page categories and seller product picker.
+      </p>
+      <form id={`quick-prod-${gameSlug}`} action={submit} className="space-y-3">
+        <input type="hidden" name="game" value={gameSlug} />
+        <Field label="Product name" hint="e.g. 60 UC, 1000 Gold, V-Bucks">
+          <input name="name" required className={inputCls} placeholder="60 UC" />
+        </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Category (where this photo appears)">
+            <select name="category" value={cat} onChange={(e) => setCat(e.target.value)} className={inputCls} required>
+              {categories.map((c) => (
+                <option key={c.slug} value={c.slug}>{c.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Base price (USD)">
+            <input name="basePrice" type="number" step="0.01" defaultValue={0.99} className={inputCls} required />
+          </Field>
+        </div>
+        <ImagePicker
+          label="Product image * (shows in product categories)"
+          urlName="image"
+          fileName="imageFile"
+          defaultUrl=""
+          hint="REQUIRED: This logo appears in product categories (e.g. UC icon for BGMI). Game logo shows on homepage, this shows as item photo."
+        />
+        {err && <div className="text-[11px] text-rose-400">{err}</div>}
+        <Btn type="submit" disabled={pending} className="flex items-center gap-2 text-[11px]">
+          {pending && <Loader2 size={12} className="animate-spin" />} Add product image
+        </Btn>
+      </form>
+    </div>
+  );
+}
+
 
 /** Pager link that keeps the current search term. */
 function GamePager({

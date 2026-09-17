@@ -6,6 +6,7 @@ import {
   getOffers,
   getProducts,
   getListing,
+  getGameOfferFields,
 } from "@/lib/queries";
 import ProductView from "@/components/browse/ProductView";
 import ListingDetail from "@/components/browse/ListingDetail";
@@ -32,9 +33,10 @@ export default async function Page({
   const product = await getProduct(game.slug, params.slug);
   if (!product) notFound();
 
-  const [offers, related] = await Promise.all([
+  const [offers, related, gameFields] = await Promise.all([
     getOffers(product.id),
     getProducts(game.slug, cat.slug),
+    getGameOfferFields(game.slug),
   ]);
 
   return (
@@ -44,6 +46,7 @@ export default async function Page({
       product={product}
       offers={offers}
       related={related.filter((r) => r.id !== product.id).slice(0, 6)}
+      gameFields={gameFields as never}
     />
   );
 }
