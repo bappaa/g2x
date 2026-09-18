@@ -120,16 +120,17 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next({ request: { headers: reqHeaders } });
   const prod = process.env.NODE_ENV === "production";
 
-  // Razorpay domains needed for automated payments
-  const razorpayScript = "https://checkout.razorpay.com https://api.razorpay.com";
-  const razorpayConnect = "https://api.razorpay.com https://checkout.razorpay.com https://lumberjack.razorpay.com https://lumberjack-cx.razorpay.com";
-  const razorpayFrame = "https://api.razorpay.com https://checkout.razorpay.com";
+  // Razorpay — needs script from checkout + cdn + api, frames for modal, connect for risk detection & api
+  const razorpayScript = "https://checkout.razorpay.com https://api.razorpay.com https://cdn.razorpay.com https://*.razorpay.com";
+  const razorpayConnect = "https://api.razorpay.com https://checkout.razorpay.com https://cdn.razorpay.com https://*.razorpay.com https://lumberjack.razorpay.com https://lumberjack-cx.razorpay.com";
+  const razorpayFrame = "https://api.razorpay.com https://checkout.razorpay.com https://cdn.razorpay.com https://*.razorpay.com";
+  const razorpayImg = "https://cdn.razorpay.com https://*.razorpay.com";
 
   const csp = [
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'${prod ? "" : " 'unsafe-eval'"} https://www.google.com https://www.gstatic.com ${razorpayScript}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "img-src 'self' data: blob: https: /api/media/",
+    `img-src 'self' data: blob: https: ${razorpayImg}`,
     "font-src 'self' data: https://fonts.gstatic.com",
     `connect-src 'self' https://api.exchangerate-api.com https://api.frankfurter.app ${razorpayConnect}`,
     `frame-src 'self' https://www.google.com https://www.gstatic.com ${razorpayFrame}`,
@@ -149,12 +150,11 @@ export async function middleware(req: NextRequest) {
   res.headers.set("X-DNS-Prefetch-Control", "off");
   res.headers.set("X-Permitted-Cross-Domain-Policies", "none");
   res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
-  // credentialless blocks Razorpay iframe credentialed requests; use same-origin for payment pages
   res.headers.set("Cross-Origin-Embedder-Policy", "credentialless");
   res.headers.set("Cross-Origin-Resource-Policy", "same-origin");
   res.headers.set(
     "Permissions-Policy",
-    "camera=(self), microphone=(), geolocation=(), payment=(self \"https://checkout.razorpay.com\"), usb=(), interest-cohort=(), clipboard-read=(), clipboard-write=(self), fullscreen=(self)"
+    "camera=(self), microphone=(), geolocation=(), payment=(self \"https://checkout.razorpay.com\" \"https://*.razorpay.com\"), usb=(), interest-cohort=(), clipboard-read=(), clipboard-write=(self), fullscreen=(self)"
   );
   if (prod) res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
 

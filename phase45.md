@@ -302,3 +302,27 @@ Also added better error message when script fails to load.
 - Improved Razorpay load error UI: tells user to disable ad-blocker and check CSP.
 
 Build: still 87.5kB, passing.
+
+## 10. Hotfix 2 — img-src invalid + cdn.razorpay.com blocked
+
+**Errors:**
+```
+The source list for 'img-src' contains invalid source: '/api/media/'. It will be ignored.
+checkout.js:1 Loading script https://cdn.razorpay.com/static/cx/razorpay-risk-detection/bundle.js violates CSP script-src 'self' ... https://checkout.razorpay.com https://api.razorpay.com
+```
+
+**Root cause:**
+- `img-src` had `/api/media/` which is not a valid CSP source (path without host). Browser ignored whole directive part.
+- `checkout.razorpay.com/v1/checkout.js` dynamically loads `https://cdn.razorpay.com/static/cx/razorpay-risk-detection/bundle.js` for fraud/risk detection. Our CSP only allowed `checkout.razorpay.com` + `api.razorpay.com`, not `cdn.razorpay.com` or `*.razorpay.com`.
+
+**Fix:**
+- Removed invalid `/api/media/` from `img-src` → now `img-src 'self' data: blob: https: https://cdn.razorpay.com https://*.razorpay.com`
+- Expanded all Razorpay directives to include `https://cdn.razorpay.com` and `https://*.razorpay.com`:
+  - `script-src` = checkout + api + cdn + *.razorpay.com
+  - `connect-src` = same + lumberjack endpoints
+  - `frame-src` = same
+  - `img-src` = same
+- `Permissions-Policy payment` now allows `https://*.razorpay.com` too.
+
+After fix, Razorpay checkout loads without CSP violations, modal opens, payment verification works.
+
