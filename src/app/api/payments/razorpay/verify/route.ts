@@ -9,11 +9,8 @@ import { mail } from "@/lib/mail";
 import { ensureSchema } from "@/lib/ensure-schema";
 import { escrowHoldHours } from "@/lib/escrow";
 import { scheduleSubscriptions } from "@/lib/subscription";
-
 import { revalidatePath } from "next/cache";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// (some casts need any for Razorpay SDK)
 export const dynamic = "force-dynamic";
 
 async function notify(userId: string, title: string, body: string, href: string, kind = "order") {
@@ -72,24 +69,21 @@ export async function POST(req: NextRequest) {
     });
     if (!valid) return NextResponse.json({ ok: false, error: "Invalid signature" }, { status: 400 });
 
-    // lookup intent
     const intent = await one<{
-      id: string; user_id: string; amount: number; purpose: string; meta: string | null; status: string;
+      id: string; user_id: string; amount: number; purpose: string; meta: string | null; status: string; currency: string;
     }>(`SELECT * FROM razorpay_intents WHERE razorpay_order_id=?`, [razorpay_order_id]);
 
     if (!intent) return NextResponse.json({ ok: false, error: "Order intent not found" }, { status: 404 });
     if (intent.user_id !== u.id) return NextResponse.json({ ok: false, error: "Not your order" }, { status: 403 });
     if (intent.status === "verified") {
-      // already verified – return existing order if any
       const existing = await one<{ code: string }>(`SELECT code FROM orders WHERE razorpay_order_id=?`, [razorpay_order_id]);
       if (existing) return NextResponse.json({ ok: true, code: existing.code, already: true });
     }
 
-    const meta = (() => { try { return JSON.parse(intent.meta || "{}"); } catch { return {}; } })();
+    const meta = (() => { try { return JSON.parse(intent.meta || "{}"); } catch { return {}; } })() as Record<string, string>;
 
     if (intent.purpose === "topup") {
-      // wallet top-up
-      const raw = Number(meta.raw || intent.amount);
+      const raw = Number(meta.raw || 0);
       const amt = Math.round(raw * 100) / 100;
       if (!(amt > 0)) return NextResponse.json({ ok: false, error: "Invalid topup amount" }, { status: 400 });
 
@@ -108,7 +102,6 @@ export async function POST(req: NextRequest) {
       } catch (e: unknown) {
         const msg = String((e as Error)?.message ?? "");
         if (/UNIQUE|constraint/i.test(msg)) {
-          // duplicate – already credited
           await run(`UPDATE razorpay_intents SET status='verified', verified_at=datetime('now') WHERE id=?`, [intent.id]).catch(() => {});
           return NextResponse.json({ ok: true, already: true });
         }
@@ -138,7 +131,6 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ ok: true, type: "topup", amount: amt, verifyAfter });
     } else {
-      // checkout
       const items = await getCart(u.id);
       if (!items.length) return NextResponse.json({ ok: false, error: "Cart empty" }, { status: 400 });
       if (!uid) return NextResponse.json({ ok: false, error: "Delivery ID required" }, { status: 400 });
@@ -155,10 +147,10 @@ export async function POST(req: NextRequest) {
       const gwFee = feeFor(subtotal + fee, gw);
       const total = +(subtotal + fee + gwFee).toFixed(2);
 
-      // amount from intent should match
-      if (Math.abs(total - Number(intent.amount)) > 0.5) {
-        // allow small drift, but log
-        console.warn(`[razorpay] amount mismatch intent=${intent.amount} cart=${total}`);
+      // intent stores charge amount (INR) and meta.usd (USD total). Compare USD totals.
+      const intentUSD = Number(meta.usd || 0);
+      if (intentUSD > 0 && Math.abs(total - intentUSD) > 0.5) {
+        console.warn(`[razorpay] USD mismatch intent=${intentUSD} cart=${total}`);
       }
 
       const willOweKyc = await kycDueFor(u.id, total);

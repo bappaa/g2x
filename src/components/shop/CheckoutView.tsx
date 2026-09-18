@@ -108,7 +108,9 @@ export default function CheckoutView({
     try {
       const loaded = await loadRazorpay();
       if (!loaded) {
-        setErr("Failed to load Razorpay. Check your connection.");
+        setErr("Failed to load Razorpay checkout. Disable ad-blocker and ensure CSP allows https://checkout.razorpay.com");
+        setRzpLoading(false);
+        busy.current = false;
         return;
       }
 

@@ -266,3 +266,39 @@ Verify: `/admin/gateways` shows Razorpay configured, `/checkout` with Razorpay s
 - Amount conversion: currently 1 USD = 1 INR unit for demo; for production add FX conversion (USD→INR) using `getRates()`.
 - Webhook secret optional — if not set, falls back to key secret (not recommended for prod).
 - No subscription recurring via Razorpay yet — uses escrow schedule same as before.
+
+## 9. Hotfix — CSP blocking Razorpay (Image-1 bug)
+
+**Error from console:**
+```
+Loading the script 'https://checkout.razorpay.com/v1/checkout.js' violates CSP directive: "script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com"
+```
+Page showed "Failed to load Razorpay" and Pay button did nothing.
+
+**Root cause:** `src/middleware.ts` set strict CSP:
+```
+script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com
+connect-src 'self' https://api.exchangerate-api.com https://api.frankfurter.app
+```
+No Razorpay domains allowed, so browser blocked `checkout.js`. Also missing `frame-src` for Razorpay modal iframe, and `Permissions-Policy payment=()` disabled Payment Request API.
+
+**Fix in `src/middleware.ts`:**
+```ts
+const razorpayScript = "https://checkout.razorpay.com https://api.razorpay.com";
+const razorpayConnect = "https://api.razorpay.com https://checkout.razorpay.com https://lumberjack.razorpay.com https://lumberjack-cx.razorpay.com";
+const razorpayFrame = "https://api.razorpay.com https://checkout.razorpay.com";
+
+script-src ... ${razorpayScript}
+connect-src ... ${razorpayConnect}
+frame-src 'self' https://www.google.com https://www.gstatic.com ${razorpayFrame}
+Permissions-Policy payment=(self "https://checkout.razorpay.com")
+```
+Also added better error message when script fails to load.
+
+**Other bugfixes in same hotfix:**
+- Wallet preset buttons showed hardcoded `$10` while balance is in ₹ (INR) via `money()` — now shows `money(a)` so $10 becomes ₹959 etc matching breakdown.
+- `create-order` API now converts USD → charge currency using live FX rate from `settings fx_*` (fallback to CURRENCIES table). Previously charged $10 as ₹10 — now charges ₹959 for $10 when INR rate 95.9.
+- `verify` route USD mismatch check fixed to compare `meta.usd` not `intent.amount` (which is now INR charge amount).
+- Improved Razorpay load error UI: tells user to disable ad-blocker and check CSP.
+
+Build: still 87.5kB, passing.

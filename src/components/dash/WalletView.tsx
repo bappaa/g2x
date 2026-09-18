@@ -93,7 +93,9 @@ export default function WalletView({
     try {
       const loaded = await loadRazorpay();
       if (!loaded) {
-        setErr("Failed to load Razorpay");
+        setErr("Failed to load Razorpay checkout. Please disable ad-blocker, check CSP, and ensure https://checkout.razorpay.com is allowed.");
+        setRzpLoading(false);
+        busy.current = false;
         return;
       }
       const createRes = await fetch("/api/payments/razorpay/create-order", {
@@ -280,7 +282,7 @@ export default function WalletView({
                     : "border-[var(--line)] soft hover:border-brand-500/50"
                 }`}
               >
-                ${a}
+                {money(a)}
               </button>
             ))}
           </div>
