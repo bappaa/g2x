@@ -82,7 +82,6 @@ const GROUPS: { title: string; items: Item[] }[] = [
       { href: "/admin/promotions", label: "Promotions / Coupons", icon: LifeBuoy, perm: "promotions" },
       { href: "/admin/announcements", label: "Announcements", icon: Megaphone, perm: "promotions" },
       { href: "/admin/cms", label: "Homepage CMS", icon: Home, perm: "cms" },
-      { href: "/admin/banners", label: "Banners", icon: ImageIcon, perm: "cms" },
       { href: "/admin/media", label: "Media Library", icon: ImageIcon, perm: "cms" },
       { href: "/admin/navigation", label: "Navigation & Footer", icon: ListChecks, perm: "cms" },
     ],

@@ -3,8 +3,6 @@ import Services from "@/components/Services";
 import Categories, { type Rail } from "@/components/Categories";
 import Stats, { type StatItem } from "@/components/Stats";
 import Testimonials from "@/components/Testimonials";
-import BannerSlider from "@/components/BannerSlider";
-import { activeBanners } from "@/lib/queries";
 import {
   getBlocks, homeCategories, popularTiles, categoryBrands, liveStats, homeReviews,
 } from "@/lib/homepage";
@@ -22,11 +20,9 @@ export const dynamic = "force-dynamic";
  *   testimonials                       -> genuine reviews rows
  */
 export default async function Home() {
-  const [blocks, cats, hero, strip, stats, reviews] = await Promise.all([
+  const [blocks, cats, stats, reviews] = await Promise.all([
     getBlocks(),
     homeCategories(),
-    activeBanners("hero"),
-    activeBanners("strip"),
     liveStats(),
     homeReviews(6),
   ]);
@@ -94,7 +90,7 @@ export default async function Home() {
 
   return (
     <main>
-      <BannerSlider banners={hero as never} />
+      {/* Banner removed per user request - not working */}
 
       {h && (
         <Hero
@@ -115,7 +111,7 @@ export default async function Home() {
       )}
 
       <div className="space-y-10 pb-12 pt-2">
-        <BannerSlider banners={strip as never} />
+        {/* Banner strip removed */}
         <Services items={services} />
         <Categories title={blocks.popular_games?.title ?? "POPULAR CATEGORIES"} rails={rails} />
         {trust !== undefined && <Stats items={statItems} />}

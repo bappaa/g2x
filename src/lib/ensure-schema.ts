@@ -12,6 +12,19 @@ async function apply(): Promise<void> {
   try {
     await db.execute("DELETE FROM game_offer_fields WHERE field_key LIKE '%ede%' OR label LIKE '%ede%' OR lower(field_key)='gg' OR lower(label)='gg' OR field_key LIKE '%test%' OR lower(field_key)='india' OR lower(label)='india' OR lower(field_key)='abc' OR lower(label)='abc' OR lower(field_key)='aa' OR lower(label)='aa'");
   } catch {}
+
+  // Fix category sell configs for production - per user request: remove region/platform, ensure vault and images show for accounts etc
+  try {
+    // accounts: needs_title=1, needs_images=1, needs_credentials=1, needs_quantity=0, allow_volume=0, fulfilment=both, show_delivery=1, show_region=0, show_platform=0, show_login=0, unit=account
+    await db.execute("UPDATE categories SET needs_title=1, needs_images=1, needs_credentials=1, needs_quantity=0, allow_volume_discount=0, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='account' WHERE slug='accounts'");
+    await db.execute("UPDATE categories SET needs_title=0, needs_images=0, needs_credentials=0, needs_quantity=1, allow_volume_discount=0, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='unit' WHERE slug='top-up'");
+    await db.execute("UPDATE categories SET needs_title=0, needs_images=0, needs_credentials=0, needs_quantity=1, allow_volume_discount=1, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='unit' WHERE slug='currency'");
+    await db.execute("UPDATE categories SET needs_title=0, needs_images=1, needs_credentials=0, needs_quantity=1, allow_volume_discount=0, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='item' WHERE slug='items'");
+    await db.execute("UPDATE categories SET needs_title=1, needs_images=0, needs_credentials=0, needs_quantity=0, allow_volume_discount=0, fulfilment='manual', show_delivery_method=0, show_region=0, show_platform=0, show_login_method=0, unit_label='service' WHERE slug='boosting'");
+    await db.execute("UPDATE categories SET needs_title=1, needs_images=0, needs_credentials=1, needs_quantity=0, allow_volume_discount=0, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='subscription' WHERE slug='subscriptions'");
+    await db.execute("UPDATE categories SET needs_title=1, needs_images=0, needs_credentials=1, needs_quantity=1, allow_volume_discount=0, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='code' WHERE slug='gift-cards'");
+  } catch {}
+
   try {
     await db.execute("DELETE FROM products WHERE lower(name) IN ('aa','all','india','test') OR lower(slug) IN ('aa','all')");
   } catch {}

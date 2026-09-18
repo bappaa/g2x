@@ -163,6 +163,7 @@ export default function OfferForm({
   const [region, setRegion] = useState(initialServerVals["region"] || "");
   const [platform, setPlatform] = useState(initialServerVals["platform"] || "");
   const [loginMethod] = useState(initialServerVals["loginMethod"] || "");
+  void regions; void platforms; // removed per admin request, kept for compat
   const [gameVals, setGameVals] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const [k, v] of Object.entries(initialServerVals)) {
@@ -642,51 +643,18 @@ export default function OfferForm({
           );
         })()}
 
-        {/* Legacy region/platform/login - HIDDEN when cascading fields exist or server already selected, per user request */}
-        {(() => {
-          const hasCascading = gameFields.filter(f=>{ if (/ede/i.test(f.field_key)) return false; if (f.field_key==='gg') return false; if (/^india$/i.test(f.field_key)) return false; if (/^abc$/i.test(f.field_key)) return false; if (/^aa$/i.test(f.field_key)) return false; return true; }).length>0;
-          const hasServer = Object.keys(initialServerVals).filter(k=>initialServerVals[k]).length>0;
-          // If we have cascading fields or server already selected, don't show legacy dropdowns - they are redundant
-          if (hasCascading || hasServer) return null;
-          return (
-            <div className="grid gap-3.5 sm:grid-cols-2">
-              {regions.length > 0 && config.show_region !== 0 && (
-                <div>
-                  <Label>Region</Label>
-                  <div className="relative">
-                    <select value={region} onChange={(e) => setRegion(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
-                      <option value="">Select Region</option>
-                      {regions.map((r) => (
-                        <option key={r.value} value={r.label}>{r.label}</option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
-                  </div>
-                </div>
-              )}
-              {platforms.length > 0 && config.show_platform !== 0 && (
-                <div>
-                  <Label>Platform</Label>
-                  <div className="relative">
-                    <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
-                      <option value="">Select Platform</option>
-                      {platforms.map((r) => (
-                        <option key={r.value} value={r.label}>{r.label}</option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {/* Region/Platform removed per user request - admin configures via gameFields cascading */}
       </Card>
 
-      {/* ---------- account credential vault ---------- */}
-      {config.needs_credentials === 1 && auto && mode !== "manual" && (
-        <Card title={`${vaultNoun} information shared with buyer`}>
-          <div className="space-y-4">
+      {/* ---------- account credential vault - FIXED: always show for accounts/subscriptions/gift-cards when needs_credentials=1, auto or manual, per user request Image-1 bug */}
+      {config.needs_credentials === 1 && (
+        <Card title={`${vaultNoun} information ${auto ? "(auto-delivered & emailed to buyer)" : "(for manual delivery)"}`} badge={auto ? "AUTO + EMAIL" : "MANUAL"}>
+          {auto ? (
+            <Hint>These details will be <b>instantly delivered</b> to buyer after payment and <b>emailed to their email</b> automatically. Fully automated per user request.</Hint>
+          ) : (
+            <Hint>For manual delivery, you can pre-fill here to deliver faster, or leave empty and send via G2X chat after sale. Buyer will be notified via email when you deliver.</Hint>
+          )}
+          <div className="mt-3 space-y-4">
             {accounts.map((a, i) => (
               <div key={i} className="rounded-xl border border-[var(--line)] p-3">
                 <div className="mb-3 flex items-center justify-between rounded-lg bg-brand-600/15 px-3 py-2">
@@ -728,19 +696,19 @@ export default function OfferForm({
                 ) : (
                 <>
                 <div className="mb-1 text-[11.5px] font-bold">
-                  Account details <span className="muted">(Required)</span>
+                  Account details <span className="muted">(Required for auto, optional for manual)</span>
                 </div>
                 <div className="grid gap-2.5 sm:grid-cols-2">
                   <div>
-                    <Label>Login / Username</Label>
+                    <Label req={auto}>Login / Username</Label>
                     <input value={a.login} onChange={(e) => setAcc(i, "login", e.target.value)} placeholder="Type here…" className={field} />
                   </div>
                   <div>
-                    <Label>Password</Label>
+                    <Label req={auto}>Password</Label>
                     <input value={a.password} onChange={(e) => setAcc(i, "password", e.target.value)} placeholder="Type here…" className={field} />
                   </div>
                   <div className="sm:col-span-2">
-                    <Label>URL</Label>
+                    <Label>URL / Email / Additional</Label>
                     <input value={a.url} onChange={(e) => setAcc(i, "url", e.target.value)} placeholder="Type here…" className={field} />
                   </div>
                 </div>
@@ -775,9 +743,7 @@ export default function OfferForm({
                 <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
                   <AlertTriangle size={14} className="mt-px shrink-0 text-amber-400" />
                   <span className="text-[11px] leading-relaxed text-amber-200/90">
-                    <b>Warning: Additional info field is not encrypted.</b> Under no circumstances
-                    should you enter sensitive data such as passwords, login details, or personal
-                    information.
+                    <b>Warning:</b> Do not enter sensitive personal data. Encrypted and only shared after purchase.
                   </span>
                 </div>
               </div>
@@ -795,14 +761,12 @@ export default function OfferForm({
           <div className="mt-3 flex items-start gap-2 rounded-lg soft px-3 py-2.5">
             <Lock size={14} className="mt-px shrink-0 text-brand-400" />
             <span className="text-[11px] leading-relaxed muted">
-              Your account information is encrypted and only shared with the buyer after the purchase
-              is completed.
+              {auto ? "Auto + Email: Buyer gets details instantly on order page AND via email (fully automated)." : "Manual: Buyer will be emailed when you deliver via chat."}
             </span>
           </div>
         </Card>
       )}
-
-      {(mode === "manual" || (config.needs_credentials === 1 && !auto)) && (
+{(mode === "manual" || (config.needs_credentials === 1 && !auto)) && (
         <Card title="Manual delivery">
           <Hint>
             You will receive the order in your seller panel and must send the account details to the

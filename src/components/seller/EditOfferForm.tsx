@@ -134,6 +134,8 @@ export default function EditOfferForm({
   const money = useMoney();
   void _gameSlug;
   void loginMethods;
+  void regions;
+  void platforms; // removed per admin request
   const [pending, start] = useTransition();
   const busy = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -555,46 +557,9 @@ export default function EditOfferForm({
           );
         })()}
 
-        {/* Legacy Region/Platform/Login - HIDDEN when cascading exists, per user request - fixes Image-1 bug */}
-        {(() => {
-          const hasCascading = gameFields.filter(f=>!/ede/i.test(f.field_key) && f.field_key!=='gg' && !/^aa$/i.test(f.field_key)).length>0;
-          if (hasCascading) return null;
-          return (
-            <div className="grid gap-3.5 sm:grid-cols-2">
-              {regions.length > 0 && config.show_region !== 0 && !gameFields.some((gf) => gf.field_key === "region") && (
-                <div>
-                  <Label>Region</Label>
-                  <div className="relative">
-                    <select value={region} onChange={(e) => setRegion(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
-                      <option value="">Select Region</option>
-                      {regions.map((r) => (
-                        <option key={r.value} value={r.label}>{r.label}</option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
-                  </div>
-                </div>
-              )}
-              {platforms.length > 0 && config.show_platform !== 0 && !gameFields.some((gf) => gf.field_key === "platform") && (
-                <div>
-                  <Label>Platform</Label>
-                  <div className="relative">
-                    <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
-                      <option value="">Select Platform</option>
-                      {platforms.map((r) => (
-                        <option key={r.value} value={r.label}>{r.label}</option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] muted">▼</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-      </Card>
+        {/* Region/Platform removed - admin configures via gameFields */}</Card>
 
-      {config.needs_credentials === 1 && auto && mode !== "manual" && (
+      {config.needs_credentials === 1 && (
         <Card title={`${vaultNoun} information`}>
           <div className="space-y-4">
             {accounts.map((a, i) => (
@@ -637,7 +602,7 @@ export default function EditOfferForm({
         </Card>
       )}
 
-      {(mode === "manual" || (config.needs_credentials === 1 && !auto)) && (
+      {!auto && (
         <Card title="Manual delivery">
           <Hint>You will receive the order in your seller panel and must send the account details to the buyer through G2X chat.</Hint>
           <div className="mt-3">
