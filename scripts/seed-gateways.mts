@@ -9,6 +9,7 @@ const db = makeDb(createClient, { quiet: true });
 
 const ROWS = [
   { code: "wallet", name: "G2X Wallet",  logo: "",          pct: 0,   fixed: 0,    topup: 0, checkout: 1, note: "Pay from your G2X balance — no gateway fee." },
+  { code: "razorpay", name: "Razorpay", logo: "razorpay", pct: 2.0, fixed: 0, topup: 1, checkout: 1, note: "UPI, Cards, NetBanking, Wallets — secure via Razorpay" },
   { code: "card",   name: "Card",        logo: "visa",      pct: 2.9, fixed: 0.30, topup: 1, checkout: 1, note: "Visa / Mastercard / Amex" },
   { code: "upi",    name: "UPI",         logo: "upi",       pct: 0,   fixed: 0,    topup: 1, checkout: 1, note: "Instant bank transfer (India)" },
   { code: "paypal", name: "PayPal",      logo: "paypal",    pct: 3.4, fixed: 0.35, topup: 1, checkout: 1, note: "" },
@@ -19,7 +20,15 @@ let n = 0;
 for (let i = 0; i < ROWS.length; i++) {
   const r = ROWS[i];
   const ex = await db.execute({ sql: `SELECT id FROM payment_gateways WHERE code=?`, args: [r.code] });
-  if (ex.rows.length) continue;
+  if (ex.rows.length) {
+    // ensure razorpay exists and is enabled with correct sort
+    if (r.code === "razorpay") {
+      try {
+        await db.execute({ sql: `UPDATE payment_gateways SET enabled=1, for_topup=1, for_checkout=1, logo='razorpay', name='Razorpay', sort_order=1 WHERE code='razorpay'` });
+      } catch {}
+    }
+    continue;
+  }
   await db.execute({
     sql: `INSERT INTO payment_gateways
             (id,code,name,logo,fee_percent,fee_fixed,min_amount,max_amount,enabled,for_topup,for_checkout,sort_order,note)

@@ -1,7 +1,7 @@
 "use client";
 import { useMoney, useT } from "@/components/LocaleProvider";
 import Image from "next/image";
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -13,6 +13,25 @@ import { placeOrderAction } from "@/lib/actions/shop";
 import type { CartRow } from "./CartView";
 import { feeFor, limitError, type GatewayView } from "@/lib/gateway-fees";
 import { img } from "@/lib/img";
+
+declare global {
+  interface Window {
+    Razorpay?: unknown;
+  }
+}
+
+function loadRazorpay(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") return resolve(false);
+    if (window.Razorpay) return resolve(true);
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 
 export default function CheckoutView({
   items,
@@ -34,14 +53,11 @@ export default function CheckoutView({
   const [err, setErr] = useState("");
   const [kycBlocked, setKycBlocked] = useState(false);
   const [pending, start] = useTransition();
+  const [rzpLoading, setRzpLoading] = useState(false);
 
   const gw = gateways.find((g) => g.code === method) ?? null;
+  const isRazorpay = method.toLowerCase().includes("razorpay") || method === "razorpay";
 
-  /**
-   * The delivery detail we ask for depends on how the seller delivers.
-   * A buyer who chose "UID" on the product page must be asked for a UID —
-   * not a generic "In-game UID / Login ID" box (see client feedback).
-   */
   const chosen = items.map((i) => i.opt_delivery).filter(Boolean) as string[];
   const deliveryKind = chosen.length ? chosen[0] : "";
   const k = deliveryKind.toLowerCase();
@@ -55,13 +71,11 @@ export default function CheckoutView({
     ? { label: "In-game name / Friend ID", placeholder: "e.g. PlayerOne#1234", hint: "So the seller can add you in-game." }
     : { label: "In-game UID / Login ID", placeholder: "e.g. 51234987 or player@mail.com", hint: "" };
 
-  // Category-aware delivery: accounts, gift-cards, subscriptions do NOT need in-game ID
   const cats = items.map((i) => (i.category_slug || "").toLowerCase());
   const needsGameId = cats.some((c) => ["currency", "top-up", "topup", "items", "boosting"].includes(c));
   const isAccountOnly = cats.length > 0 && cats.every((c) => ["accounts", "gift-cards", "giftcards", "subscriptions", "subscription"].includes(c));
   const idField = baseField;
 
-  /** Distinct region + method pairs, echoed back so the buyer can confirm. */
   const optSummary = Array.from(
     new Set(
       items
@@ -78,12 +92,113 @@ export default function CheckoutView({
 
   const blocked = lowBal || !!limitMsg;
 
-  // Synchronous re-entry guard: a second tap in the same tick (before React
-  // re-renders with `pending`) would otherwise fire a second order.
   const busy = useRef(false);
+
+  // Preload Razorpay script when razorpay selected
+  useEffect(() => {
+    if (isRazorpay) loadRazorpay();
+  }, [isRazorpay]);
+
+  const submitRazorpay = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setErr("");
+    setKycBlocked(false);
+    setRzpLoading(true);
+    try {
+      const loaded = await loadRazorpay();
+      if (!loaded) {
+        setErr("Failed to load Razorpay. Check your connection.");
+        return;
+      }
+
+      // create Razorpay order on server
+      const createRes = await fetch("/api/payments/razorpay/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purpose: "checkout", gateway_code: method, uid, note }),
+      });
+      const createData = await createRes.json();
+      if (!createRes.ok || !createData.ok) {
+        setErr(createData.error || "Could not initiate Razorpay payment.");
+        return;
+      }
+
+      const options: Record<string, unknown> = {
+        key: createData.keyId,
+        amount: Math.round(createData.amount * 100),
+        currency: createData.currency || "INR",
+        name: "G2X.GG",
+        description: `Order payment`,
+        order_id: createData.razorpayOrderId,
+        prefill: { email },
+        theme: { color: "#8b3dff" },
+        handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          try {
+            setRzpLoading(true);
+            const verifyRes = await fetch("/api/payments/razorpay/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                uid,
+                note,
+              }),
+            });
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok || !verifyData.ok) {
+              setErr(verifyData.error || "Payment verification failed. Contact support with payment ID.");
+              setRzpLoading(false);
+              return;
+            }
+            if (verifyData.verifyAfter) {
+              router.push(`/dashboard/verification?after=${verifyData.code}`);
+              return;
+            }
+            router.push(`/dashboard/orders/${verifyData.code}?new=1`);
+          } catch (e: unknown) {
+            setErr((e as Error)?.message || "Verification failed");
+            setRzpLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setRzpLoading(false);
+            busy.current = false;
+          },
+        },
+      };
+
+      const rzp = new (window as unknown as { Razorpay: new (opts: unknown) => { open: () => void; on: (ev: string, cb: (r: unknown) => void) => void } }).Razorpay(options);
+      rzp.on("payment.failed", (resp: unknown) => {
+        setErr((resp as { error?: { description?: string } })?.error?.description || "Payment failed");
+        setRzpLoading(false);
+        busy.current = false;
+      });
+      rzp.open();
+    } catch (e: unknown) {
+      setErr((e as Error)?.message || "Razorpay error");
+    } finally {
+      if (!isRazorpay) {
+        // for non-razorpay flow busy is cleared in finally of transition
+      } else {
+        // keep busy until modal dismiss or handler completes
+        // but ensure loading stops if error before open
+        setRzpLoading(false);
+        // busy cleared on dismiss or success
+        busy.current = false;
+      }
+    }
+  };
 
   const submit = () => {
     if (busy.current) return;
+    if (isRazorpay) {
+      submitRazorpay();
+      return;
+    }
     busy.current = true;
     setErr("");
     setKycBlocked(false);
@@ -91,7 +206,6 @@ export default function CheckoutView({
       try {
         const r = await placeOrderAction({ paymentMethod: method, uid, note }).catch(() => null);
         if (!r || !r.ok) {
-          // Unverified email — send them to confirm it, then straight back here.
           if (r?.error === "VERIFY_EMAIL") {
             router.push("/verify-email?next=%2Fcheckout");
             return;
@@ -100,12 +214,6 @@ export default function CheckoutView({
           setErr(r?.error || "Payment failed. Please try again.");
           return;
         }
-        /**
-         * Payment succeeded. If this order crossed the identity threshold the
-         * server flags the account and returns `verifyAfter`; we send the buyer
-         * to the verification tab, carrying the order code so the page can
-         * confirm the purchase went through before asking for documents.
-         */
         if (r.verifyAfter) {
           router.push(`/dashboard/verification?after=${r.code}`);
           return;
@@ -116,6 +224,8 @@ export default function CheckoutView({
       }
     });
   };
+
+  const isProcessing = pending || rzpLoading;
 
   return (
     <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_340px]">
@@ -217,6 +327,11 @@ export default function CheckoutView({
               method.
             </div>
           )}
+          {isRazorpay && (
+            <div className="mt-3 rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-2 text-[11px] text-brand-300">
+              Secure payment via Razorpay — UPI, Cards, NetBanking, Wallets. Your order is created only after successful payment verification.
+            </div>
+          )}
         </section>
 
         <section className="rounded-2xl panel p-4 sm:p-5">
@@ -293,16 +408,18 @@ export default function CheckoutView({
 
           <Btn
             className="mt-4 flex w-full items-center justify-center gap-2"
-            disabled={pending || blocked}
+            disabled={isProcessing || blocked}
             onClick={submit}
           >
-            {pending && <Loader2 size={14} className="animate-spin" />}
-            {pending ? tr("co.processing") : `${tr("co.pay")} ${money(total)}`}
+            {isProcessing && <Loader2 size={14} className="animate-spin" />}
+            {isProcessing ? tr("co.processing") : `${tr("co.pay")} ${money(total)}`}
           </Btn>
 
           <div className="mt-3 flex items-start gap-2 text-[11px] muted">
             <ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-400" />
-            Funds are held in escrow and released to the seller only after you confirm delivery.
+            {isRazorpay
+              ? "Razorpay secure checkout. Funds are held in escrow after verified payment."
+              : "Funds are held in escrow and released to the seller only after you confirm delivery."}
           </div>
         </motion.div>
       </div>

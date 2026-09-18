@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
 import { one } from "@/lib/db";
-import { getUnreadCount } from "@/lib/queries";
+import { getUnreadCount, getMessageUnreadCount } from "@/lib/queries";
 import DashboardNav from "@/components/dash/DashboardNav";
 import PanelShell from "@/components/dash/PanelShell";
 import PanelBadge from "@/components/PanelBadge";
@@ -12,9 +12,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const u = await getSessionUser();
   if (!u) redirect("/login?next=/dashboard");
 
-  const [stats, unread] = await Promise.all([
+  const [stats, unread, msgUnread] = await Promise.all([
     one<{ orders: number }>(`SELECT COUNT(*) AS orders FROM orders WHERE buyer_id=?`, [u.id]),
     getUnreadCount(u.id),
+    getMessageUnreadCount(u.id),
   ]);
 
   return (
@@ -28,6 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           balance={Number(u.balance ?? 0)}
           orders={Number(stats?.orders ?? 0)}
           unread={unread}
+          msgUnread={msgUnread}
           isSeller={!!u.isSeller}
           kycStatus={u.kycStatus}
         />

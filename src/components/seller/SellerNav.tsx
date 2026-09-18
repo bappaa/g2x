@@ -11,20 +11,14 @@ import {
 
 const links = [
   { href: "/seller", label: "Overview", icon: LayoutDashboard },
-  { href: "/seller/orders", label: "Orders", icon: Package, badge: true },
-  { href: "/seller/messages", label: "Messages", icon: MessageSquare },
+  { href: "/seller/orders", label: "Orders", icon: Package, badge: "orders" },
+  { href: "/seller/messages", label: "Messages", icon: MessageSquare, badge: "msg" },
   { href: "/seller/reviews", label: "Reviews", icon: Star },
   { href: "/seller/disputes", label: "Disputes", icon: Gavel },
   { href: "/seller/finance", label: "Finance & Payouts", icon: Wallet },
   { href: "/seller/store", label: "Store Settings", icon: Store },
 ];
 
-/**
- * "My Offers" is now a category drawer instead of a flat link, and the old
- * standalone "Listings" page folds in as its first entry. Sellers think in
- * terms of *what they sell*, so the sub-items mirror the storefront
- * categories; each filters the offers table via `?cat=`.
- */
 const OFFER_CATS = [
   { slug: "", label: "All listings" },
   { slug: "currency", label: "Currency" },
@@ -36,9 +30,9 @@ const OFFER_CATS = [
 ];
 
 export default function SellerNav({
-  store, level, rating, available, pendingBal, toDeliver,
+  store, level, rating, available, pendingBal, toDeliver, msgUnread = 0,
 }: {
-  store: string; level: string; rating: number; available: number; pendingBal: number; toDeliver: number;
+  store: string; level: string; rating: number; available: number; pendingBal: number; toDeliver: number; msgUnread?: number;
 }) {
   const money = useMoney();
   const path = usePathname();
@@ -68,12 +62,12 @@ export default function SellerNav({
       </div>
 
       <nav className="mt-4 space-y-0.5">
-          {/* Overview stays first, then the Offers drawer, then the rest. */}
-          <NavLink l={links[0]} toDeliver={toDeliver} />
+          <NavLink l={links[0]} toDeliver={toDeliver} msgUnread={msgUnread} />
           <OffersDrawer />
 
           {links.slice(1).map((l) => {
             const active = path === l.href;
+            const badgeVal = (l as { badge?: string }).badge === "orders" ? toDeliver : (l as { badge?: string }).badge === "msg" ? msgUnread : 0;
             return (
               <Link
                 key={l.href}
@@ -88,9 +82,9 @@ export default function SellerNav({
                 )}
                 <l.icon size={15} className="shrink-0" />
                 <span className="group-data-[collapsed=true]/rail:hidden">{l.label}</span>
-                {l.badge && toDeliver > 0 && (
-                  <span className="ml-auto rounded-full bg-amber-500 px-1.5 text-[9.5px] font-bold text-white group-data-[collapsed=true]/rail:absolute group-data-[collapsed=true]/rail:right-1 group-data-[collapsed=true]/rail:top-1 group-data-[collapsed=true]/rail:ml-0 group-data-[collapsed=true]/rail:px-1">
-                    {toDeliver}
+                {badgeVal > 0 && (
+                  <span className={`ml-auto rounded-full px-1.5 text-[9.5px] font-bold text-white group-data-[collapsed=true]/rail:absolute group-data-[collapsed=true]/rail:right-1 group-data-[collapsed=true]/rail:top-1 group-data-[collapsed=true]/rail:ml-0 group-data-[collapsed=true]/rail:px-1 ${l.badge === "msg" ? "bg-rose-500" : "bg-amber-500"}`}>
+                    {badgeVal > 99 ? "99+" : badgeVal}
                   </span>
                 )}
               </Link>
@@ -110,9 +104,9 @@ export default function SellerNav({
   );
 }
 
-type NavItem = { href: string; label: string; icon: typeof Package; badge?: boolean };
+type NavItem = { href: string; label: string; icon: typeof Package; badge?: string };
 
-function NavLink({ l, toDeliver }: { l: NavItem; toDeliver: number }) {
+function NavLink({ l, toDeliver }: { l: NavItem; toDeliver: number; msgUnread: number }) {
   const path = usePathname();
   const active = path === l.href;
   return (
@@ -137,7 +131,6 @@ function NavLink({ l, toDeliver }: { l: NavItem; toDeliver: number }) {
   );
 }
 
-/** Expandable "My Offers" section — the old Listings page lives in here now. */
 function OffersDrawer() {
   const path = usePathname();
   const params = useSearchParams();

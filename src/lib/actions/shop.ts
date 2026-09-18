@@ -208,6 +208,7 @@ export async function placeOrderAction(form: {
   // Gateway fee is resolved server-side from the admin's configuration.
   const gw = await gatewayByCode(form.paymentMethod);
   if (!gw) return { ok: false, error: "That payment method is not available." };
+  if (gw.code === "razorpay") return { ok: false, error: "Razorpay orders must go through secure checkout. Please use the Razorpay button." };
   const gwFee = feeFor(subtotal + fee, gw);
   const total = +(subtotal + fee + gwFee).toFixed(2);
 
@@ -751,6 +752,7 @@ export async function topUpWalletAction(
   // Re-resolve the gateway server-side — never trust a fee sent by the client.
   const gw = await gatewayByCode(method);
   if (!gw) return { ok: false, error: "That payment method is not available." };
+  if (gw.code === "razorpay") return { ok: false, error: "Razorpay top-ups must go through secure checkout." };
   const limit = limitError(amt, gw);
   if (limit) return { ok: false, error: limit };
 
@@ -936,7 +938,7 @@ export async function sendMessageAction(threadId: string, body: string): Promise
       );
   }
 
-  // notify the other participant by email (not the sender)
+  // notify the other participant by email + in-app notification (fixes missing badge in sidebar/navbar)
   {
     const otherId = t.buyer_id === u.id ? t.seller_id : t.buyer_id;
     const other = await one<{ email: string }>(`SELECT email FROM users WHERE id=?`, [otherId]);
@@ -947,6 +949,16 @@ export async function sendMessageAction(threadId: string, body: string): Promise
         preview: body.trim().slice(0, 180),
         href: forSeller ? "/seller/messages" : "/dashboard/messages",
       });
+    // in-app notification – drives bell + message badge counts
+    try {
+      await notify(
+        otherId,
+        `New message from ${u.name}`,
+        body.trim().slice(0, 120),
+        forSeller ? `/seller/messages?t=${threadId}` : `/dashboard/messages?t=${threadId}`,
+        "message"
+      );
+    } catch {}
   }
 
   revalidatePath("/dashboard/messages");
@@ -1017,6 +1029,26 @@ export async function sendAttachmentAction(threadId: string, form: FormData): Pr
     },
     { sql: `UPDATE threads SET updated_at=datetime('now') WHERE id=?`, args: [threadId] },
   ] as never);
+
+  // notify other side for image too
+  try {
+    const otherId = t.buyer_id === u.id ? t.seller_id : t.buyer_id;
+    const forSeller = otherId === t.seller_id;
+    await notify(
+      otherId,
+      `New image from ${u.name}`,
+      file.name.slice(0, 80),
+      forSeller ? `/seller/messages?t=${threadId}` : `/dashboard/messages?t=${threadId}`,
+      "message"
+    );
+    const other = await one<{ email: string }>(`SELECT email FROM users WHERE id=?`, [otherId]);
+    if (other?.email)
+      await mail.newMessage(other.email, {
+        from: u.name,
+        preview: `Sent an image: ${file.name}`,
+        href: forSeller ? "/seller/messages" : "/dashboard/messages",
+      });
+  } catch {}
 
   revalidatePath("/dashboard/messages");
   revalidatePath("/seller/messages");

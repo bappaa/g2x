@@ -187,6 +187,29 @@ export const PATCHES = [
      UNIQUE(game_slug, category_slug)
    )`,
   `CREATE INDEX IF NOT EXISTS idx_gci_game ON game_category_images(game_slug)`,
+
+  // --- Phase 45: Razorpay automated payments ---
+  `ALTER TABLE payment_gateways ADD COLUMN config TEXT`,
+  `ALTER TABLE orders ADD COLUMN razorpay_order_id TEXT`,
+  `ALTER TABLE orders ADD COLUMN razorpay_payment_id TEXT`,
+  `ALTER TABLE orders ADD COLUMN razorpay_signature TEXT`,
+  `ALTER TABLE transactions ADD COLUMN razorpay_order_id TEXT`,
+  `ALTER TABLE transactions ADD COLUMN razorpay_payment_id TEXT`,
+  `CREATE TABLE IF NOT EXISTS razorpay_intents (
+     id TEXT PRIMARY KEY,
+     user_id TEXT NOT NULL,
+     razorpay_order_id TEXT NOT NULL UNIQUE,
+     amount REAL NOT NULL,
+     currency TEXT NOT NULL DEFAULT 'INR',
+     purpose TEXT NOT NULL DEFAULT 'checkout',
+     status TEXT NOT NULL DEFAULT 'created',
+     gateway_code TEXT NOT NULL DEFAULT 'razorpay',
+     meta TEXT,
+     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+     verified_at TEXT
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_rzp_user ON razorpay_intents(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_rzp_order ON razorpay_intents(razorpay_order_id)`,
 ];
 
 /** Errors that mean "already applied" — expected on every run after the first. */

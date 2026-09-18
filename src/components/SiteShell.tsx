@@ -10,18 +10,6 @@ import { dictFor } from "@/lib/i18n";
 import LocaleProvider from "./LocaleProvider";
 
 export default async function SiteShell({ children }: { children: React.ReactNode }) {
-  /**
-   * PERFORMANCE: one waterfall, not five.
-   *
-   * Every one of these reads is independent of the others, but they used to run
-   * in four sequential stages (session -> footer/menu -> counters -> search ->
-   * rates). Locally that is invisible; against Turso each stage is a network
-   * round-trip, so the shell alone cost ~5 RTTs *before* the page itself began.
-   *
-   * The site-wide, user-independent reads are all cached (`unstable_cache`,
-   * tag "catalog"), so on a warm cache they cost nothing at all. Starting them
-   * together with the session lookup means the uncached path is a single hop.
-   */
   const shellData = Promise.all([
     footerNav(),
     homeCategories(),
@@ -41,8 +29,6 @@ export default async function SiteShell({ children }: { children: React.ReactNod
   }));
   const footerBlurb = blocks.hero?.body ?? "";
 
-  // Marquee copy comes from the `announcement_bar` CMS block. Each list row
-  // contributes one message; the title is used when no rows are set.
   const ann = blocks.announcement_bar;
   const marquee = (
     ann?.active !== false
@@ -59,9 +45,10 @@ export default async function SiteShell({ children }: { children: React.ReactNod
   let cartCount = 0;
   let notifications: HeaderNotif[] = [];
   let unread = 0;
+  let msgUnread = 0;
 
   if (u) {
-    const [c, n, ur] = await Promise.all([
+    const [c, n, ur, mr] = await Promise.all([
       one<{ n: number }>(`SELECT COALESCE(SUM(qty),0) AS n FROM cart_items WHERE user_id=?`, [u.id]),
       all<{ id: string; title: string; body: string | null; href: string | null; created_at: string; read_flag: number }>(
         `SELECT id,title,body,href,created_at,read_flag FROM notifications
@@ -72,9 +59,14 @@ export default async function SiteShell({ children }: { children: React.ReactNod
         `SELECT COUNT(*) AS n FROM notifications WHERE user_id=? AND read_flag=0`,
         [u.id]
       ),
+      one<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM messages m JOIN threads t ON t.id=m.thread_id WHERE (t.buyer_id=? OR t.seller_id=?) AND m.sender_id<>? AND m.read_flag=0`,
+        [u.id, u.id, u.id]
+      ),
     ]);
     cartCount = Number(c?.n ?? 0);
     unread = Number(ur?.n ?? 0);
+    msgUnread = Number(mr?.n ?? 0);
     notifications = n.map((x) => ({
       id: x.id,
       title: x.title,
@@ -108,6 +100,7 @@ export default async function SiteShell({ children }: { children: React.ReactNod
         cartCount={cartCount}
         notifications={notifications}
         unread={unread}
+        msgUnread={msgUnread}
         marquee={marquee}
         navMenu={menu}
       />

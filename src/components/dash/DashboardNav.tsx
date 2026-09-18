@@ -32,8 +32,8 @@ const groups = [
   {
     title: "Support",
     links: [
-      { href: "/dashboard/messages", label: "Messages", icon: MessageSquare },
-      { href: "/dashboard/notifications", label: "Notifications", icon: Bell, badge: true },
+      { href: "/dashboard/messages", label: "Messages", icon: MessageSquare, badge: "msg" },
+      { href: "/dashboard/notifications", label: "Notifications", icon: Bell, badge: "notif" },
     ],
   },
   {
@@ -47,9 +47,9 @@ const groups = [
 ];
 
 export default function DashboardNav({
-  name, username, balance, orders, unread, isSeller, kycStatus,
+  name, username, balance, orders, unread, msgUnread = 0, isSeller, kycStatus,
 }: {
-  name: string; username: string | null; balance: number; orders: number; unread: number; isSeller: boolean; kycStatus?: string | null;
+  name: string; username: string | null; balance: number; orders: number; unread: number; msgUnread?: number; isSeller: boolean; kycStatus?: string | null;
 }) {
   const isVerified = kycStatus === "approved";
   const filteredGroups = groups.map(g => {
@@ -92,6 +92,8 @@ export default function DashboardNav({
               </div>
               {g.links.map((l) => {
                 const active = path === l.href;
+                const badgeVal = (l as { badge?: string }).badge === "msg" ? msgUnread : (l as { badge?: string }).badge === "notif" ? unread : 0;
+                const showBadge = badgeVal > 0;
                 return (
                   <Link
                     key={l.href}
@@ -109,9 +111,9 @@ export default function DashboardNav({
                     )}
                     <l.icon size={15} className="shrink-0" />
                     <span className="group-data-[collapsed=true]/rail:hidden">{l.label}</span>
-                    {"badge" in l && l.badge && unread > 0 && (
+                    {showBadge && (
                       <span className="ml-auto rounded-full bg-rose-500 px-1.5 text-[9.5px] font-bold text-white group-data-[collapsed=true]/rail:absolute group-data-[collapsed=true]/rail:right-1 group-data-[collapsed=true]/rail:top-1 group-data-[collapsed=true]/rail:ml-0 group-data-[collapsed=true]/rail:px-1">
-                        {unread}
+                        {badgeVal > 99 ? "99+" : badgeVal}
                       </span>
                     )}
                   </Link>

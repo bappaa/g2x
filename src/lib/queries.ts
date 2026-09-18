@@ -339,6 +339,21 @@ export const getUnreadCount = async (userId: string) => {
   return Number(r?.n ?? 0);
 };
 
+export const getMessageUnreadCount = async (userId: string) => {
+  const r = await one<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM messages m
+       JOIN threads t ON t.id=m.thread_id
+      WHERE (t.buyer_id=? OR t.seller_id=?) AND m.sender_id<>? AND m.read_flag=0`,
+    [userId, userId, userId]
+  );
+  return Number(r?.n ?? 0);
+};
+
+export const getCombinedUnread = async (userId: string) => {
+  const [notif, msg] = await Promise.all([getUnreadCount(userId), getMessageUnreadCount(userId)]);
+  return { notif, msg, total: notif + msg };
+};
+
 export const getBuyerDisputes = (userId: string) =>
   all(
     `SELECT d.*, sp.store_name FROM disputes d

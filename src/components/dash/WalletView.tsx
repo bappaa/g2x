@@ -1,6 +1,6 @@
 "use client";
 import { useMoney } from "@/components/LocaleProvider";
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Wallet, Plus, Loader2, Check } from "lucide-react";
@@ -17,6 +17,25 @@ const MAX_TOPUP = 5000;
 
 type T = { id: string; type: string; amount: number; reference: string; created_at: string };
 
+declare global {
+  interface Window {
+    Razorpay?: unknown;
+  }
+}
+
+function loadRazorpay(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") return resolve(false);
+    if (window.Razorpay) return resolve(true);
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 export default function WalletView({
   balance, txns, gateways,
 }: {
@@ -25,20 +44,25 @@ export default function WalletView({
   const money = useMoney();
   const router = useRouter();
   const [amt, setAmt] = useState(50);
-  const [custom, setCustom] = useState("");        // free-text custom amount
+  const [custom, setCustom] = useState("");
   const [method, setMethod] = useState(gateways[0]?.code ?? "card");
   const [pending, start] = useTransition();
   const [ok, setOk] = useState(false);
   const [err, setErr] = useState("");
   const [kycBlocked, setKycBlocked] = useState(false);
+  const [rzpLoading, setRzpLoading] = useState(false);
 
   const gw = gateways.find((g) => g.code === method) ?? null;
+  const isRazorpay = method.toLowerCase().includes("razorpay") || method === "razorpay";
   const fee = feeFor(amt, gw);
   const total = Math.round((amt + fee) * 100) / 100;
   const limitMsg = limitError(amt, gw);
   const invalid = !(amt > 0) || amt > MAX_TOPUP || !!limitMsg;
 
-  /** Accepts a typed custom amount, clamped and rounded to cents. */
+  useEffect(() => {
+    if (isRazorpay) loadRazorpay();
+  }, [isRazorpay]);
+
   const onCustom = (raw: string) => {
     const clean = raw.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
     setCustom(clean);
@@ -52,20 +76,107 @@ export default function WalletView({
     setCustom("");
   };
 
-  /**
-   * Guards against the double-credit bug from two directions:
-   *  1. `busy` is a ref, so it flips synchronously — a second click landing in
-   *     the same tick (before React re-renders with `pending`) is dropped.
-   *     The `disabled` prop alone could not catch that.
-   *  2. `idemKey` is generated once per attempt and reused on retries, so if a
-   *     request does reach the server twice the UNIQUE index rejects the
-   *     duplicate instead of crediting the wallet again.
-   */
   const busy = useRef(false);
   const idemKey = useRef<string>("");
 
+  const topUpRazorpay = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    setErr("");
+    setKycBlocked(false);
+    setRzpLoading(true);
+    if (!idemKey.current) {
+      idemKey.current =
+        globalThis.crypto?.randomUUID?.() ??
+        `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    try {
+      const loaded = await loadRazorpay();
+      if (!loaded) {
+        setErr("Failed to load Razorpay");
+        return;
+      }
+      const createRes = await fetch("/api/payments/razorpay/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purpose: "topup", gateway_code: method, amount: amt }),
+      });
+      const createData = await createRes.json();
+      if (!createRes.ok || !createData.ok) {
+        setErr(createData.error || "Could not start Razorpay payment");
+        return;
+      }
+
+      const options: Record<string, unknown> = {
+        key: createData.keyId,
+        amount: Math.round(createData.amount * 100),
+        currency: createData.currency || "INR",
+        name: "G2X.GG",
+        description: `Wallet top-up $${amt}`,
+        order_id: createData.razorpayOrderId,
+        theme: { color: "#8b3dff" },
+        handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          try {
+            const verifyRes = await fetch("/api/payments/razorpay/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                idemKey: idemKey.current,
+              }),
+            });
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok || !verifyData.ok) {
+              setErr(verifyData.error || "Verification failed");
+              setRzpLoading(false);
+              return;
+            }
+            idemKey.current = "";
+            setOk(true);
+            setCustom("");
+            if (verifyData.verifyAfter) {
+              router.push("/dashboard/verification?after=topup");
+              return;
+            }
+            setTimeout(() => setOk(false), 2200);
+            router.refresh();
+          } catch (e: unknown) {
+            setErr((e as Error)?.message || "Verification error");
+          } finally {
+            setRzpLoading(false);
+            busy.current = false;
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setRzpLoading(false);
+            busy.current = false;
+          },
+        },
+      };
+
+      const rzp = new (window as unknown as { Razorpay: new (opts: unknown) => { open: () => void; on: (ev: string, cb: (r: unknown) => void) => void } }).Razorpay(options);
+      rzp.on("payment.failed", (resp: unknown) => {
+        setErr((resp as { error?: { description?: string } })?.error?.description || "Payment failed");
+        setRzpLoading(false);
+        busy.current = false;
+      });
+      rzp.open();
+    } catch (e: unknown) {
+      setErr((e as Error)?.message || "Razorpay error");
+      setRzpLoading(false);
+      busy.current = false;
+    }
+  };
+
   const topUp = () => {
     if (busy.current) return;
+    if (isRazorpay) {
+      topUpRazorpay();
+      return;
+    }
     busy.current = true;
     if (!idemKey.current) {
       idemKey.current =
@@ -83,12 +194,10 @@ export default function WalletView({
           setErr(r.error || "Top-up failed.");
           return;
         }
-        idemKey.current = "";   // success -> next top-up gets a fresh key
+        idemKey.current = "";
         setOk(true);
         setCustom("");
 
-        // Funds are in. If the deposit crossed the identity threshold, collect
-        // the verification now rather than having blocked the payment earlier.
         if (r.verifyAfter) {
           router.push("/dashboard/verification?after=topup");
           return;
@@ -104,6 +213,8 @@ export default function WalletView({
 
   const inflow = txns.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const outflow = txns.filter((t) => t.amount < 0).reduce((s, t) => s - t.amount, 0);
+
+  const isProcessing = pending || rzpLoading;
 
   return (
     <div className="space-y-4">
@@ -174,7 +285,6 @@ export default function WalletView({
             ))}
           </div>
 
-          {/* custom amount */}
           <div className="mt-2">
             <label className="mb-1 block text-[11px] font-medium muted">Or enter a custom amount</label>
             <div
@@ -194,7 +304,6 @@ export default function WalletView({
             </div>
           </div>
 
-          {/* payment methods — admin managed */}
           <div className="mt-3 grid grid-cols-2 gap-2">
             {gateways.map((m) => (
               <button
@@ -215,7 +324,6 @@ export default function WalletView({
             ))}
           </div>
 
-          {/* live fee breakdown */}
           {amt > 0 && (
             <div className="mt-3 space-y-1 rounded-lg soft p-3 text-[11.5px]">
               <div className="flex justify-between">
@@ -274,14 +382,14 @@ export default function WalletView({
 
           <Btn
             className="mt-3 flex w-full items-center justify-center gap-2"
-            disabled={pending || invalid}
+            disabled={isProcessing || invalid}
             onClick={topUp}
           >
-            {pending ? <Loader2 size={13} className="animate-spin" /> : ok ? <Check size={13} /> : <Plus size={13} />}
-            {ok ? "Funds added!" : amt > 0 ? `Pay ${money(total)}` : "Enter an amount"}
+            {isProcessing ? <Loader2 size={13} className="animate-spin" /> : ok ? <Check size={13} /> : <Plus size={13} />}
+            {ok ? "Funds added!" : amt > 0 ? `Pay ${money(total)} ${isRazorpay ? "via Razorpay" : ""}` : "Enter an amount"}
           </Btn>
           <p className="mt-2 text-[10.5px] muted">
-            Demo mode — payments are simulated and credited instantly.
+            {isRazorpay ? "Secure Razorpay checkout — UPI, Cards, NetBanking. Instant credit after verification." : "Demo mode — payments are simulated and credited instantly."}
           </p>
         </div>
       </div>

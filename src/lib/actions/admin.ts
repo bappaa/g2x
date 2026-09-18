@@ -1773,32 +1773,73 @@ export async function saveGatewayAction(form: FormData): Promise<R> {
   const forTopup = form.get("forTopup") ? 1 : 0;
   const forCheckout = form.get("forCheckout") ? 1 : 0;
 
+  const rzpKeyId = String(form.get("rzpKeyId") ?? "").trim();
+  const rzpKeySecret = String(form.get("rzpKeySecret") ?? "").trim();
+  const rzpWebhook = String(form.get("rzpWebhookSecret") ?? "").trim();
+  const rzpCurrency = String(form.get("rzpCurrency") ?? "").trim() || "INR";
+  let configJson: string | null = null;
+  if (code === "razorpay" || rzpKeyId || rzpKeySecret) {
+    configJson = JSON.stringify({
+      key_id: rzpKeyId,
+      key_secret: rzpKeySecret,
+      webhook_secret: rzpWebhook,
+      currency: rzpCurrency,
+    });
+  }
+
   const dupe = await one<{ id: string }>(
     `SELECT id FROM payment_gateways WHERE code=? AND id<>?`,
     [code, id || ""]
   );
   if (dupe) return { ok: false, error: `A gateway with code "${code}" already exists.` };
 
-  if (id) {
-    await run(
-      `UPDATE payment_gateways SET code=?, name=?, logo=?, fee_percent=?, fee_fixed=?,
-              min_amount=?, max_amount=?, enabled=?, for_topup=?, for_checkout=?,
-              sort_order=?, note=? WHERE id=?`,
-      [code, name, logo, feePercent, feeFixed, minAmount, maxAmount,
-       enabled, forTopup, forCheckout, sortOrder, note, id]
-    );
-  } else {
-    await run(
-      `INSERT INTO payment_gateways
-         (id,code,name,logo,fee_percent,fee_fixed,min_amount,max_amount,
-          enabled,for_topup,for_checkout,sort_order,note)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [nid("pg_"), code, name, logo, feePercent, feeFixed, minAmount, maxAmount,
-       enabled, forTopup, forCheckout, sortOrder, note]
-    );
+  try {
+    if (id) {
+      await run(
+        `UPDATE payment_gateways SET code=?, name=?, logo=?, fee_percent=?, fee_fixed=?,
+                min_amount=?, max_amount=?, enabled=?, for_topup=?, for_checkout=?,
+                sort_order=?, note=?, config=? WHERE id=?`,
+        [code, name, logo, feePercent, feeFixed, minAmount, maxAmount,
+         enabled, forTopup, forCheckout, sortOrder, note, configJson, id]
+      );
+    } else {
+      await run(
+        `INSERT INTO payment_gateways
+           (id,code,name,logo,fee_percent,fee_fixed,min_amount,max_amount,
+            enabled,for_topup,for_checkout,sort_order,note,config)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [nid("pg_"), code, name, logo, feePercent, feeFixed, minAmount, maxAmount,
+         enabled, forTopup, forCheckout, sortOrder, note, configJson]
+      );
+    }
+  } catch (e: unknown) {
+    const msg = String((e as Error)?.message ?? "");
+    if (/no column named config|no such column: config/i.test(msg)) {
+      const mergedNote = configJson ? note + "\n<!--rzp:" + configJson + "-->" : note;
+      if (id) {
+        await run(
+          `UPDATE payment_gateways SET code=?, name=?, logo=?, fee_percent=?, fee_fixed=?,
+                  min_amount=?, max_amount=?, enabled=?, for_topup=?, for_checkout=?,
+                  sort_order=?, note=? WHERE id=?`,
+          [code, name, logo, feePercent, feeFixed, minAmount, maxAmount,
+           enabled, forTopup, forCheckout, sortOrder, mergedNote, id]
+        );
+      } else {
+        await run(
+          `INSERT INTO payment_gateways
+             (id,code,name,logo,fee_percent,fee_fixed,min_amount,max_amount,
+              enabled,for_topup,for_checkout,sort_order,note)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [nid("pg_"), code, name, logo, feePercent, feeFixed, minAmount, maxAmount,
+           enabled, forTopup, forCheckout, sortOrder, mergedNote]
+        );
+      }
+    } else {
+      throw e;
+    }
   }
 
-  await audit(a.id, id ? "gateway.update" : "gateway.create", code, { feePercent, feeFixed });
+  await audit(a.id, id ? "gateway.update" : "gateway.create", code, { feePercent, feeFixed, hasRzp: !!configJson });
   revalidateTag("gateways");
   revalidatePath("/", "layout");
   revalidatePath("/admin/gateways");

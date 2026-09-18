@@ -55,6 +55,7 @@ export default function Header({
   cartCount,
   notifications,
   unread,
+  msgUnread = 0,
   marquee = [],
   navMenu = [],
 }: {
@@ -62,6 +63,7 @@ export default function Header({
   cartCount: number;
   notifications: HeaderNotif[];
   unread: number;
+  msgUnread?: number;
   marquee?: string[];
   /** Category dropdowns, built from the live catalog. */
   navMenu?: MenuCategory[];
@@ -303,6 +305,11 @@ export default function Header({
                 title="Messages"
               >
                 <MessageSquare size={15} />
+                {msgUnread > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+                    {msgUnread > 99 ? "99+" : msgUnread}
+                  </span>
+                )}
               </Link>
             )}
 

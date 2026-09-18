@@ -14,7 +14,7 @@ type G = {
   id: string; code: string; name: string; logo: string;
   fee_percent: number; fee_fixed: number; min_amount: number; max_amount: number;
   enabled: number; for_topup: number; for_checkout: number;
-  sort_order: number; note: string;
+  sort_order: number; note: string; config?: string | null;
 };
 
 const feeLabel = (g: G) => {
@@ -23,6 +23,34 @@ const feeLabel = (g: G) => {
   if (!p && !f) return "No fee";
   return [p ? `${p}%` : "", f ? `$${f.toFixed(2)}` : ""].filter(Boolean).join(" + ");
 };
+
+function parseConfig(g: G | null): { key_id: string; key_secret: string; webhook_secret: string; currency: string } {
+  if (!g) return { key_id: "", key_secret: "", webhook_secret: "", currency: "INR" };
+  const raw = g.config || g.note || "";
+  try {
+    const j = JSON.parse(raw);
+    if (j.key_id || j.key_secret) return {
+      key_id: j.key_id || j.keyId || "",
+      key_secret: j.key_secret || j.keySecret || "",
+      webhook_secret: j.webhook_secret || j.webhookSecret || "",
+      currency: j.currency || "INR",
+    };
+  } catch {}
+  // try extract from <!--rzp:...-->
+  const m = raw.match(/<!--rzp:(.*?)-->/);
+  if (m) {
+    try {
+      const j = JSON.parse(m[1]);
+      return {
+        key_id: j.key_id || "",
+        key_secret: j.key_secret || "",
+        webhook_secret: j.webhook_secret || "",
+        currency: j.currency || "INR",
+      };
+    } catch {}
+  }
+  return { key_id: "", key_secret: "", webhook_secret: "", currency: "INR" };
+}
 
 export default function GatewaysManager({ rows }: { rows: G[] }) {
   const router = useRouter();
@@ -45,7 +73,7 @@ export default function GatewaysManager({ rows }: { rows: G[] }) {
 
       <div className="rounded-xl bg-brand-600/10 px-3 py-2 text-[11.5px]">
         Fees are charged on top of the order total and shown to the buyer before they pay.
-        Changing a fee never alters orders that were already placed.
+        Changing a fee never alters orders that were already placed. For Razorpay, add your Key ID/Secret from dashboard.razorpay.com
       </div>
 
       {err && <div className="rounded-lg bg-rose-500/10 px-3 py-2 text-[11.5px] text-rose-400">{err}</div>}
@@ -54,72 +82,82 @@ export default function GatewaysManager({ rows }: { rows: G[] }) {
         <Empty title="No payment methods" sub="Add one so buyers can pay." />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {rows.map((g) => (
-            <motion.div key={g.id} layout className="rounded-2xl panel p-4">
-              <div className="flex items-center gap-2.5">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/90">
-                  {g.logo ? <AnyLogo logo={g.logo} size={18} /> : <Calculator size={16} className="text-slate-700" />}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-bold">{g.name}</div>
-                  <div className="truncate font-mono text-[10px] muted">{g.code}</div>
-                </div>
-                <Tag tone={g.enabled ? "green" : "slate"}>{g.enabled ? "Live" : "Off"}</Tag>
-              </div>
-
-              <div className="mt-3 space-y-1 rounded-lg soft p-2.5 text-[11.5px]">
-                <div className="flex justify-between">
-                  <span className="muted">Fee</span>
-                  <span className="font-bold text-amber-400">{feeLabel(g)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="muted">Limits</span>
-                  <span className="font-semibold">
-                    {g.min_amount > 0 ? `$${g.min_amount}` : "$0"} –{" "}
-                    {g.max_amount > 0 ? `$${g.max_amount}` : "∞"}
+          {rows.map((g) => {
+            const cfg = parseConfig(g);
+            const isRzp = g.code === "razorpay";
+            return (
+              <motion.div key={g.id} layout className="rounded-2xl panel p-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/90">
+                    {g.logo ? <AnyLogo logo={g.logo} size={18} /> : <Calculator size={16} className="text-slate-700" />}
                   </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-bold">{g.name}</div>
+                    <div className="truncate font-mono text-[10px] muted">{g.code} {isRzp && cfg.key_id ? "· configured ✓" : isRzp ? "· missing keys" : ""}</div>
+                  </div>
+                  <Tag tone={g.enabled ? "green" : "slate"}>{g.enabled ? "Live" : "Off"}</Tag>
                 </div>
-                <div className="flex justify-between">
-                  <span className="muted">Used for</span>
-                  <span className="font-semibold">
-                    {[g.for_topup && "Top-up", g.for_checkout && "Checkout"].filter(Boolean).join(" · ") || "—"}
-                  </span>
+
+                <div className="mt-3 space-y-1 rounded-lg soft p-2.5 text-[11.5px]">
+                  <div className="flex justify-between">
+                    <span className="muted">Fee</span>
+                    <span className="font-bold text-amber-400">{feeLabel(g)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="muted">Limits</span>
+                    <span className="font-semibold">
+                      {g.min_amount > 0 ? `$${g.min_amount}` : "$0"} –{" "}
+                      {g.max_amount > 0 ? `$${g.max_amount}` : "∞"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="muted">Used for</span>
+                    <span className="font-semibold">
+                      {[g.for_topup && "Top-up", g.for_checkout && "Checkout"].filter(Boolean).join(" · ") || "—"}
+                    </span>
+                  </div>
+                  {isRzp && (
+                    <div className="flex justify-between">
+                      <span className="muted">Razorpay</span>
+                      <span className="font-semibold truncate max-w-[120px]">{cfg.key_id ? `${cfg.key_id.slice(0, 12)}… ${cfg.currency}` : "Not set"}</span>
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              {g.note && <p className="mt-2 line-clamp-2 text-[10.5px] muted">{g.note}</p>}
+                {g.note && <p className="mt-2 line-clamp-2 text-[10.5px] muted">{g.note.replace(/<!--rzp:.*?-->/g, "").trim()}</p>}
 
-              <div className="mt-2.5 flex gap-1.5">
-                <IconAction
-                  title={g.enabled ? "Disable" : "Enable"}
-                  disabled={busy}
-                  onClick={() =>
-                    start(async () => {
-                      await toggleGatewayAction(g.id, !g.enabled);
-                      router.refresh();
-                    })
-                  }
-                >
-                  {g.enabled ? <EyeOff size={12} /> : <Eye size={12} />}
-                </IconAction>
-                <IconAction title="Edit" onClick={() => setEdit(g)}><Pencil size={12} /></IconAction>
-                <IconAction
-                  title="Delete" danger disabled={busy}
-                  onClick={() => {
-                    if (!confirm(`Remove ${g.name}? Buyers will no longer see it.`)) return;
-                    start(async () => {
-                      setErr("");
-                      const r = await deleteGatewayAction(g.id);
-                      if (!r.ok) setErr(r.error || "Could not delete.");
-                      router.refresh();
-                    });
-                  }}
-                >
-                  <Trash2 size={12} />
-                </IconAction>
-              </div>
-            </motion.div>
-          ))}
+                <div className="mt-2.5 flex gap-1.5">
+                  <IconAction
+                    title={g.enabled ? "Disable" : "Enable"}
+                    disabled={busy}
+                    onClick={() =>
+                      start(async () => {
+                        await toggleGatewayAction(g.id, !g.enabled);
+                        router.refresh();
+                      })
+                    }
+                  >
+                    {g.enabled ? <EyeOff size={12} /> : <Eye size={12} />}
+                  </IconAction>
+                  <IconAction title="Edit" onClick={() => setEdit(g)}><Pencil size={12} /></IconAction>
+                  <IconAction
+                    title="Delete" danger disabled={busy}
+                    onClick={() => {
+                      if (!confirm(`Remove ${g.name}? Buyers will no longer see it.`)) return;
+                      start(async () => {
+                        setErr("");
+                        const r = await deleteGatewayAction(g.id);
+                        if (!r.ok) setErr(r.error || "Could not delete.");
+                        router.refresh();
+                      });
+                    }}
+                  >
+                    <Trash2 size={12} />
+                  </IconAction>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
       )}
 
@@ -137,11 +175,14 @@ function Form({ g, count, onClose }: { g: G | null; count: number; onClose: () =
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
 
-  // live preview of what a buyer would pay
+  const cfg = parseConfig(g);
+
   const [pct, setPct] = useState(Number(g?.fee_percent ?? 0));
   const [fixed, setFixed] = useState(Number(g?.fee_fixed ?? 0));
+  const [code, setCode] = useState(g?.code ?? "");
   const sample = 100;
   const sampleFee = Math.round((sample * (pct / 100) + fixed) * 100) / 100;
+  const isRzp = code === "razorpay";
 
   const submit = (fd: FormData) =>
     start(async () => {
@@ -162,7 +203,7 @@ function Form({ g, count, onClose }: { g: G | null; count: number; onClose: () =
         onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); submit(fd); }}
         initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[90vh] w-full max-w-[480px] space-y-3 overflow-y-auto rounded-2xl panel p-5"
+        className="max-h-[90vh] w-full max-w-[520px] space-y-3 overflow-y-auto rounded-2xl panel p-5"
       >
         <div className="flex items-center">
           <h2 className="text-[15px] font-black">{g ? "Edit gateway" : "Add gateway"}</h2>
@@ -174,20 +215,47 @@ function Form({ g, count, onClose }: { g: G | null; count: number; onClose: () =
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Display name">
-            <input name="name" required defaultValue={g?.name} className={inputCls} placeholder="Card" />
+            <input name="name" required defaultValue={g?.name} className={inputCls} placeholder="Razorpay" />
           </Field>
-          <Field label="Code" hint="Lowercase identifier">
+          <Field label="Code" hint="Lowercase identifier – use razorpay for Razorpay">
             <input
-              name="code" required defaultValue={g?.code}
+              name="code" required value={code}
+              onChange={(e) => setCode(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
               readOnly={g?.code === "wallet"}
-              className={inputCls} placeholder="card"
+              className={inputCls} placeholder="razorpay"
             />
           </Field>
         </div>
 
-        <Field label="Logo" hint="Brand icon name: visa, mastercard, paypal, applepay…">
-          <input name="logo" defaultValue={g?.logo} className={inputCls} placeholder="visa" />
+        <Field label="Logo" hint="Brand icon name: razorpay, visa, mastercard, paypal…">
+          <input name="logo" defaultValue={g?.logo} className={inputCls} placeholder="razorpay" />
         </Field>
+
+        {isRzp && (
+          <div className="rounded-xl border border-brand-500/30 bg-brand-500/10 p-3 space-y-3">
+            <div className="text-[12px] font-bold text-brand-300">Razorpay Configuration — from dashboard.razorpay.com → Settings → API Keys</div>
+            <Field label="Razorpay Key ID" hint="rzp_test_… or rzp_live_…">
+              <input name="rzpKeyId" defaultValue={cfg.key_id} className={inputCls} placeholder="rzp_test_xxxx" />
+            </Field>
+            <Field label="Razorpay Key Secret" hint="Keep secret – never share publicly">
+              <input name="rzpKeySecret" type="password" defaultValue={cfg.key_secret} className={inputCls} placeholder="••••••••" />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Webhook Secret (optional)" hint="For webhook verification">
+                <input name="rzpWebhookSecret" defaultValue={cfg.webhook_secret} className={inputCls} placeholder="whsec_…" />
+              </Field>
+              <Field label="Currency" hint="INR is default for India">
+                <select name="rzpCurrency" defaultValue={cfg.currency} className={inputCls}>
+                  <option value="INR">INR</option>
+                  <option value="USD">USD</option>
+                </select>
+              </Field>
+            </div>
+            <div className="text-[10.5px] muted">
+              Webhook URL to set in Razorpay Dashboard: <code className="rounded bg-black/30 px-1 py-0.5">/api/payments/razorpay/webhook</code> — Events: payment.captured, order.paid
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Percentage fee (%)">
@@ -208,7 +276,6 @@ function Form({ g, count, onClose }: { g: G | null; count: number; onClose: () =
           </Field>
         </div>
 
-        {/* live worked example so the admin sees the real effect */}
         <div className="space-y-1 rounded-lg soft p-3 text-[11.5px]">
           <div className="mb-1 flex items-center gap-1.5 font-semibold">
             <Calculator size={12} /> On a $100 order the buyer pays
@@ -237,7 +304,7 @@ function Form({ g, count, onClose }: { g: G | null; count: number; onClose: () =
         </div>
 
         <Field label="Note shown to buyers">
-          <input name="note" defaultValue={g?.note} className={inputCls} placeholder="Visa / Mastercard / Amex" />
+          <input name="note" defaultValue={g?.note ? g.note.replace(/<!--rzp:.*?-->/g, "").trim() : ""} className={inputCls} placeholder="UPI, Cards, NetBanking, Wallets" />
         </Field>
 
         <div className="space-y-1.5">

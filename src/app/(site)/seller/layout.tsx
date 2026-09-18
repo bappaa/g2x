@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/session";
-import { getSellerProfile } from "@/lib/queries";
+import { getSellerProfile, getMessageUnreadCount } from "@/lib/queries";
 import { one } from "@/lib/db";
 import SellerNav from "@/components/seller/SellerNav";
 import PanelShell from "@/components/dash/PanelShell";
@@ -17,10 +17,13 @@ export default async function SellerLayout({ children }: { children: React.React
   if (!prof) redirect("/dashboard/become-seller");
   if (prof.status !== "active") redirect("/dashboard/become-seller");
 
-  const pending = await one<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM order_items WHERE seller_id=? AND status='processing'`,
-    [u.id]
-  );
+  const [pending, msgUnread] = await Promise.all([
+    one<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM order_items WHERE seller_id=? AND status='processing'`,
+      [u.id]
+    ),
+    getMessageUnreadCount(u.id),
+  ]);
 
   return (
     <PanelShell
@@ -34,6 +37,7 @@ export default async function SellerLayout({ children }: { children: React.React
           available={prof.available_bal}
           pendingBal={prof.pending_bal}
           toDeliver={Number(pending?.n ?? 0)}
+          msgUnread={msgUnread}
         />
       }
     >
