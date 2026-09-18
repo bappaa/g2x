@@ -94,7 +94,7 @@ export async function saveGameAction(form: FormData): Promise<R> {
   
   // For new games, logo is mandatory
   if (!logo && !original) {
-    return { ok: false, error: "Game logo is required! Upload an icon that will show on homepage and category pages. Use PNG, JPG, WEBP (max 2MB). You can also add currency/top-up images when creating products for this game." };
+    return { ok: false, error: "Game logo is required! Upload an icon that will show on homepage and category pages. Use PNG, JPG, WEBP (max 5 MB, recommended 512x512 under 1 MB). You can also add currency/top-up images when creating products for this game." };
   }
   
   // Fallback to placeholder only if absolutely needed (should not happen for new games now)

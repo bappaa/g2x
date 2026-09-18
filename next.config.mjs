@@ -9,7 +9,7 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react", "framer-motion", "recharts"],
     staleTimes: { dynamic: 30, static: 180 },
-    serverActions: { bodySizeLimit: "12mb" },
+    serverActions: { bodySizeLimit: "15mb" },
   },
   compiler: {
     removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false,
@@ -28,10 +28,11 @@ const nextConfig = {
       { key: "X-XSS-Protection", value: "1; mode=block" },
       { key: "X-DNS-Prefetch-Control", value: "off" },
       { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
-      { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
-      { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
+      // Fixed: was same-origin + credentialless which blocked Razorpay iframe
+      { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+      { key: "Cross-Origin-Embedder-Policy", value: "unsafe-none" },
       { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
-      { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()" },
+      { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(), payment=(self \"https://checkout.razorpay.com\" \"https://*.razorpay.com\"), usb=(), interest-cohort=()" },
     ];
     if (process.env.NODE_ENV === "production") {
       securityHeaders.push({ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" });

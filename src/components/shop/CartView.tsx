@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import { useMoney } from "@/components/LocaleProvider";
 import Image from "next/image";
@@ -14,9 +15,11 @@ import { img } from "@/lib/img";
 export type CartRow = {
   key: string; title: string; sub: string; image: string; store_name: string;
   price: number; qty: number; stock: number; delivery: string; href: string;
-  /** Buyer's picks on the product page (region / server and delivery method). */
   opt_region?: string | null; opt_delivery?: string | null;
   category_slug?: string | null;
+  game_slug?: string | null;
+  game_name?: string | null;
+  product_slug?: string | null;
 };
 
 export default function CartView({ items }: { items: CartRow[] }) {
@@ -47,6 +50,9 @@ export default function CartView({ items }: { items: CartRow[] }) {
   const fee = +(subtotal * 0.02).toFixed(2);
   const total = +(subtotal + fee).toFixed(2);
 
+  const distinctCats = Array.from(new Set(rows.map((r)=> (r.category_slug||"").toLowerCase()).filter(Boolean)));
+  const isMixed = distinctCats.length > 1;
+
   if (!rows.length)
     return (
       <div className="mt-5">
@@ -65,6 +71,11 @@ export default function CartView({ items }: { items: CartRow[] }) {
   return (
     <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_330px]">
       <div className="space-y-3">
+        {isMixed && (
+          <div className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-[11.5px] text-rose-300">
+            <b>Mixed categories:</b> {distinctCats.join(", ")} — you cannot checkout different categories together. Please remove items from other categories and checkout one category at a time.
+          </div>
+        )}
         <AnimatePresence initial={false}>
           {rows.map((r) => (
             <motion.div

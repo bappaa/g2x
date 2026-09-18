@@ -217,11 +217,12 @@ export const getCart = (userId: string) =>
     title: string; sub: string; image: string; seller_id: string; store_name: string;
     price: number; qty: number; stock: number; delivery: string; href: string;
     opt_region: string | null; opt_delivery: string | null;
-    /** 1 = the seller pre-filled the details; deliver instantly on payment. */
     auto_delivery: number;
-    /** JSON array of credential sets the seller supplied up front. */
     accounts_data: string | null;
     category_slug: string | null;
+    game_slug: string | null;
+    game_name: string | null;
+    product_slug: string | null;
   }>(
     `SELECT * FROM (
        SELECT ci.id AS key, ci.offer_id, ci.listing_id, o.product_id,
@@ -232,7 +233,10 @@ export const getCart = (userId: string) =>
               '/g/' || p.game_slug || '/' || p.category_slug || '/' || p.slug AS href,
               ci.opt_region, ci.opt_delivery,
               COALESCE(o.auto_delivery, 0) AS auto_delivery, o.accounts_data,
-              p.category_slug AS category_slug
+              p.category_slug AS category_slug,
+              p.game_slug AS game_slug,
+              g.name AS game_name,
+              p.slug AS product_slug
          FROM cart_items ci
          JOIN offers o   ON o.id = ci.offer_id
          JOIN products p ON p.id = o.product_id
@@ -248,7 +252,10 @@ export const getCart = (userId: string) =>
               '/g/' || l.game_slug || '/' || l.category_slug || '/' || l.id,
               ci.opt_region, ci.opt_delivery,
               COALESCE(l.auto_delivery, 0) AS auto_delivery, l.accounts_data,
-              l.category_slug AS category_slug
+              l.category_slug AS category_slug,
+              l.game_slug AS game_slug,
+              g.name AS game_name,
+              l.id AS product_slug
          FROM cart_items ci
          JOIN listings l ON l.id = ci.listing_id
          JOIN games g    ON g.slug = l.game_slug
@@ -573,23 +580,24 @@ export const getSellerOrders = (
   }
   if (opts?.q) {
     const like = `%${opts.q}%`;
-    where += ` AND (o.code LIKE ? OR oi.title LIKE ? OR u.username LIKE ? OR u.email LIKE ?)`;
-    args.push(like, like, like, like);
+    where += ` AND (o.code LIKE ? OR oi.title LIKE ? OR COALESCE(u.username,'') LIKE ? OR COALESCE(u.email,'') LIKE ? OR COALESCE(u.name,'') LIKE ?)`;
+    args.push(like, like, like, like, like);
   }
   const limit = Math.min(opts?.limit ?? 1000, 1000);
   const offset = opts?.offset ?? 0;
   return all(
-    `SELECT oi.*, o.id as order_id, o.code, o.created_at, o.delivery_uid, o.buyer_note, o.payment_method,
-            COALESCE('@' || u.username, '@user_' || substr(u.id,-6)) AS buyer_name,
-            u.email AS buyer_email, o.buyer_id,
-            COALESCE(p.category_slug, l.category_slug) AS category_slug
+    `SELECT oi.*, o.id as order_id, o.code, o.created_at, o.delivery_uid, o.buyer_note, o.payment_method, o.status AS order_status,
+            COALESCE('@' || u.username, u.name, '@user_' || substr(u.id,-6)) AS buyer_name,
+            COALESCE(u.email, '') AS buyer_email, o.buyer_id,
+            COALESCE(p.category_slug, l.category_slug) AS category_slug,
+            COALESCE(p.game_slug, l.game_slug) AS game_slug
        FROM order_items oi
        JOIN orders o ON o.id=oi.order_id
-       JOIN users u ON u.id=o.buyer_id
+       LEFT JOIN users u ON u.id=o.buyer_id
        LEFT JOIN products p ON p.id=oi.product_id
        LEFT JOIN listings l ON l.id=oi.listing_id
       ${where}
-      ORDER BY o.created_at DESC LIMIT ? OFFSET ?`,
+      ORDER BY o.created_at DESC, oi.created_at DESC LIMIT ? OFFSET ?`,
     [...args, limit, offset]
   );
 };
@@ -607,13 +615,13 @@ export const countSellerOrders = async (
   }
   if (q) {
     const like = `%${q}%`;
-    where += ` AND (o.code LIKE ? OR oi.title LIKE ? OR u.username LIKE ? OR u.email LIKE ?)`;
-    args.push(like, like, like, like);
+    where += ` AND (o.code LIKE ? OR oi.title LIKE ? OR COALESCE(u.username,'') LIKE ? OR COALESCE(u.email,'') LIKE ? OR COALESCE(u.name,'') LIKE ?)`;
+    args.push(like, like, like, like, like);
   }
   const row = await one<{ n: number }>(
     `SELECT COUNT(*) as n FROM order_items oi
      JOIN orders o ON o.id=oi.order_id
-     JOIN users u ON u.id=o.buyer_id
+     LEFT JOIN users u ON u.id=o.buyer_id
      ${where}`,
     args
   );

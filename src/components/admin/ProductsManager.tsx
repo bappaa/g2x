@@ -402,7 +402,7 @@ function ProductForm({
         onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); submit(fd); }}
         initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[90vh] w-full max-w-[600px] space-y-3 overflow-y-auto rounded-2xl panel p-5"
+        className="max-h-[92vh] w-full max-w-[650px] space-y-4 overflow-y-auto rounded-2xl panel p-5 sm:p-6"
       >
         <div className="flex items-center">
           <h2 className="text-[15px] font-black">{p ? "Edit product" : "Add a product"}</h2>
@@ -419,22 +419,25 @@ function ProductForm({
           urlName="image"
           fileName="imageFile"
           defaultUrl={p?.image ?? ""}
-          hint={p ? "This image shows on game page categories. For currency, upload currency icon (e.g., V-Bucks image)." : "REQUIRED: This shows on game page categories. Upload specific image - e.g., for 1000 V-Bucks, upload V-Bucks icon. Homepage shows game logo, this shows item photo."}
+          hint={p ? "This image shows on game page categories. For currency, upload currency icon (e.g., V-Bucks image). Max 5 MB, 512×512 recommended, auto-compress over 1 MB." : "REQUIRED: This shows on game page categories. Max 5 MB, PNG/JPG/WEBP, 512×512 recommended, auto-compresses over 1 MB. Upload specific image - e.g., for 1000 V-Bucks, upload V-Bucks icon. Homepage shows game logo, this shows item photo."}
         />
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Game">
+          <Field label="Game" hint={`${games.length} games — admin-added appear here instantly`}>
             <select name="game" defaultValue={p?.game_slug} className={inputCls} required>
-              <option value="">Choose…</option>
+              <option value="">Choose a game…</option>
               {games.map((g) => <option key={g.slug} value={g.slug}>{g.name}</option>)}
             </select>
           </Field>
-          <Field label="Category">
+          <Field label="Category" hint={`${categories.length} categories`}>
             <select name="category" defaultValue={p?.category_slug} className={inputCls} required>
-              <option value="">Choose…</option>
+              <option value="">Choose a category…</option>
               {categories.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
             </select>
           </Field>
+        </div>
+        <div className="rounded-lg bg-sky-500/10 px-3 py-2 text-[11px] leading-relaxed text-sky-300">
+          Products you add here appear on <b>/g/{'{game}'}</b> and <b>/c/{'{category}'}</b> instantly after save — linked via game_categories. No premade options override your custom products; your product image (max 5 MB) shows on game page.
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -457,11 +460,11 @@ function ProductForm({
         </Field>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Platform">
+          <Field label="Platform" hint="Admin-managed options — add more in Dropdown Options">
             <OptionSelect name="platform" opts={options.platform} value={p?.platform} fallback="All" />
           </Field>
-          <Field label="Typical delivery time">
-            <input name="deliveryTime" defaultValue={p?.delivery_time ?? "5–30 min"} className={inputCls} />
+          <Field label="Delivery time" hint="How fast buyers get it — from admin Dropdown Options">
+            <OptionSelect name="deliveryTime" opts={options.delivery_time} value={p?.delivery_time} fallback="Instant" />
           </Field>
         </div>
 

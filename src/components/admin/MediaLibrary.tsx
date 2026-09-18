@@ -18,6 +18,45 @@ type M = {
 type G = { slug: string; name: string; logo: string };
 
 const KINDS = ["all", "game_icon", "banner", "product", "logo", "image"];
+const MAX_BYTES = 5 * 1024 * 1024;
+const COMPRESS_THRESHOLD = 1 * 1024 * 1024;
+
+async function compressIfNeeded(file: File): Promise<File> {
+  if (file.type.includes("svg") || file.type === "image/gif") return file;
+  if (file.size <= COMPRESS_THRESHOLD) return file;
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      const maxDim = 1024;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { URL.revokeObjectURL(url); resolve(file); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      const mime = file.type === "image/png" ? "image/webp" : "image/jpeg";
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(url);
+        if (!blob || blob.size >= file.size) { resolve(file); return; }
+        const newName = file.name.replace(/\.[^.]+$/, "") + (mime === "image/webp" ? ".webp" : ".jpg");
+        resolve(new File([blob], newName, { type: mime }));
+      }, mime, 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
 
 export default function MediaLibrary({ rows, games, kind }: { rows: M[]; games: G[]; kind: string }) {
   const router = useRouter();
@@ -32,8 +71,13 @@ export default function MediaLibrary({ rows, games, kind }: { rows: M[]; games: 
     setErr("");
     start(async () => {
       for (const f of Array.from(files)) {
+        if (f.size > MAX_BYTES) {
+          setErr(`${f.name}: too large ${(f.size/1024/1024).toFixed(2)} MB — max 5 MB`);
+          continue;
+        }
+        const fileToUpload = await compressIfNeeded(f);
         const fd = new FormData();
-        fd.append("file", f);
+        fd.append("file", fileToUpload);
         fd.append("kind", kind === "all" ? "image" : kind);
         const r = await uploadMediaAction(fd);
         if (!r.ok) {
@@ -69,6 +113,7 @@ export default function MediaLibrary({ rows, games, kind }: { rows: M[]; games: 
               {k.replace("_", " ")}
             </Link>
           ))}
+          <span className="ml-2 rounded bg-amber-500/15 px-2 py-1 text-[10px] font-bold uppercase text-amber-400">Max 5 MB — auto-compress over 1 MB</span>
         </div>
         <div className="ml-auto">
           <input
@@ -92,9 +137,10 @@ export default function MediaLibrary({ rows, games, kind }: { rows: M[]; games: 
 
       <label
         htmlFor="media-upload"
-        className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--line)] py-6 text-[12px] muted transition-colors hover:border-brand-500/50 hover:text-brand-400"
+        className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-[var(--line)] py-6 text-[12px] muted transition-colors hover:border-brand-500/50 hover:text-brand-400"
       >
-        <ImagePlus size={15} /> Drop files here or click to upload — stored directly in the database
+        <span className="flex items-center gap-2"><ImagePlus size={15} /> Drop files here or click to upload — stored directly in the database</span>
+        <span className="text-[10px]">PNG, JPG, WEBP, GIF, AVIF, SVG · <b className="text-amber-300">max 5 MB</b> · Recommended 512×512, under 1 MB · Auto-compresses over 1 MB to WEBP</span>
       </label>
 
       {rows.length === 0 ? (

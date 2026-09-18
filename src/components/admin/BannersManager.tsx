@@ -133,7 +133,7 @@ function Form({ b, count, onClose }: { b: B | null; count: number; onClose: () =
         </div>
         <input type="hidden" name="id" value={b?.id ?? ""} />
 
-        <ImagePicker label="Banner image" urlName="image" fileName="imageFile" defaultUrl={b?.image ?? ""} />
+        <ImagePicker label="Banner image" urlName="image" fileName="imageFile" defaultUrl={b?.image ?? ""} hint="Banner image — max 5 MB, PNG/JPG/WEBP. Recommended 1200×400, under 1 MB for fast loading. Auto-compresses over 1 MB." />
 
         <Field label="Title">
           <input name="title" defaultValue={b?.title} className={inputCls} placeholder="Summer Sale — up to 40% off" />

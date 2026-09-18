@@ -142,7 +142,7 @@ function CatForm({ cat, onClose }: { cat: C | null; onClose: () => void }) {
           <textarea name="blurb" rows={2} defaultValue={cat?.blurb ?? ""} className={inputCls} />
         </Field>
 
-        <ImagePicker label="Category Icon" urlName="icon" fileName="iconFile" defaultUrl={cat?.icon ?? ""} square hint="Icon for this category (e.g., Top Up, Currency). Shows on category listings. PNG/WEBP max 2MB" />
+        <ImagePicker label="Category Icon" urlName="icon" fileName="iconFile" defaultUrl={cat?.icon ?? ""} square hint="Icon for this category (e.g., Top Up, Currency). Shows on category listings. PNG/WEBP/JPG max 5 MB, 512×512 recommended, auto-compresses over 1 MB." />
 
         <Field label="Status">
           <select name="status" defaultValue={cat?.status ?? "active"} className={inputCls}>

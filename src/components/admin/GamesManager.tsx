@@ -243,7 +243,7 @@ function GameForm({ game, categories, allFields, onClose }: { game: G | null; ca
             fileName="logoFile"
             defaultUrl={game?.logo ?? ""}
             square
-            hint={game ? "Shows on homepage and as fallback for products. Edit anytime." : "REQUIRED: Upload game logo (e.g., Valorant icon) - shows on homepage. You will add currency/top-up images when creating products."}
+            hint={game ? "Shows on homepage and as fallback for products. Edit anytime. Max 5 MB — recommended 512×512, square, under 1 MB for fast loading." : "REQUIRED: Upload game logo (e.g., Valorant icon) - shows on homepage. Max 5 MB, PNG/JPG/WEBP. Recommended 512×512 square, under 1 MB. You will add currency/top-up images when creating products."}
           />
 
           <Field label="Accent colour">
@@ -360,7 +360,7 @@ function QuickProductAdder({ gameSlug, categories }: { gameSlug: string; categor
           urlName="image"
           fileName="imageFile"
           defaultUrl=""
-          hint="REQUIRED: One logo per category (e.g., UC icon for BGMI Top Up). Will be used for all products in that category that don't have specific image. Saves bandwidth vs many product images."
+          hint="REQUIRED: One logo per category (e.g., UC icon for BGMI Top Up). Max 5 MB, PNG/JPG/WEBP, 512×512 recommended. Will be used for all products in that category."
         />
         {err && <div className="text-[11px] text-rose-400">{err}</div>}
         <Btn type="submit" disabled={pending} className="flex items-center gap-2 text-[11px]">

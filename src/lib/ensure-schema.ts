@@ -58,10 +58,11 @@ async function apply(): Promise<void> {
     console.warn("[ensure-schema] preset update failed", e);
   }
 
-  // Seed delivery_time options per user request
+  // Seed delivery_time options — admin dropdown for products
   try {
     const times = [
       { value: "instant", label: "Instant" },
+      { value: "5_30_min", label: "5–30 min" },
       { value: "1_hour", label: "1 hour" },
       { value: "5_hour", label: "5 hour" },
       { value: "12_hour", label: "12 hour" },

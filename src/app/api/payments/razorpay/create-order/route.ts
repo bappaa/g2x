@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { getCart } from "@/lib/queries";
@@ -49,6 +50,33 @@ export async function POST(req: NextRequest) {
     } else {
       const items = await getCart(u.id);
       if (!items.length) return NextResponse.json({ ok: false, error: "Cart empty" }, { status: 400 });
+
+      // --- Mixed category block ---
+      const cats = Array.from(new Set((items as any[]).map((i) => (i.category_slug || "").toLowerCase()).filter(Boolean)));
+      if (cats.length > 1) {
+        return NextResponse.json({ ok: false, error: `Mixed categories (${cats.join(", ")}) — checkout one category at a time.` }, { status: 400 });
+      }
+      const NO_DETAILS_CATS = ["accounts", "gift-cards", "giftcards", "subscriptions", "subscription"];
+      const isAccountOnly = cats.length > 0 && cats.every((c) => NO_DETAILS_CATS.includes(c));
+
+      // Validate per-game delivery details
+      const deliveryDetails = (body.deliveryDetails || {}) as Record<string, string>;
+      const singleUid = String(body.uid || "").trim();
+      const groups = new Map<string, { game_name: string; category_slug: string }>();
+      for (const it of items as any[]) {
+        const gSlug = it.game_slug || "unknown";
+        if (!groups.has(gSlug)) groups.set(gSlug, { game_name: it.game_name || gSlug, category_slug: (it.category_slug || "").toLowerCase() });
+      }
+      if (!isAccountOnly) {
+        for (const [gSlug, g] of groups.entries()) {
+          if (NO_DETAILS_CATS.includes(g.category_slug)) continue;
+          const val = (deliveryDetails[gSlug] || singleUid || "").trim();
+          if (!val) {
+            return NextResponse.json({ ok: false, error: `Delivery details required for ${g.game_name}` }, { status: 400 });
+          }
+        }
+      }
+
       const subtotal = +items.reduce((t, i) => t + i.price * i.qty, 0).toFixed(2);
       const fee = +(subtotal * 0.02).toFixed(2);
       const gw = await gatewayByCode(gatewayCode);
@@ -58,7 +86,6 @@ export async function POST(req: NextRequest) {
       meta = { userId: u.id, purpose: "checkout", subtotal: String(subtotal), fee: String(fee), gwFee: String(gwFee), usd: String(amountUSD) };
     }
 
-    // Convert USD to charge currency (Razorpay)
     const chargeCurrency = (cfg.currency || "INR").toUpperCase();
     const rate = await getRateFor(chargeCurrency);
     const amountCharge = chargeCurrency === "USD" ? amountUSD : Math.round(amountUSD * rate * 100) / 100;
@@ -78,7 +105,7 @@ export async function POST(req: NextRequest) {
     await run(
       `INSERT INTO razorpay_intents (id,user_id,razorpay_order_id,amount,currency,purpose,status,gateway_code,meta)
        VALUES (?,?,?,?,?,?,?,?,?)`,
-      [intentId, u.id, rzpOrder.id, amountCharge, rzpOrder.currency, purpose, "created", gatewayCode, JSON.stringify({ ...meta, uid: body.uid || "", note: body.note || "", charge: String(amountCharge), rate: String(rate) })]
+      [intentId, u.id, rzpOrder.id, amountCharge, rzpOrder.currency, purpose, "created", gatewayCode, JSON.stringify({ ...meta, uid: body.uid || "", deliveryDetails: body.deliveryDetails || {}, note: body.note || "", charge: String(amountCharge), rate: String(rate) })]
     ).catch(() => {});
 
     return NextResponse.json({

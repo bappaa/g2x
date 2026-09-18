@@ -267,8 +267,8 @@ export const adminWithdrawals = (status = "all") =>
 
 export const adminTransactions = (limit = 150) =>
   all(
-    `SELECT t.*, u.name, u.email FROM transactions t
-       JOIN users u ON u.id=t.user_id
+    `SELECT t.*, COALESCE(u.name, 'Deleted user') AS name, COALESCE(u.email,'') AS email FROM transactions t
+       LEFT JOIN users u ON u.id=t.user_id
       ORDER BY t.created_at DESC LIMIT ?`,
     [limit]
   );

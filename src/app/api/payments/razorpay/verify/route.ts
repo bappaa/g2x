@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/session";
 import { getRazorpayConfig, verifyPaymentSignature } from "@/lib/razorpay";
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
     const razorpay_order_id = String(body.razorpay_order_id || "");
     const razorpay_payment_id = String(body.razorpay_payment_id || "");
     const razorpay_signature = String(body.razorpay_signature || "");
-    const uid = String(body.uid || "").trim();
+    const uidRaw = String(body.uid || "").trim();
     const note = String(body.note || "").trim();
     const idemKey = String(body.idemKey || "").trim();
 
@@ -133,8 +134,40 @@ export async function POST(req: NextRequest) {
     } else {
       const items = await getCart(u.id);
       if (!items.length) return NextResponse.json({ ok: false, error: "Cart empty" }, { status: 400 });
-      if (!uid) return NextResponse.json({ ok: false, error: "Delivery ID required" }, { status: 400 });
 
+      // Mixed category block
+      const cats = Array.from(new Set((items as any[]).map((i:any)=>(i.category_slug||"").toLowerCase()).filter(Boolean)));
+      if (cats.length > 1) {
+        return NextResponse.json({ ok: false, error: `Mixed categories (${cats.join(", ")}) — checkout one category at a time.` }, { status: 400 });
+      }
+      const NO_DETAILS_CATS = ["accounts", "gift-cards", "giftcards", "subscriptions", "subscription"];
+      const isAccountOnly = cats.length>0 && cats.every((c:any)=>NO_DETAILS_CATS.includes(c));
+
+      // Per-game delivery details
+      const deliveryDetails = (body.deliveryDetails || {}) as Record<string,string>;
+      const singleUid = uidRaw;
+      const groups = new Map<string, { game_name: string; category_slug: string }>();
+      for (const it of items as any[]) {
+        const gSlug = it.game_slug || "unknown";
+        if (!groups.has(gSlug)) groups.set(gSlug, { game_name: it.game_name || gSlug, category_slug: (it.category_slug||"").toLowerCase() });
+      }
+      let deliveryUidToStore = singleUid;
+      if (!isAccountOnly) {
+        const detailsMap: Record<string,string> = {};
+        for (const [gSlug, g] of groups.entries()) {
+          if (NO_DETAILS_CATS.includes(g.category_slug)) continue;
+          const val = (deliveryDetails[gSlug] || singleUid || "").trim();
+          if (!val) {
+            return NextResponse.json({ ok: false, error: `Delivery details required for ${g.game_name}` }, { status: 400 });
+          }
+          detailsMap[gSlug] = val;
+        }
+        deliveryUidToStore = Object.keys(detailsMap).length > 1 ? JSON.stringify(detailsMap) : (Object.values(detailsMap)[0] || singleUid || "");
+      } else {
+        deliveryUidToStore = singleUid || "auto-delivery";
+      }
+
+      // Validate stock & self-buy
       for (const it of items) {
         if (it.qty > it.stock) return NextResponse.json({ ok: false, error: `"${it.title}" only has ${it.stock} left` }, { status: 400 });
         if (it.seller_id === u.id) return NextResponse.json({ ok: false, error: `"${it.title}" is your own listing` }, { status: 400 });
@@ -163,7 +196,7 @@ export async function POST(req: NextRequest) {
         {
           sql: `INSERT INTO orders (id,code,buyer_id,subtotal,fee,total,status,payment_method,payment_status,delivery_uid,buyer_note,gateway_fee,gateway_code,razorpay_order_id,razorpay_payment_id,razorpay_signature)
                 VALUES (?,?,?,?,?,?,'processing',?,'paid',?,?,?, ?, ?, ?, ?)`,
-          args: [orderId, code, u.id, subtotal, fee, total, gw.name, uid, note || null, gwFee, gw.code, razorpay_order_id, razorpay_payment_id, razorpay_signature],
+          args: [orderId, code, u.id, subtotal, fee, total, gw.name, deliveryUidToStore, note || null, gwFee, gw.code, razorpay_order_id, razorpay_payment_id, razorpay_signature],
         },
       ];
 
@@ -207,6 +240,13 @@ export async function POST(req: NextRequest) {
         })
       );
 
+      // Transaction history for buyer — fixes missing entry in /dashboard/transactions
+      stmts.push({
+        sql: `INSERT INTO transactions (id,user_id,type,amount,reference,order_id,razorpay_order_id,razorpay_payment_id)
+              VALUES (?,?, 'purchase', ?, ?, ?, ?, ?)`,
+        args: [nid("txn_"), u.id, -total, `Order ${code} via ${gw.name}`, orderId, razorpay_order_id, razorpay_payment_id],
+      });
+
       stmts.push({ sql: `DELETE FROM cart_items WHERE user_id=?`, args: [u.id] });
 
       await tx(stmts as never);
@@ -246,7 +286,7 @@ export async function POST(req: NextRequest) {
         const net = gross * (1 - Number(prof?.commission_pct ?? 8) / 100);
         if (su?.email) {
           await mail.newSale(su.email, { code, title: mine[0]?.title ?? "your listing", net: `$${net.toFixed(2)}` });
-          await mail.actionRequired(su.email, { code, title: mine[0]?.title ?? "your listing", qty: mine.reduce((a, b) => a + b.qty, 0), uid, deadline: "24 hours" });
+          await mail.actionRequired(su.email, { code, title: mine[0]?.title ?? "your listing", qty: mine.reduce((a, b) => a + b.qty, 0), uid: deliveryUidToStore.slice(0,500), deadline: "24 hours" });
         }
       }
 

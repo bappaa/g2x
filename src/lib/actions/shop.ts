@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use server";
 
 import { revalidatePath } from "next/cache";
@@ -61,23 +62,43 @@ export async function addToCartAction(input: {
    */
   const SELF_BUY = "This is your own listing — you can't buy it.";
 
+  let newCategory: string | null = null;
   if (input.offerId) {
-    const o = await one<{ stock: number; status: string; seller_id: string }>(
-      `SELECT stock, status, seller_id FROM offers WHERE id=?`,
+    const o = await one<{ stock: number; status: string; seller_id: string; category_slug: string }>(
+      `SELECT o.stock, o.status, o.seller_id, p.category_slug FROM offers o JOIN products p ON p.id=o.product_id WHERE o.id=?`,
       [input.offerId]
     );
     if (!o || o.status !== "active") return { ok: false, error: "This offer is no longer available." };
     if (o.seller_id === u.id) return { ok: false, error: SELF_BUY };
     if (o.stock < qty) return { ok: false, error: "Not enough stock left for this offer." };
+    newCategory = (o.category_slug||"").toLowerCase() || null;
   }
   if (input.listingId) {
-    const l = await one<{ stock: number; status: string; seller_id: string }>(
-      `SELECT stock, status, seller_id FROM listings WHERE id=?`,
+    const l = await one<{ stock: number; status: string; seller_id: string; category_slug: string }>(
+      `SELECT stock, status, seller_id, category_slug FROM listings WHERE id=?`,
       [input.listingId]
     );
     if (!l || l.status !== "active" || l.stock < 1)
       return { ok: false, error: "This listing is no longer available." };
     if (l.seller_id === u.id) return { ok: false, error: SELF_BUY };
+    newCategory = (l.category_slug||"").toLowerCase() || null;
+  }
+
+  // --- Mixed category block in cart ---
+  if (newCategory) {
+    const existingCats = await all<{ category_slug: string }>(
+      `SELECT DISTINCT COALESCE(p.category_slug, l.category_slug) AS category_slug
+         FROM cart_items ci
+         LEFT JOIN offers o ON o.id=ci.offer_id
+         LEFT JOIN products p ON p.id=o.product_id
+         LEFT JOIN listings l ON l.id=ci.listing_id
+        WHERE ci.user_id=?`,
+      [u.id]
+    );
+    const distinct = Array.from(new Set(existingCats.map((r)=> (r.category_slug||"").toLowerCase()).filter(Boolean)));
+    if (distinct.length>0 && !distinct.includes(newCategory)) {
+      return { ok: false, error: `You have ${distinct.join(", ")} items in cart. You cannot mix categories — checkout one category at a time. Remove existing items to add ${newCategory}.` };
+    }
   }
 
   const existing = await one<{ id: string; qty: number }>(
@@ -176,22 +197,55 @@ export async function placeOrderAction(form: {
   paymentMethod: string;
   uid: string;
   note?: string;
+  deliveryDetails?: Record<string, string>;
 }): Promise<R> {
   const u = await requireUser();
-  /**
-   * Block checkout until the email is confirmed.
-   *
-   * Order confirmations and delivered credentials go to that inbox, so an
-   * unverified address means the buyer may never receive what they paid for.
-   * Browsing and adding to the cart stay open — only money is gated.
-   */
   if (!(await isEmailVerified(u.id)))
     return { ok: false, error: "VERIFY_EMAIL" };
 
   const items = await getCart(u.id);
   if (!items.length) return { ok: false, error: "Your cart is empty." };
-  if (!form.uid?.trim())
-    return { ok: false, error: "Enter your in-game UID / login ID for delivery." };
+
+  // --- Mixed category block ---
+  const cats = Array.from(new Set((items as { category_slug?: string | null }[]).map((i) => (i.category_slug||"").toLowerCase()).filter(Boolean)));
+  if (cats.length > 1) {
+    return { ok: false, error: `Mixed categories in cart (${cats.join(", ")}) — checkout one category at a time. Remove items from other categories.` };
+  }
+
+  // --- Per-game delivery details ---
+  const NO_DETAILS_CATS = ["accounts", "gift-cards", "giftcards", "subscriptions", "subscription"];
+  const isAccountOnly = cats.length>0 && cats.every((c)=>NO_DETAILS_CATS.includes(c));
+  
+  // Build map game_slug -> uid from deliveryDetails or fallback uid
+  let detailsMap: Record<string, string> = {};
+  if (form.deliveryDetails && typeof form.deliveryDetails === "object") {
+    detailsMap = form.deliveryDetails as Record<string,string>;
+  }
+  // Fallback: if single uid provided and we have groups, use it for all groups that need details
+  const singleUid = (form.uid||"").trim();
+
+  // Group by game_slug
+  const groups = new Map<string, { game_name: string; category_slug: string; items: any[] }>();
+  for (const it of items as any[]) {
+    const gSlug = (it.game_slug as string) || "unknown";
+    if (!groups.has(gSlug)) groups.set(gSlug, { game_name: (it.game_name as string) || gSlug, category_slug: (it.category_slug||"").toLowerCase(), items: [] });
+    groups.get(gSlug)!.items.push(it);
+  }
+
+  // Validate per-game UID for groups that need it
+  if (!isAccountOnly) {
+    for (const [gSlug, g] of groups.entries()) {
+      if (NO_DETAILS_CATS.includes(g.category_slug)) continue; // no details needed for this game group
+      const val = (detailsMap[gSlug] || singleUid || "").trim();
+      if (!val) {
+        return { ok: false, error: `Enter delivery details (UID / Login ID) for ${g.game_name} — required for ${g.category_slug}.` };
+      }
+      detailsMap[gSlug] = val;
+    }
+  }
+
+  // Final delivery_uid to store — JSON if multiple games, else single string
+  const deliveryUidToStore = Object.keys(detailsMap).length > 1 ? JSON.stringify(detailsMap) : (Object.values(detailsMap)[0] || singleUid || "");
 
   // server-side revalidation of price & stock (docs requirement)
   for (const it of items) {
@@ -244,7 +298,7 @@ export async function placeOrderAction(form: {
             VALUES (?,?,?,?,?,?,'processing',?,'paid',?,?,?,?)`,
       args: [
         orderId, code, u.id, subtotal, fee, total, gw.name,
-        form.uid.trim(), form.note ?? null, gwFee, gw.code,
+        deliveryUidToStore, form.note ?? null, gwFee, gw.code,
       ],
     },
   ];
@@ -341,7 +395,14 @@ export async function placeOrderAction(form: {
     stmts.push({
       sql: `INSERT INTO transactions (id,user_id,type,amount,reference,order_id)
             VALUES (?,?, 'purchase', ?, ?, ?)`,
-      args: [nid("txn_"), u.id, -total, `Order ${code}`, orderId],
+      args: [nid("txn_"), u.id, -total, `Order ${code} via ${gw.name}`, orderId],
+    });
+  } else {
+    // Non-wallet gateways (Card, PayPal, Crypto etc) — still record purchase for transaction history
+    stmts.push({
+      sql: `INSERT INTO transactions (id,user_id,type,amount,reference,order_id)
+            VALUES (?,?, 'purchase', ?, ?, ?)`,
+      args: [nid("txn_"), u.id, -total, `Order ${code} via ${gw.name}`, orderId],
     });
   }
 
@@ -463,7 +524,7 @@ export async function placeOrderAction(form: {
         code,
         title: mine[0]?.title ?? "your listing",
         qty: mine.reduce((a, b) => a + b.qty, 0),
-        uid: form.uid.trim(),
+        uid: deliveryUidToStore.slice(0,500),
         deadline: "24 hours",
       });
     }
