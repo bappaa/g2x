@@ -210,6 +210,13 @@ export const PATCHES = [
    )`,
   `CREATE INDEX IF NOT EXISTS idx_rzp_user ON razorpay_intents(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_rzp_order ON razorpay_intents(razorpay_order_id)`,
+
+  // --- Phase 46 hotfix: seller orders crash oi.created_at missing ---
+  `ALTER TABLE order_items ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'))`,
+  `ALTER TABLE order_items ADD COLUMN opt_region TEXT`,
+  `ALTER TABLE order_items ADD COLUMN opt_delivery TEXT`,
+  `ALTER TABLE cart_items ADD COLUMN opt_region TEXT`,
+  `ALTER TABLE cart_items ADD COLUMN opt_delivery TEXT`,
 ];
 
 /** Errors that mean "already applied" — expected on every run after the first. */

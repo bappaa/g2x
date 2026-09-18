@@ -597,7 +597,7 @@ export const getSellerOrders = (
        LEFT JOIN products p ON p.id=oi.product_id
        LEFT JOIN listings l ON l.id=oi.listing_id
       ${where}
-      ORDER BY o.created_at DESC, oi.created_at DESC LIMIT ? OFFSET ?`,
+      ORDER BY o.created_at DESC LIMIT ? OFFSET ?`,
     [...args, limit, offset]
   );
 };

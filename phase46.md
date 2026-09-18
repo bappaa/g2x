@@ -161,3 +161,42 @@ pm2 restart g2x
 - delivery_uid as JSON string requires seller UI to parse if needed — currently shows raw JSON in seller Info, acceptable. Future: parse and show per-game mapping nicely.
 - Mixed-category block is strict (one category at a time) — user requested this. If they want to buy accounts + currency, they must checkout separately.
 - Per-game UID stored as JSON — buyer order view shows JSON; could be improved to pretty list.
+
+## 9. Hotfix — Seller panel crash `no such column: oi.created_at`
+
+**PM2 logs:**
+```
+LibsqlError: SQLITE_ERROR: no such column: oi.created_at
+  at ... seller/orders/page.js
+  at ... seller/page.js
+```
+
+**Root cause:**
+- `getSellerOrders` was updated to `ORDER BY o.created_at DESC, oi.created_at DESC` for deterministic ordering when same order has multiple items.
+- Base schema `schema.sql` `order_items` table has NO `created_at` column (only orders has). Production DB never had it, so query crashes and seller panel shows 500 / blank.
+- Same for `opt_region`/`opt_delivery` columns used in `order_items` insert but not in base schema — existed only in some dev DBs via manual alter, not via PATCHES.
+
+**Fix:**
+- `src/lib/queries.ts` reverted to `ORDER BY o.created_at DESC` only (safe, exists).
+- Added additive patches to `src/lib/schema-patches.mjs`:
+```sql
+ALTER TABLE order_items ADD COLUMN created_at TEXT NOT NULL DEFAULT (datetime('now'));
+ALTER TABLE order_items ADD COLUMN opt_region TEXT;
+ALTER TABLE order_items ADD COLUMN opt_delivery TEXT;
+ALTER TABLE cart_items ADD COLUMN opt_region TEXT;
+ALTER TABLE cart_items ADD COLUMN opt_delivery TEXT;
+```
+- These are idempotent, run via `ensureSchema()` on every request and via `deploy-migrate.mts`.
+- Build passes, seller orders no longer crash.
+
+**Deploy steps for VPS:**
+```bash
+cd ~/g2x
+git pull
+npm install
+npx tsx scripts/deploy-migrate.mts   # applies new patches
+npm run build
+pm2 restart g2x --update-env
+pm2 logs --lines 50
+```
+After restart, `/seller/orders` and `/seller` dashboard load without SQLITE_ERROR.
