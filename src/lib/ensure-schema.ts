@@ -25,6 +25,30 @@ async function apply(): Promise<void> {
     await db.execute("UPDATE categories SET needs_title=1, needs_images=0, needs_credentials=1, needs_quantity=1, allow_volume_discount=0, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='code' WHERE slug='gift-cards'");
   } catch {}
 
+
+  // Fix delivery time options per user request: 1 hour, 5 hour, 12 hour, 1day, 2days, 5 days, 7 days, 14 days
+  try {
+    const times = [
+      { value: "instant", label: "Instant" },
+      { value: "1_hour", label: "1 hour" },
+      { value: "5_hour", label: "5 hour" },
+      { value: "12_hour", label: "12 hour" },
+      { value: "1_day", label: "1 day" },
+      { value: "2_days", label: "2 days" },
+      { value: "5_days", label: "5 days" },
+      { value: "7_days", label: "7 days" },
+      { value: "14_days", label: "14 days" },
+    ];
+    for (const tm of times) {
+      try {
+        await db.execute("INSERT OR IGNORE INTO option_lists (id, list_key, value, label, sort_order, active) VALUES (?,?,?,?,?,1)", [`opt_dt_${tm.value}`, "delivery_time", tm.value, tm.label, times.indexOf(tm)*10]);
+      } catch {}
+      try {
+        await db.execute("UPDATE option_lists SET label=?, active=1 WHERE list_key='delivery_time' AND value=?", [tm.label, tm.value]);
+      } catch {}
+    }
+  } catch {}
+
   try {
     await db.execute("DELETE FROM products WHERE lower(name) IN ('aa','all','india','test') OR lower(slug) IN ('aa','all')");
   } catch {}

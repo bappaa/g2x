@@ -371,12 +371,12 @@ export default function ProductView({
 
                 <div className="mt-3.5 grid gap-2 text-[12px] sm:mt-4 sm:grid-cols-2 sm:text-[12.5px]">
                   <Info icon={Clock} label={tr("prod.deliveryTime")} value={product.delivery_time} />
-                  <Info icon={Monitor} label={tr("prod.platform")} value={product.platform} />
+                  {!gameFields.some(f=>f.field_key==='platform') && <Info icon={Monitor} label={tr("prod.platform")} value={product.platform} />}
                 </div>
 
                 {/* Buyer picks the server + how they want it delivered. Both
                     lists are configured per-product by the admin. */}
-                {regions.length > 0 && (
+                {regions.length > 0 && !gameFields.some(f=>['region','server','game_server'].includes(f.field_key)) && (
                   <ChipRow
                     icon={<Globe size={13} className="text-brand-500" />}
                     label={tr("prod.gameServer")}

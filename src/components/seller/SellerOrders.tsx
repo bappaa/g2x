@@ -38,7 +38,7 @@ function OrderRow({ o }: { o: OI }) {
   const money = useMoney();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [fields, setFields] = useState([{ label: "Code", value: "" }]);
+  const [fields, setFields] = useState([{ label: "", value: "" }]); // fixed: remove pre-filled Code per user request, make optional
   const [reason, setReason] = useState("");
   const [mode, setMode] = useState<"deliver" | "cancel" | "message" | null>(null);
   const [msgText, setMsgText] = useState("");
@@ -206,7 +206,7 @@ function OrderRow({ o }: { o: OI }) {
                   <div key={i} className="flex gap-2">
                     <input
                       className={`${inputCls} max-w-[150px]`}
-                      placeholder="Label"
+                      placeholder="Label (optional)"
                       value={f.label}
                       onChange={(e) =>
                         setFields((fs) => fs.map((x, j) => (i === j ? { ...x, label: e.target.value } : x)))
@@ -214,7 +214,7 @@ function OrderRow({ o }: { o: OI }) {
                     />
                     <input
                       className={inputCls}
-                      placeholder="Value (code / login / note)"
+                      placeholder="Value (optional - code / login / note)"
                       value={f.value}
                       onChange={(e) =>
                         setFields((fs) => fs.map((x, j) => (i === j ? { ...x, value: e.target.value } : x)))

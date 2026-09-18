@@ -1,24 +1,15 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Layers, Check, Search } from "lucide-react";
+import { Loader2, Layers, Check, Search, Globe } from "lucide-react";
 import { Btn, Field, inputCls } from "@/components/ui";
 import { bulkAddProductsAction } from "@/lib/actions/admin";
 
 type G = { slug: string; name: string };
 type C = { slug: string; name: string };
+type GF = { id: string; game_slug: string; field_key: string; label: string; field_type: string; options: string | null; parent_field: string | null; parent_value: string | null; sort_order: number; required: number };
 
-/**
- * Bulk product creator.
- *
- * Currency and Top Up repeat the same denominations across dozens of games, so
- * adding them one at a time through the product form is hours of work. Pick a
- * category, tick the games, paste the denominations once.
- *
- * Products inherit the game's logo, so the category page and the product tiles
- * both have artwork straight away instead of blank squares.
- */
-export default function BulkProducts({ games, categories }: { games: G[]; categories: C[] }) {
+export default function BulkProducts({ games, categories, allFields = [] }: { games: G[]; categories: C[]; allFields?: GF[] }) {
   const router = useRouter();
   const [busy, start] = useTransition();
   const [msg, setMsg] = useState("");
@@ -28,6 +19,7 @@ export default function BulkProducts({ games, categories }: { games: G[]; catego
   const [picked, setPicked] = useState<string[]>([]);
   const [q, setQ] = useState("");
   const [items, setItems] = useState("1,000 Coins | 0.99\n5,000 Coins | 3.99\n10,000 Coins | 6.99");
+  const [fieldVals, setFieldVals] = useState<Record<string, string>>({});
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -40,12 +32,49 @@ export default function BulkProducts({ games, categories }: { games: G[]; catego
   const toggle = (slug: string) =>
     setPicked((p) => (p.includes(slug) ? p.filter((x) => x !== slug) : [...p, slug]));
 
+  // Game fields for selected games - show dropdowns that admin added via Games edit
+  const relevantFields = useMemo(() => {
+    if (!picked.length) return [] as GF[];
+    // Get fields for first selected game (or union if multiple)
+    const fields = allFields.filter(f => picked.includes(f.game_slug));
+    // Deduplicate by field_key, keep first
+    const seen = new Set<string>();
+    const out: GF[] = [];
+    for (const f of fields.sort((a,b)=>a.sort_order-b.sort_order)) {
+      if (!seen.has(f.field_key)) {
+        seen.add(f.field_key);
+        out.push(f);
+      }
+    }
+    return out.filter(f=>!/ede/i.test(f.field_key) && f.field_key!=='gg' && !/^aa$/i.test(f.field_key) && !/^india$/i.test(f.field_key) && !/^abc$/i.test(f.field_key));
+  }, [picked, allFields]);
+
+  const getFieldOptions = (f: GF): string[] => {
+    if (!f.options) return [];
+    try {
+      const parsed = JSON.parse(f.options);
+      if (Array.isArray(parsed)) return parsed.map(String);
+      if (typeof parsed === "object" && parsed !== null) return Object.keys(parsed);
+      return [];
+    } catch {
+      return f.options.split(",").map(x=>x.trim()).filter(Boolean);
+    }
+  };
+
   const submit = (fd: FormData) =>
     start(async () => {
       setErr(""); setMsg("");
       fd.set("games", picked.join(","));
       fd.set("items", items);
       fd.set("category", category);
+      // Include game field values - these will be used as region/platform if field_key is server/region/platform
+      for (const [k,v] of Object.entries(fieldVals)) {
+        if (v) fd.set(`field_${k}`, v);
+      }
+      // If server/region selected, also set as region for product
+      if (fieldVals["server"]) fd.set("region", fieldVals["server"]);
+      if (fieldVals["region"]) fd.set("region", fieldVals["region"]);
+      if (fieldVals["platform"]) fd.set("platform", fieldVals["platform"]);
       const r = await bulkAddProductsAction(fd).catch(() => null);
       if (!r || !r.ok) return setErr(r?.error || "Could not create the products.");
       setMsg(r.error ?? "Done.");
@@ -68,15 +97,20 @@ export default function BulkProducts({ games, categories }: { games: G[]; catego
             </select>
           </Field>
           <Field label="Delivery time">
-            <input name="deliveryTime" defaultValue="Instant" className={inputCls} />
-          </Field>
-          <Field label="Region">
-            <input name="region" defaultValue="Global" className={inputCls} />
-          </Field>
-          <Field label="Platform">
-            <input name="platform" defaultValue="All" className={inputCls} />
+            <select name="deliveryTime" defaultValue="Instant" className={inputCls}>
+              <option value="Instant">Instant</option>
+              <option value="1 hour">1 hour</option>
+              <option value="5 hour">5 hour</option>
+              <option value="12 hour">12 hour</option>
+              <option value="1 day">1 day</option>
+              <option value="2 days">2 days</option>
+              <option value="5 days">5 days</option>
+              <option value="7 days">7 days</option>
+              <option value="14 days">14 days</option>
+            </select>
           </Field>
         </div>
+        <p className="mt-2 text-[11px] muted">Region/Platform removed per request — configure servers via Games → Edit → Cascading Fields. If game has Server field, it will show below when you select a game.</p>
       </div>
 
       <div className="rounded-2xl panel p-4 sm:p-5">
@@ -131,6 +165,36 @@ export default function BulkProducts({ games, categories }: { games: G[]; catego
           )}
         </div>
       </div>
+
+      {relevantFields.length > 0 && (
+        <div className="rounded-2xl border border-brand-500/20 bg-brand-600/5 p-4 sm:p-5">
+          <div className="mb-3 flex items-center gap-2 text-[12px] font-bold">
+            <Globe size={14} className="text-brand-400" /> Game Server Fields (from Games → Edit → Add Field)
+            <span className="ml-auto text-[11px] font-normal muted">{picked.length} game{picked.length!==1?'s':''} selected</span>
+          </div>
+          <p className="mb-3 text-[11px] muted">These are the dropdowns you added in Games edit. Selecting here will set Region/Platform for products created in bulk — fixes duplicate server glitch (Image-2).</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {relevantFields.map((gf) => {
+              const opts = getFieldOptions(gf);
+              return (
+                <div key={gf.field_key}>
+                  <label className="mb-1 block text-[11px] font-semibold">{gf.label}</label>
+                  <select
+                    value={fieldVals[gf.field_key] || ""}
+                    onChange={(e) => setFieldVals(prev=>({...prev, [gf.field_key]: e.target.value}))}
+                    className="h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3 text-[13px] outline-none focus:border-brand-500"
+                  >
+                    <option value="">Select {gf.label}</option>
+                    {opts.map(o=>(
+                      <option key={o} value={o}>{o}</option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl panel p-4 sm:p-5">
         <h2 className="mb-1 text-[13.5px] font-bold">Products — one per line</h2>
