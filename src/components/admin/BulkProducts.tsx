@@ -1,9 +1,10 @@
 "use client";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Layers, Check, Search, Globe } from "lucide-react";
+import { Loader2, Layers, Check, Search, Globe, Package } from "lucide-react";
 import { Btn, Field, inputCls } from "@/components/ui";
 import { bulkAddProductsAction } from "@/lib/actions/admin";
+import { getPreset } from "@/lib/category-delivery";
 
 type G = { slug: string; name: string };
 type C = { slug: string; name: string };
@@ -21,6 +22,8 @@ export default function BulkProducts({ games, categories, allFields = [] }: { ga
   const [items, setItems] = useState("1,000 Coins | 0.99\n5,000 Coins | 3.99\n10,000 Coins | 6.99");
   const [fieldVals, setFieldVals] = useState<Record<string, string>>({});
 
+  const preset = useMemo(() => getPreset(category), [category]);
+
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
     return s ? games.filter((g) => g.name.toLowerCase().includes(s)) : games;
@@ -32,12 +35,9 @@ export default function BulkProducts({ games, categories, allFields = [] }: { ga
   const toggle = (slug: string) =>
     setPicked((p) => (p.includes(slug) ? p.filter((x) => x !== slug) : [...p, slug]));
 
-  // Game fields for selected games - show dropdowns that admin added via Games edit
   const relevantFields = useMemo(() => {
     if (!picked.length) return [] as GF[];
-    // Get fields for first selected game (or union if multiple)
     const fields = allFields.filter(f => picked.includes(f.game_slug));
-    // Deduplicate by field_key, keep first
     const seen = new Set<string>();
     const out: GF[] = [];
     for (const f of fields.sort((a,b)=>a.sort_order-b.sort_order)) {
@@ -67,11 +67,9 @@ export default function BulkProducts({ games, categories, allFields = [] }: { ga
       fd.set("games", picked.join(","));
       fd.set("items", items);
       fd.set("category", category);
-      // Include game field values - these will be used as region/platform if field_key is server/region/platform
       for (const [k,v] of Object.entries(fieldVals)) {
         if (v) fd.set(`field_${k}`, v);
       }
-      // If server/region selected, also set as region for product
       if (fieldVals["server"]) fd.set("region", fieldVals["server"]);
       if (fieldVals["region"]) fd.set("region", fieldVals["region"]);
       if (fieldVals["platform"]) fd.set("platform", fieldVals["platform"]);
@@ -84,7 +82,7 @@ export default function BulkProducts({ games, categories, allFields = [] }: { ga
   return (
     <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget as HTMLFormElement); submit(fd); }} className="space-y-4">
       <div className="rounded-2xl panel p-4 sm:p-5">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Category">
             <select
               value={category}
@@ -92,7 +90,7 @@ export default function BulkProducts({ games, categories, allFields = [] }: { ga
               className={inputCls}
             >
               {categories.map((c) => (
-                <option key={c.slug} value={c.slug}>{c.name}</option>
+                <option key={c.slug} value={c.slug}>{c.name} – {getPreset(c.slug)?.deliveryMethods.map(m=>m.label).join(", ") || "auto/manual"}</option>
               ))}
             </select>
           </Field>
@@ -109,8 +107,43 @@ export default function BulkProducts({ games, categories, allFields = [] }: { ga
               <option value="14 days">14 days</option>
             </select>
           </Field>
+          <Field label={`Delivery method (${preset?.name || category})`}>
+            {preset?.showDeliveryMethods ? (
+              preset.singleFixed ? (
+                <>
+                  <div className={`${inputCls} opacity-70`}>{preset.deliveryMethods[0]?.label}</div>
+                  <input type="hidden" name="deliveryMethod" value={preset.deliveryMethods[0]?.value || ""} />
+                </>
+              ) : (
+                <select name="deliveryMethod" className={inputCls} defaultValue={preset.deliveryMethods[0]?.value}>
+                  {preset.deliveryMethods.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}{m.beta ? " (BETA)" : ""}</option>
+                  ))}
+                </select>
+              )
+            ) : (
+              <>
+                <div className={`${inputCls} opacity-70`}>
+                  {preset?.fulfilment === "both" ? "Automatic / Manual (seller chooses)" : preset?.fulfilment === "manual" ? "Manual service" : "Automatic"}
+                </div>
+                <input type="hidden" name="deliveryMethod" value={preset?.slug === "boosting" ? "boosting_service" : preset?.fulfilment === "both" ? "automatic_manual" : preset?.deliveryMethods[0]?.value || ""} />
+              </>
+            )}
+          </Field>
         </div>
-        <p className="mt-2 text-[11px] muted">Region/Platform removed per request — configure servers via Games → Edit → Cascading Fields. If game has Server field, it will show below when you select a game.</p>
+        <div className="mt-3 flex items-start gap-2 rounded-lg bg-brand-600/5 border border-brand-500/20 px-3 py-2.5 text-[11px]">
+          <Package size={12} className="mt-0.5 text-brand-400" />
+          <div className="leading-relaxed muted">
+            <b className="text-brand-300">{preset?.name}</b>: {preset?.description}. 
+            {preset?.slug === "currency" && " Shows 7 delivery methods (In-game trade, Game Pass, Auction House, Mail Trade, Island Delivery, Epic Gifting, Login Method) – BETA like Eldorado."}
+            {preset?.slug === "items" && " Single fixed method: In-game delivery – no multiple options."}
+            {preset?.slug === "accounts" && " Delivery method = Automatic/Manual radio, vault for credentials. Quantity fixed 1."}
+            {preset?.slug === "gift-cards" && " Delivery method = Automatic/Manual radio, gift card code vault."}
+            {preset?.slug === "top-up" && " Single fixed method: Top-up."}
+            {preset?.slug === "boosting" && " No delivery method – manual boosting service, Guaranteed Delivery Time only."}
+            <br/>Region/Platform configured via Games → Edit → Cascading Fields. If game has Server field, it will show below when you select a game.
+          </div>
+        </div>
       </div>
 
       <div className="rounded-2xl panel p-4 sm:p-5">
@@ -172,7 +205,7 @@ export default function BulkProducts({ games, categories, allFields = [] }: { ga
             <Globe size={14} className="text-brand-400" /> Game Server Fields (from Games → Edit → Add Field)
             <span className="ml-auto text-[11px] font-normal muted">{picked.length} game{picked.length!==1?'s':''} selected</span>
           </div>
-          <p className="mb-3 text-[11px] muted">These are the dropdowns you added in Games edit. Selecting here will set Region/Platform for products created in bulk — fixes duplicate server glitch (Image-2).</p>
+          <p className="mb-3 text-[11px] muted">These are the dropdowns you added in Games edit. Selecting here will set Region/Platform for products created in bulk.</p>
           <div className="grid gap-3 sm:grid-cols-3">
             {relevantFields.map((gf) => {
               const opts = getFieldOptions(gf);

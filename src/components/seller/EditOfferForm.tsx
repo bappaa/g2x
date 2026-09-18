@@ -1,10 +1,11 @@
 "use client";
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Plus, Trash2, Upload, X } from "lucide-react";
 import { useMoney } from "@/components/LocaleProvider";
 import { updateOfferFullAction } from "@/lib/actions/seller";
+import { getPreset } from "@/lib/category-delivery";
 
 type SellConfig = {
   slug: string; name: string; unit_label: string | null;
@@ -135,17 +136,17 @@ export default function EditOfferForm({
   void _gameSlug;
   void loginMethods;
   void regions;
-  void platforms; // removed per admin request
+  void platforms;
   const [pending, start] = useTransition();
   const busy = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
 
-  const unit = config.unit_label || "unit";
-  const mode = config.fulfilment || "both";
+  const preset = useMemo(() => getPreset(config.slug), [config.slug]);
+  const unit = config.unit_label || preset?.unitLabel || "unit";
+  const mode = preset?.fulfilment || config.fulfilment || "both";
   const isGiftCard = config.slug === "gift-cards";
   const vaultNoun = isGiftCard ? "Gift Card" : "Account";
 
-  // Parse existing JSON fields
   let existingImages: string[] = [];
   try { existingImages = JSON.parse(offer.images || "[]"); } catch {}
   let existingVolume: { qty: number; pct: number }[] = [];
@@ -167,14 +168,36 @@ export default function EditOfferForm({
   const [stock, setStock] = useState(String(offer.stock ?? "1"));
   const [minQty, setMinQty] = useState(String(offer.min_qty ?? "1"));
   const [deliveryTime, setDeliveryTime] = useState(offer.delivery_time || "");
-  const [deliveryMethod, setDeliveryMethod] = useState(offer.delivery_method || deliveryMethods[0]?.value || "");
+
+  const effectiveDeliveryMethods = useMemo(() => {
+    if (preset) {
+      if (preset.showDeliveryMethods) {
+        return preset.deliveryMethods.map(m => ({ value: m.value, label: m.label, beta: m.beta }));
+      }
+      return [];
+    }
+    if (config.show_delivery_method === 0) return [];
+    return deliveryMethods;
+  }, [preset, deliveryMethods, config.show_delivery_method]);
+
+  const [deliveryMethod, setDeliveryMethod] = useState(offer.delivery_method || (preset?.slug === "boosting" ? "boosting_service" : (effectiveDeliveryMethods[0]?.value || deliveryMethods[0]?.value || "")));
+  useEffect(() => {
+    if (preset?.slug === "boosting" && deliveryMethod !== "boosting_service") {
+      setDeliveryMethod("boosting_service");
+      return;
+    }
+    if (effectiveDeliveryMethods.length === 1 && deliveryMethod !== effectiveDeliveryMethods[0].value) {
+      setDeliveryMethod(effectiveDeliveryMethods[0].value);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveDeliveryMethods, preset?.slug]);
+
   const [region, setRegion] = useState(offer.region || "");
   const [platform, setPlatform] = useState(offer.platform || "");
   const loginMethod = offer.login_method || "";
   void loginMethods;
   const [auto, setAuto] = useState(offer.auto_delivery ? !!offer.auto_delivery : mode !== "manual");
   const [instructions, setInstructions] = useState(offer.instructions || "");
-  // Separate game-specific fields from regular custom fields
   const initialGameVals: Record<string, string> = {};
   const initialCustom: Record<string, string> = {};
   for (const [k,v] of Object.entries(existingCustom)) {
@@ -272,7 +295,8 @@ export default function EditOfferForm({
     setErr("");
     if ((config.needs_title || !product.id) && !title.trim()) return setErr("Offer title is required.");
     if (!(priceNum > 0)) return setErr("Enter a price greater than 0.");
-    if (!auto && !deliveryTime) return setErr("Guaranteed delivery time is required.");
+    const needTime = preset ? (preset.showGuaranteedTime === true ? true : preset.showGuaranteedTime === "manual_only" ? !auto : false) : !auto;
+    if (needTime && !deliveryTime) return setErr("Guaranteed delivery time is required.");
     if (config.needs_credentials && auto && mode !== "manual") {
       const bad = accounts.findIndex((a) =>
         isGiftCard ? !a.login.trim() : !a.login.trim() || !a.password.trim()
@@ -341,6 +365,9 @@ export default function EditOfferForm({
       }
     });
   };
+
+  const showTime = preset ? (preset.showGuaranteedTime === true ? true : preset.showGuaranteedTime === "manual_only" ? !auto : false) : !auto;
+  const quantityMode = preset?.quantityMode || (config.needs_quantity ? "full" : "hidden");
 
   return (
     <div className="mx-auto max-w-[720px] space-y-4">
@@ -489,7 +516,7 @@ export default function EditOfferForm({
           </div>
         )}
 
-        {!auto && (
+        {showTime && (
           <div className="mb-4">
             <Label req>Guaranteed Delivery Time</Label>
             <div className="relative">
@@ -504,25 +531,49 @@ export default function EditOfferForm({
           </div>
         )}
 
-        {deliveryMethods.length > 0 && config.show_delivery_method !== 0 && (
+        {effectiveDeliveryMethods.length > 0 && (
           <div className="mb-4">
-            <Label>How will you deliver?</Label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {deliveryMethods.map((d) => (
-                <label key={d.value} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12.5px] font-medium transition-all ${deliveryMethod===d.value ? "border-brand-500 bg-brand-600/10" : "border-[var(--line)] soft hover:border-brand-500/50"}`}>
-                  <input type="radio" name="dm" checked={deliveryMethod === d.value} onChange={() => setDeliveryMethod(d.value)} className="accent-[var(--brand,#8b3dff)]" />
-                  {d.label}
-                </label>
-              ))}
-            </div>
+            {preset?.slug === "currency" ? (
+              <>
+                <div className="mb-2 flex items-center gap-2">
+                  <Label>Delivery method</Label>
+                  <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-black text-emerald-400">BETA</span>
+                </div>
+                <div className="grid gap-2">
+                  {effectiveDeliveryMethods.map((d) => (
+                    <label key={d.value} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12.5px] font-medium transition-all ${deliveryMethod===d.value ? "border-brand-500 bg-brand-600/10" : "border-[var(--line)] soft hover:border-brand-500/50"}`}>
+                      <input type="radio" name="dm" checked={deliveryMethod === d.value} onChange={() => setDeliveryMethod(d.value)} className="accent-[var(--brand,#8b3dff)]" />
+                      {d.label}
+                    </label>
+                  ))}
+                </div>
+              </>
+            ) : preset?.singleFixed ? (
+              <>
+                <Label>Delivery method</Label>
+                <div className="h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--panel)]/50 px-3.5 text-[13px] leading-[44px]">
+                  {effectiveDeliveryMethods[0]?.label || "In-game delivery"}
+                </div>
+              </>
+            ) : (
+              <>
+                <Label>How will you deliver?</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {effectiveDeliveryMethods.map((d) => (
+                    <label key={d.value} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12.5px] font-medium transition-all ${deliveryMethod===d.value ? "border-brand-500 bg-brand-600/10" : "border-[var(--line)] soft hover:border-brand-500/50"}`}>
+                      <input type="radio" name="dm" checked={deliveryMethod === d.value} onChange={() => setDeliveryMethod(d.value)} className="accent-[var(--brand,#8b3dff)]" />
+                      {d.label}
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 
-        {/* Cascading game fields - filter out test fields like ede, india/abc if they are dummy */}
         {(() => {
           const clean = gameFields.filter(f=>!/ede/i.test(f.field_key) && !/ede/i.test(f.label) && f.field_key!=='gg' && f.label!=='gg' && f.field_key.length>=2 && !/^aa$/i.test(f.field_key) && !/^aa$/i.test(f.label));
           const filtered = clean.filter(f=>{ 
-            // Hide dummy fields like 'india' with values 'delhi, aa, bb' and 'abc' with 'uu' if they look like test data
             if (/^india$/i.test(f.field_key) && f.options && /delhi.*aa.*bb/i.test(f.options)) return false;
             if (/^abc$/i.test(f.field_key)) return false;
             return true;
@@ -557,7 +608,7 @@ export default function EditOfferForm({
           );
         })()}
 
-        {/* Region/Platform removed - admin configures via gameFields */}</Card>
+        </Card>
 
       {config.needs_credentials === 1 && (
         <Card title={`${vaultNoun} information`}>
@@ -612,7 +663,7 @@ export default function EditOfferForm({
         </Card>
       )}
 
-      {config.needs_quantity === 1 && (
+      {quantityMode === "full" && (
         <Card title="Quantity">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -632,6 +683,32 @@ export default function EditOfferForm({
           </div>
         </Card>
       )}
+      {quantityMode === "min_total" && (
+        <Card title="Quantity">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label req>Total Quantity available</Label>
+              <div className="relative">
+                <input type="number" min={1} value={stock} onChange={(e) => setStock(e.target.value)} className={`${fieldCls} pr-14`} />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] muted">M</span>
+              </div>
+            </div>
+            <div>
+              <Label>Minimum Offer quantity</Label>
+              <div className="relative">
+                <input type="number" min={1} value={minQty} onChange={(e) => setMinQty(e.target.value)} className={`${fieldCls} pr-14`} />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] muted">M</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+      {quantityMode === "fixed_1" && (
+        <Card title="Quantity">
+          <Label>Total Quantity available</Label>
+          <div className="h-10 w-full rounded-lg border border-[var(--line)] bg-[var(--panel)]/50 px-3 text-[12.5px] leading-[40px]">1 unit</div>
+        </Card>
+      )}
 
       <Card title="Price">
         <Label req>Price per {unit}</Label>
@@ -646,7 +723,7 @@ export default function EditOfferForm({
         )}
       </Card>
 
-      {config.allow_volume_discount === 1 && (
+      {(config.allow_volume_discount === 1 && preset?.allowVolume) && (
         <Card title="Volume discount">
           <div className="space-y-2">
             {volume.map((v, i) => (

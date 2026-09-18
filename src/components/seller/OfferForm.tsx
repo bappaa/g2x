@@ -1,10 +1,11 @@
 "use client";
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Plus, Trash2, Upload, X, Lock, AlertTriangle } from "lucide-react";
 import { useMoney } from "@/components/LocaleProvider";
 import { createOfferAction } from "@/lib/actions/seller";
+import { getPreset } from "@/lib/category-delivery";
 
 export type SellConfig = {
   slug: string; name: string; unit_label: string | null;
@@ -42,8 +43,6 @@ const emptyAccount = (): AccountSet => ({
   twoFaLogin: "", twoFaPassword: "", extra: "",
 });
 
-/* --- small presentational helpers, in our own design language --- */
-
 function Card({ title, badge, children }: { title: string; badge?: string; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl panel p-4 sm:p-5">
@@ -59,11 +58,9 @@ function Card({ title, badge, children }: { title: string; badge?: string; child
     </section>
   );
 }
-
 function Hint({ children }: { children: React.ReactNode }) {
   return <div className="mt-2 rounded-lg soft px-3 py-2 text-[11px] leading-relaxed muted">{children}</div>;
 }
-
 function Label({ children, req }: { children: React.ReactNode; req?: boolean }) {
   return (
     <label className="mb-1.5 block text-[11.5px] font-semibold">
@@ -72,34 +69,9 @@ function Label({ children, req }: { children: React.ReactNode; req?: boolean }) 
     </label>
   );
 }
-
 const field =
   "h-10 w-full rounded-lg border border-[var(--line)] bg-transparent px-3 text-[12.5px] outline-none transition-all focus:border-brand-500 focus:shadow-[0_0_0_3px_rgba(139,61,255,.12)] soft";
 
-/**
- * THE OFFER FORM
- * ==============
- * One component drives every category. What it asks for is not hardcoded — it
- * comes from `categories` (does this category need a title? images? account
- * credentials? volume discounts? what is the unit called?) plus the admin's
- * `field_templates` rows for that category.
- *
- * So "Currency" shows quantity + price per K, "Accounts" shows the credential
- * vault and hides volume discounts, and adding a new requirement is an admin
- * action rather than a code change.
- */
-
-/**
- * Shrink an offer photo in the browser before it is uploaded.
- *
- * A phone photo is several megabytes, and base64 adds another third on top.
- * Six of them comfortably exceeded the server-action body limit, which failed
- * the whole submit with a 413 — the seller lost everything they had typed.
- *
- * 1280px on the long edge is plenty for a listing thumbnail and keeps each
- * image around 100-200 KB. Falls back to the original file if the browser
- * cannot decode it; the server still validates either way.
- */
 async function downscale(file: File, max = 1280, quality = 0.82): Promise<string> {
   const asDataUrl = () =>
     new Promise<string>((res) => {
@@ -107,16 +79,12 @@ async function downscale(file: File, max = 1280, quality = 0.82): Promise<string
       r.onload = () => res(String(r.result));
       r.readAsDataURL(file);
     });
-
-  // GIFs are usually animated; re-encoding would freeze them.
   if (file.type === "image/gif") return asDataUrl();
-
   try {
     const bmp = await createImageBitmap(file);
     const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
     const w = Math.round(bmp.width * scale);
     const h = Math.round(bmp.height * scale);
-
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
@@ -150,7 +118,8 @@ export default function OfferForm({
   const busy = useRef(false);
   const picker = useRef<HTMLInputElement>(null);
 
-  const unit = config.unit_label || "unit";
+  const preset = useMemo(() => getPreset(config.slug), [config.slug]);
+  const unit = config.unit_label || preset?.unitLabel || "unit";
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -159,11 +128,25 @@ export default function OfferForm({
   const [stock, setStock] = useState("1");
   const [minQty, setMinQty] = useState("1");
   const [deliveryTime, setDeliveryTime] = useState("");
-  const [deliveryMethod, setDeliveryMethod] = useState(deliveryMethods[0]?.value ?? "");
+  const effectiveDeliveryMethods = useMemo(() => {
+    if (preset) {
+      if (preset.showDeliveryMethods) {
+        return preset.deliveryMethods.map(m => ({ value: m.value, label: m.label, beta: m.beta, hint: m.hint }));
+      }
+      return [];
+    }
+    // fallback to prop if preset missing
+    if (config.show_delivery_method === 0) return [];
+    return deliveryMethods.map(m => ({ value: m.value, label: m.label }));
+  }, [preset, deliveryMethods, config.show_delivery_method]);
+
+  const [deliveryMethod, setDeliveryMethod] = useState(
+    (preset?.slug === "boosting" ? "boosting_service" : (effectiveDeliveryMethods[0]?.value || deliveryMethods[0]?.value || ""))
+  );
   const [region, setRegion] = useState(initialServerVals["region"] || "");
   const [platform, setPlatform] = useState(initialServerVals["platform"] || "");
   const [loginMethod] = useState(initialServerVals["loginMethod"] || "");
-  void regions; void platforms; // removed per admin request, kept for compat
+  void regions; void platforms;
   const [gameVals, setGameVals] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const [k, v] of Object.entries(initialServerVals)) {
@@ -171,24 +154,22 @@ export default function OfferForm({
     }
     return init;
   });
-  /**
-   * Fulfilment mode.
-   *
-   * 'auto'   — the seller pre-fills the details now and G2X delivers instantly.
-   * 'manual' — the seller sends the details through chat after the sale.
-   * 'both'   — the seller chooses (the default).
-   *
-   * The admin sets this per product, so a product that can only ever be
-   * hand-delivered never shows the credential vault, and an instant-code
-   * product never offers "Manual".
-   */
-  const mode = config.fulfilment || "both";
 
-  /**
-   * Gift cards share the credential-vault plumbing but need only a code, not a
-   * login / email / 2FA set. Driving it off the category keeps one component
-   * for both instead of a near-duplicate form.
-   */
+  // sync delivery method when preset changes (single fixed)
+  useEffect(() => {
+    if (preset?.slug === "boosting") {
+      setDeliveryMethod("boosting_service");
+      return;
+    }
+    if (effectiveDeliveryMethods.length === 1) {
+      setDeliveryMethod(effectiveDeliveryMethods[0].value);
+    } else if (effectiveDeliveryMethods.length > 0 && !effectiveDeliveryMethods.find(m => m.value === deliveryMethod)) {
+      setDeliveryMethod(effectiveDeliveryMethods[0].value);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveDeliveryMethods, preset?.slug]);
+
+  const mode = preset?.fulfilment || config.fulfilment || "both";
   const isGiftCard = config.slug === "gift-cards";
   const vaultNoun = isGiftCard ? "Gift Card" : "Account";
   const [auto, setAuto] = useState(mode !== "manual");
@@ -201,39 +182,30 @@ export default function OfferForm({
   const [err, setErr] = useState("");
 
   const priceNum = Number(price) || 0;
-  void loginMethods; // kept for compatibility, hidden per user request
+  void loginMethods;
 
-  // --- Game-specific cascading fields helpers ---
   const getGameFieldOptions = (f: GameField): string[] => {
     if (!f.options) return [];
     try {
       const parsed = JSON.parse(f.options);
       if (Array.isArray(parsed)) return parsed.map(String);
       if (typeof parsed === "object" && parsed !== null) {
-        // If object mapping parent value -> array, look up by parent value
         if (f.parent_field) {
           const parentVal = gameVals[f.parent_field] || (f.parent_field === "region" ? region : f.parent_field === "platform" ? platform : "");
-          if (parentVal && parsed[parentVal]) {
-            const v = parsed[parentVal];
+          if (parentVal && (parsed as Record<string, unknown>)[parentVal]) {
+            const v = (parsed as Record<string, unknown>)[parentVal];
             return Array.isArray(v) ? v.map(String) : [String(v)];
           }
-          // If parent_value is set and we have exact match, return its array
-          if (f.parent_value && parsed[f.parent_value]) {
-            const v = parsed[f.parent_value];
+          if (f.parent_value && (parsed as Record<string, unknown>)[f.parent_value]) {
+            const v = (parsed as Record<string, unknown>)[f.parent_value];
             return Array.isArray(v) ? v.map(String) : [String(v)];
           }
-          // Otherwise flatten all values if no parent selected yet? return empty to force selection
           return [];
         }
-        // If options is object without parent logic, return its values flattened or keys?
-        // For simple case where options is {"NA": ["Penance"]}, if no parent, return keys as options
-        // But for region field itself, options is array, so we already returned
-        // If object and no parent_field, return keys
-        return Object.keys(parsed);
+        return Object.keys(parsed as Record<string, unknown>);
       }
       return [];
     } catch {
-      // comma separated fallback
       return f.options.split(",").map((x) => x.trim()).filter(Boolean);
     }
   };
@@ -249,7 +221,6 @@ export default function OfferForm({
   const setGameVal = (key: string, val: string) => {
     setGameVals((prev) => {
       const next = { ...prev, [key]: val };
-      // When parent changes, clear children that depend on it
       const toClear: string[] = [];
       const findChildren = (parentKey: string) => {
         for (const gf of gameFields) {
@@ -263,7 +234,6 @@ export default function OfferForm({
       for (const c of toClear) delete next[c];
       return next;
     });
-    // Also sync to legacy region/platform if field_key is region/platform
     if (key === "region") setRegion(val);
     if (key === "platform") setPlatform(val);
   };
@@ -296,8 +266,15 @@ export default function OfferForm({
     if ((config.needs_title || !product.id) && !title.trim())
       return setErr("Offer title is required.");
     if (!(priceNum > 0)) return setErr("Enter a price greater than 0.");
-    // Automatic delivery is instant; only hand-delivery needs a promised time.
-    if (!auto && !deliveryTime) return setErr("Guaranteed delivery time is required.");
+    // Delivery time required logic per preset
+    const needTime = preset
+      ? preset.showGuaranteedTime === true
+        ? true
+        : preset.showGuaranteedTime === "manual_only"
+        ? !auto
+        : false
+      : !auto;
+    if (needTime && !deliveryTime) return setErr("Guaranteed delivery time is required.");
     if (config.needs_credentials && auto && mode !== "manual") {
       const bad = accounts.findIndex((a) =>
         isGiftCard ? !a.login.trim() : !a.login.trim() || !a.password.trim()
@@ -313,11 +290,9 @@ export default function OfferForm({
       if (f.required && !String(custom[f.field_key] ?? "").trim())
         return setErr(`${f.label} is required.`);
     }
-    // Validate game-specific cascading fields
     for (const gf of gameFields) {
       if (!isGameFieldVisible(gf)) continue;
       if (gf.required && !String(gameVals[gf.field_key] ?? "").trim()) {
-        // For region that also has legacy state, check region
         if (gf.field_key === "region" && region) continue;
         return setErr(`${gf.label} is required.`);
       }
@@ -328,7 +303,6 @@ export default function OfferForm({
     start(async () => {
       try {
         const fd = new FormData();
-        // Empty productId = a free-form listing (accounts / boosting).
         fd.set("productId", product.id);
         fd.set("gameSlug", game);
         fd.set("categorySlug", config.slug);
@@ -355,19 +329,10 @@ export default function OfferForm({
         );
         if (config.needs_credentials) fd.set("accounts", JSON.stringify(accounts));
         Object.entries(custom).forEach(([k, v]) => fd.set("cf_" + k, v));
-        // Include game-specific cascading fields as cf_ as well
         Object.entries(gameVals).forEach(([k, v]) => fd.set("cf_" + k, v));
-        // Also ensure region/platform from gameVals override legacy if present
         if (gameVals["region"]) fd.set("region", gameVals["region"]);
         if (gameVals["platform"]) fd.set("platform", gameVals["platform"]);
 
-        /**
-         * A rejected request (413, gateway timeout, dropped connection) makes
-         * the action resolve to `undefined`, and reading `.ok` off that threw —
-         * which React turned into a blank "Application error" page and lost
-         * everything the seller had typed. Treat any non-result as a failure
-         * and keep the form on screen.
-         */
         const r = await createOfferAction(fd).catch(() => null);
         if (!r || !r.ok) {
           setErr(
@@ -384,9 +349,18 @@ export default function OfferForm({
     });
   };
 
+  const showTime = preset
+    ? preset.showGuaranteedTime === true
+      ? true
+      : preset.showGuaranteedTime === "manual_only"
+      ? !auto
+      : false
+    : !auto;
+
+  const quantityMode = preset?.quantityMode || (config.needs_quantity ? "full" : "hidden");
+
   return (
     <div className="mx-auto max-w-[720px] space-y-4">
-      {/* ---------- title / offer details ---------- */}
       {(config.needs_title === 1 || !product.id) && (
         <Card title="Offer Title">
           <div className="mb-1 text-right text-[10.5px] muted">{title.length}/160</div>
@@ -404,7 +378,6 @@ export default function OfferForm({
         </Card>
       )}
 
-      {/* ---------- admin-defined fields ---------- */}
       {fields.length > 0 && (
         <Card title="Offer Details">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -472,7 +445,6 @@ export default function OfferForm({
         </Card>
       )}
 
-      {/* ---------- images ---------- */}
       {config.needs_images === 1 && (
         <Card title="Upload offer photo(s) (Optional)">
           <Hint>We recommend that your images are at least 800 pixels square.</Hint>
@@ -515,7 +487,6 @@ export default function OfferForm({
         </Card>
       )}
 
-      {/* ---------- description ---------- */}
       <Card title="Description (Optional)">
         <div className="mb-1 text-right text-[10.5px] muted">{description.length}/2000</div>
         <textarea
@@ -533,15 +504,16 @@ export default function OfferForm({
         </Hint>
       </Card>
 
-            {/* ---------- delivery ---------- */}
+      {/* ---------- delivery – per category like Eldorado ---------- */}
       <Card title="Delivery">
+        {/* Automatic / Manual for accounts, gift-cards, subscriptions */}
         {mode === "both" && (
           <div className="mb-4">
             <Label>Delivery method</Label>
             <div className="grid gap-2 sm:grid-cols-2">
               {[
-                { v: true, l: "Automatic", d: "G2X delivers instantly after payment — you don't need to be online." },
-                { v: false, l: "Manual", d: "You will manually send details via G2X chat within guaranteed time." },
+                { v: true, l: "Automatic", d: preset?.slug === "gift-cards" ? "When the buyer purchases your gift card, G2X will instantly deliver the gift card code so you don't have to be online!" : "When the buyer purchases your account, G2X will instantly deliver the account details so you don't even have to be online!" },
+                { v: false, l: "Manual", d: preset?.slug === "gift-cards" ? "You will manually send the gift card code to the buyer through G2X chat." : "When this offer is sold, you will have to manually send all the required account details to the buyer through G2X chat." },
               ].map((o) => (
                 <label key={o.l} className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-3 transition-all ${auto===o.v ? "border-brand-500 bg-brand-600/10" : "border-[var(--line)] soft hover:border-brand-500/50"}`}>
                   <input type="radio" checked={auto === o.v} onChange={() => setAuto(o.v)} className="mt-0.5 accent-[var(--brand,#8b3dff)]" />
@@ -555,37 +527,76 @@ export default function OfferForm({
           </div>
         )}
 
-        {!auto && (
+        {/* Guaranteed Delivery Time – shown per preset */}
+        {showTime && (
           <div className="mb-4">
             <Label req>Guaranteed Delivery Time</Label>
             <div className="relative">
               <select value={deliveryTime} onChange={(e) => setDeliveryTime(e.target.value)} className="h-11 w-full appearance-none rounded-xl border border-[var(--line)] bg-[var(--panel)] px-3.5 pr-9 text-[13px] outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20">
-                <option value="">Choose delivery time</option>
+                <option value="">Choose</option>
                 {deliveryTimes.map((d) => (
                   <option key={d.value} value={d.label}>{d.label}</option>
                 ))}
               </select>
               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 muted">▼</span>
             </div>
-            <Hint>Faster delivery improves your ranking.</Hint>
+            <Hint>Faster delivery time improves your offer&apos;s ranking in the offer list.</Hint>
           </div>
         )}
 
-        {deliveryMethods.length > 0 && config.show_delivery_method !== 0 && (
+        {/* Delivery method – per category */}
+        {effectiveDeliveryMethods.length > 0 && (
           <div className="mb-4">
-            <Label>How will you deliver?</Label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {deliveryMethods.map((d) => (
-                <label key={d.value} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12.5px] font-medium transition-all ${deliveryMethod===d.value ? "border-brand-500 bg-brand-600/10 text-white" : "border-[var(--line)] soft hover:border-brand-500/50"}`}>
-                  <input type="radio" name="dm" checked={deliveryMethod === d.value} onChange={() => setDeliveryMethod(d.value)} className="accent-[var(--brand,#8b3dff)]" />
-                  {d.label}
-                </label>
-              ))}
-            </div>
+            {preset?.slug === "currency" ? (
+              <>
+                <div className="mb-2 flex items-center gap-2">
+                  <Label>Delivery method</Label>
+                  <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-black text-emerald-400">BETA</span>
+                  <span className="grid h-4 w-4 place-items-center rounded-full border border-[var(--line)] text-[10px]">?</span>
+                </div>
+                <div className="mb-1 text-[11px] font-semibold muted">Choose delivery method</div>
+                <div className="grid gap-2">
+                  {effectiveDeliveryMethods.map((d) => (
+                    <label key={d.value} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12.5px] font-medium transition-all ${deliveryMethod===d.value ? "border-brand-500 bg-brand-600/10 text-white" : "border-[var(--line)] soft hover:border-brand-500/50"}`}>
+                      <input type="radio" name="dm" checked={deliveryMethod === d.value} onChange={() => setDeliveryMethod(d.value)} className="accent-[var(--brand,#8b3dff)]" />
+                      <span className="flex-1">{d.label}</span>
+                      <span className="grid h-4 w-4 place-items-center rounded-full border border-[var(--line)] text-[10px]">?</span>
+                    </label>
+                  ))}
+                </div>
+              </>
+            ) : preset?.singleFixed ? (
+              <>
+                <Label>Delivery method</Label>
+                <div className="h-11 w-full rounded-xl border border-[var(--line)] bg-[var(--panel)]/50 px-3.5 text-[13px] leading-[44px] text-[var(--fg)]">
+                  {effectiveDeliveryMethods[0]?.label || "In-game delivery"}
+                </div>
+                <Hint>Faster delivery time improves your offer&apos;s ranking in the offer list.</Hint>
+              </>
+            ) : (
+              <>
+                <Label>How will you deliver?</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {effectiveDeliveryMethods.map((d) => (
+                    <label key={d.value} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3.5 py-2.5 text-[12.5px] font-medium transition-all ${deliveryMethod===d.value ? "border-brand-500 bg-brand-600/10 text-white" : "border-[var(--line)] soft hover:border-brand-500/50"}`}>
+                      <input type="radio" name="dm" checked={deliveryMethod === d.value} onChange={() => setDeliveryMethod(d.value)} className="accent-[var(--brand,#8b3dff)]" />
+                      {d.label}
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 
-        {/* Selected server summary from previous step - clean UI */}
+        {/* Boosting – no delivery method, just info */}
+        {config.slug === "boosting" && (
+          <div className="mb-4 rounded-lg soft px-3 py-2.5 text-[11px] muted">
+            Boosting service will be delivered manually. You will coordinate with buyer via G2X chat.
+          </div>
+        )}
+
+        {/* Selected server summary */}
         {Object.keys(initialServerVals).filter(k=>initialServerVals[k] && !/ede/i.test(k) && !/ede/i.test(initialServerVals[k]) && k!=='gg' && k!=='india' && k!=='abc' && k!=='aa').length > 0 && (
           <div className="mb-4 rounded-xl border border-brand-500/20 bg-gradient-to-br from-brand-600/10 to-violet-600/10 p-4">
             <div className="mb-2.5 flex items-center gap-2">
@@ -607,7 +618,6 @@ export default function OfferForm({
           </div>
         )}
 
-        {/* Game-specific cascading fields - only show those not already selected, clean UI */}
         {(() => {
           const cleanFields = gameFields.filter(f => { if (/ede/i.test(f.field_key) || /ede/i.test(f.label)) return false; if (f.field_key==='gg' || f.label==='gg') return false; if (/^india$/i.test(f.field_key)) return false; if (/^abc$/i.test(f.field_key)) return false; if (/^aa$/i.test(f.field_key)) return false; if (f.field_key.length<2) return false; return true; });
           const remaining = cleanFields.slice().sort((a,b)=>a.sort_order-b.sort_order).filter(gf => !initialServerVals[gf.field_key] && isGameFieldVisible(gf));
@@ -642,11 +652,8 @@ export default function OfferForm({
             </div>
           );
         })()}
-
-        {/* Region/Platform removed per user request - admin configures via gameFields cascading */}
       </Card>
 
-      {/* ---------- account credential vault - FIXED: always show for accounts/subscriptions/gift-cards when needs_credentials=1, auto or manual, per user request Image-1 bug */}
       {config.needs_credentials === 1 && (
         <Card title={`${vaultNoun} information ${auto ? "(auto-delivered & emailed to buyer)" : "(for manual delivery)"}`} badge={auto ? "AUTO + EMAIL" : "MANUAL"}>
           {auto ? (
@@ -671,7 +678,6 @@ export default function OfferForm({
                   )}
                 </div>
 
-                {/* A gift card is just a code; an account needs the full set. */}
                 {isGiftCard ? (
                   <>
                     <div className="mb-1 text-[11.5px] font-bold">
@@ -766,7 +772,8 @@ export default function OfferForm({
           </div>
         </Card>
       )}
-{(mode === "manual" || (config.needs_credentials === 1 && !auto)) && (
+
+      {(mode === "manual" || (config.needs_credentials === 1 && !auto)) && (
         <Card title="Manual delivery">
           <Hint>
             You will receive the order in your seller panel and must send the account details to the
@@ -785,8 +792,8 @@ export default function OfferForm({
         </Card>
       )}
 
-      {/* ---------- quantity ---------- */}
-      {config.needs_quantity === 1 && (
+      {/* ---------- quantity – per category ---------- */}
+      {quantityMode === "full" && (
         <Card title="Quantity">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -818,8 +825,45 @@ export default function OfferForm({
           </div>
         </Card>
       )}
+      {quantityMode === "min_total" && (
+        <Card title="Quantity">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label req>Total Quantity available</Label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={1}
+                  value={stock}
+                  onChange={(e) => setStock(e.target.value)}
+                  className={`${field} pr-14`}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] muted">M</span>
+              </div>
+            </div>
+            <div>
+              <Label>Minimum Offer quantity</Label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={1}
+                  value={minQty}
+                  onChange={(e) => setMinQty(e.target.value)}
+                  className={`${field} pr-14`}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11.5px] muted">M</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+      {quantityMode === "fixed_1" && (
+        <Card title="Quantity">
+          <Label>Total Quantity available</Label>
+          <div className="h-10 w-full rounded-lg border border-[var(--line)] bg-[var(--panel)]/50 px-3 text-[12.5px] leading-[40px]">1 unit</div>
+        </Card>
+      )}
 
-      {/* ---------- price ---------- */}
       <Card title="Price">
         <Label req>Price per {unit}</Label>
         <div className="relative">
@@ -836,11 +880,6 @@ export default function OfferForm({
             $ USD
           </span>
         </div>
-        {/*
-          Prices are STORED in USD so every offer stays comparable, but a seller
-          reading the site in INR needs to see what they are actually charging.
-          The live conversion removes the guesswork.
-        */}
         {priceNum > 0 && (
           <div className="mt-2 text-[11.5px] font-semibold text-brand-400">
             Buyers see {money(priceNum)} per {unit}
@@ -852,8 +891,7 @@ export default function OfferForm({
         </Hint>
       </Card>
 
-      {/* ---------- volume discount ---------- */}
-      {config.allow_volume_discount === 1 && (
+      {(config.allow_volume_discount === 1 && preset?.allowVolume) && (
         <Card title="Volume discount">
           <div className="space-y-2">
             {volume.map((v, i) => (
@@ -908,7 +946,6 @@ export default function OfferForm({
         </Card>
       )}
 
-      {/* ---------- consent + submit ---------- */}
       <div className="space-y-2">
         <label className="flex cursor-pointer items-start gap-2 text-[12px]">
           <input type="checkbox" checked={agreeTos} onChange={(e) => setAgreeTos(e.target.checked)} className="mt-0.5 accent-[var(--brand,#8b3dff)]" />

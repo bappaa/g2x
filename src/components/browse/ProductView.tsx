@@ -80,7 +80,7 @@ export default function ProductView({
   const tr = useT();
   const { ids, ready } = useWishlist();
   const splitOpts = (v?: string | null) =>
-    String(v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+    String(v ?? "").split(",").map((x) => x.trim()).filter(Boolean).filter(x=>!["boosting_service","automatic_manual"].includes(x));
   const regions = useMemo(() => splitOpts(product.region), [product.region]);
   const methods = useMemo(() => splitOpts(product.delivery_method), [product.delivery_method]);
   const [region, setRegion] = useState(regions[0] ?? "");

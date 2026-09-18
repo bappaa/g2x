@@ -1,11 +1,12 @@
 import "server-only";
 import { db } from "./db";
 import { PATCHES, isBenignSchemaError } from "./schema-patches.mjs";
+import { DELIVERY_PRESETS, allDeliveryMethodValues } from "./category-delivery";
 
 let done: Promise<void> | null = null;
 
 async function apply(): Promise<void> {
-  // Cleanup test fields like 'ede' that were created during testing and break UI (image-1, image-3)
+  // Cleanup test fields like 'ede' that were created during testing and break UI
   try {
     await db.execute("CREATE TABLE IF NOT EXISTS game_category_images (id TEXT PRIMARY KEY, game_slug TEXT NOT NULL, category_slug TEXT NOT NULL, image TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), UNIQUE(game_slug, category_slug))");
   } catch {}
@@ -13,20 +14,51 @@ async function apply(): Promise<void> {
     await db.execute("DELETE FROM game_offer_fields WHERE field_key LIKE '%ede%' OR label LIKE '%ede%' OR lower(field_key)='gg' OR lower(label)='gg' OR field_key LIKE '%test%' OR lower(field_key)='india' OR lower(label)='india' OR lower(field_key)='abc' OR lower(label)='abc' OR lower(field_key)='aa' OR lower(label)='aa'");
   } catch {}
 
-  // Fix category sell configs for production - per user request: remove region/platform, ensure vault and images show for accounts etc
+  // --- Phase 44: per-category delivery presets (Eldorado-style) ---
+  // Each category now has only its relevant delivery methods:
+  // items: single In-game delivery
+  // currency: 7 methods (in-game trade, game pass, auction house, mail trade, island delivery, epic gifting, login method) BETA
+  // accounts: Automatic/Manual (fulfilment), no delivery_method list
+  // gift-cards: Automatic/Manual, gift card vault
+  // top-up: single Top-up
+  // subscriptions: Automatic/Manual
+  // boosting: manual only, no delivery method
   try {
-    // accounts: needs_title=1, needs_images=1, needs_credentials=1, needs_quantity=0, allow_volume=0, fulfilment=both, show_delivery=1, show_region=0, show_platform=0, show_login=0, unit=account
-    await db.execute("UPDATE categories SET needs_title=1, needs_images=1, needs_credentials=1, needs_quantity=0, allow_volume_discount=0, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='account' WHERE slug='accounts'");
-    await db.execute("UPDATE categories SET needs_title=0, needs_images=0, needs_credentials=0, needs_quantity=1, allow_volume_discount=0, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='unit' WHERE slug='top-up'");
-    await db.execute("UPDATE categories SET needs_title=0, needs_images=0, needs_credentials=0, needs_quantity=1, allow_volume_discount=1, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='unit' WHERE slug='currency'");
-    await db.execute("UPDATE categories SET needs_title=0, needs_images=1, needs_credentials=0, needs_quantity=1, allow_volume_discount=0, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='item' WHERE slug='items'");
-    await db.execute("UPDATE categories SET needs_title=1, needs_images=0, needs_credentials=0, needs_quantity=0, allow_volume_discount=0, fulfilment='manual', show_delivery_method=0, show_region=0, show_platform=0, show_login_method=0, unit_label='service' WHERE slug='boosting'");
-    await db.execute("UPDATE categories SET needs_title=1, needs_images=0, needs_credentials=1, needs_quantity=0, allow_volume_discount=0, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='subscription' WHERE slug='subscriptions'");
-    await db.execute("UPDATE categories SET needs_title=1, needs_images=0, needs_credentials=1, needs_quantity=1, allow_volume_discount=0, fulfilment='both', show_delivery_method=1, show_region=0, show_platform=0, show_login_method=0, unit_label='code' WHERE slug='gift-cards'");
-  } catch {}
+    for (const [slug, preset] of Object.entries(DELIVERY_PRESETS)) {
+      const showDM = preset.showDeliveryMethods ? 1 : 0;
+      // fulfilment: both/manual/auto
+      await db.execute(
+        `UPDATE categories SET
+           needs_title=?,
+           needs_images=?,
+           needs_credentials=?,
+           needs_quantity=?,
+           allow_volume_discount=?,
+           fulfilment=?,
+           show_delivery_method=?,
+           show_region=0,
+           show_platform=0,
+           show_login_method=0,
+           unit_label=?
+         WHERE slug=?`,
+        [
+          preset.needsTitle ? 1 : 0,
+          preset.needsImages ? 1 : 0,
+          preset.needsCredentials ? 1 : 0,
+          preset.needsQuantity ? 1 : 0,
+          preset.allowVolume ? 1 : 0,
+          preset.fulfilment,
+          showDM,
+          preset.unitLabel,
+          slug,
+        ]
+      );
+    }
+  } catch (e) {
+    console.warn("[ensure-schema] preset update failed", e);
+  }
 
-
-  // Fix delivery time options per user request: 1 hour, 5 hour, 12 hour, 1day, 2days, 5 days, 7 days, 14 days
+  // Seed delivery_time options per user request
   try {
     const times = [
       { value: "instant", label: "Instant" },
@@ -41,11 +73,40 @@ async function apply(): Promise<void> {
     ];
     for (const tm of times) {
       try {
-        await db.execute("INSERT OR IGNORE INTO option_lists (id, list_key, value, label, sort_order, active) VALUES (?,?,?,?,?,1)", [`opt_dt_${tm.value}`, "delivery_time", tm.value, tm.label, times.indexOf(tm)*10]);
+        await db.execute("INSERT OR IGNORE INTO option_lists (id, list_key, value, label, sort_order, active) VALUES (?,?,?,?,?,1)", [`opt_dt_${tm.value}`, "delivery_time", tm.value, tm.label, times.indexOf(tm) * 10]);
       } catch {}
       try {
         await db.execute("UPDATE option_lists SET label=?, active=1 WHERE list_key='delivery_time' AND value=?", [tm.label, tm.value]);
       } catch {}
+    }
+  } catch {}
+
+  // Seed delivery_method options from presets (all possible values)
+  try {
+    const methods = allDeliveryMethodValues();
+    // add extra generic ones for admin
+    const extra: { value: string; label: string }[] = [
+      { value: "in_game_delivery", label: "In-game delivery" },
+      { value: "top_up", label: "Top-up" },
+      { value: "in_game_trade", label: "In-game trade" },
+      { value: "game_pass", label: "Game Pass" },
+      { value: "auction_house", label: "Auction House" },
+      { value: "mail_trade", label: "Mail Trade" },
+      { value: "island_delivery", label: "Island Delivery" },
+      { value: "epic_gifting", label: "Epic Gifting" },
+      { value: "login_method", label: "Login Method" },
+    ];
+    const merged = new Map<string, string>();
+    for (const m of [...methods, ...extra]) merged.set(m.value, m.label);
+    let idx = 0;
+    for (const [value, label] of merged.entries()) {
+      try {
+        await db.execute("INSERT OR IGNORE INTO option_lists (id, list_key, value, label, sort_order, active) VALUES (?,?,?,?,?,1)", [`opt_dm_${value}`, "delivery_method", value, label, idx * 10]);
+      } catch {}
+      try {
+        await db.execute("UPDATE option_lists SET label=?, active=1 WHERE list_key='delivery_method' AND value=?", [label, value]);
+      } catch {}
+      idx++;
     }
   } catch {}
 
