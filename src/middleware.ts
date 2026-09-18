@@ -1,15 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-/**
- * Edge security layer - HIGH SECURITY for gaming ecommerce
- * 1. Exploit path blocking
- * 2. Bad UA blocking
- * 3. CSRF origin check
- * 4. Auth gate
- * 5. Security headers
- */
-
 const PROTECTED = ["/admin", "/dashboard", "/seller"];
 
 const BAD_PATH =
@@ -120,24 +111,24 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next({ request: { headers: reqHeaders } });
   const prod = process.env.NODE_ENV === "production";
 
-  // Razorpay — needs script from checkout + cdn + api, frames for modal, connect for risk detection & api
-  const razorpayScript = "https://checkout.razorpay.com https://api.razorpay.com https://cdn.razorpay.com https://*.razorpay.com";
-  const razorpayConnect = "https://api.razorpay.com https://checkout.razorpay.com https://cdn.razorpay.com https://*.razorpay.com https://lumberjack.razorpay.com https://lumberjack-cx.razorpay.com";
-  const razorpayFrame = "https://api.razorpay.com https://checkout.razorpay.com https://cdn.razorpay.com https://*.razorpay.com";
-  const razorpayImg = "https://cdn.razorpay.com https://*.razorpay.com";
+  // Razorpay — checkout.js loads cdn.razorpay.com bundle, needs wide allowlist
+  const rzp = "https://checkout.razorpay.com https://api.razorpay.com https://cdn.razorpay.com https://*.razorpay.com";
+  const rzpConnect = "https://api.razorpay.com https://checkout.razorpay.com https://cdn.razorpay.com https://*.razorpay.com https://lumberjack.razorpay.com https://lumberjack-cx.razorpay.com";
 
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'unsafe-inline'${prod ? "" : " 'unsafe-eval'"} https://www.google.com https://www.gstatic.com ${razorpayScript}`,
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    `img-src 'self' data: blob: https: ${razorpayImg}`,
+    `script-src 'self' 'unsafe-inline'${prod ? "" : " 'unsafe-eval'"} https://www.google.com https://www.gstatic.com ${rzp}`,
+    `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com ${rzp}`,
+    `img-src 'self' data: blob: https: ${rzp}`,
     "font-src 'self' data: https://fonts.gstatic.com",
-    `connect-src 'self' https://api.exchangerate-api.com https://api.frankfurter.app ${razorpayConnect}`,
-    `frame-src 'self' https://www.google.com https://www.gstatic.com ${razorpayFrame}`,
+    `connect-src 'self' https://api.exchangerate-api.com https://api.frankfurter.app ${rzpConnect}`,
+    `frame-src 'self' https://www.google.com https://www.gstatic.com ${rzp}`,
+    `form-action 'self' ${rzp} javascript: blob:`,
     "frame-ancestors 'none'",
-    "form-action 'self' javascript: blob:",
     "base-uri 'self'",
     "object-src 'none'",
+    `worker-src 'self' blob: ${rzp}`,
+    `child-src 'self' blob: ${rzp}`,
     "media-src 'self' blob:",
     ...(prod ? ["upgrade-insecure-requests", "block-all-mixed-content"] : []),
   ].join("; ");
@@ -149,8 +140,10 @@ export async function middleware(req: NextRequest) {
   res.headers.set("X-XSS-Protection", "1; mode=block");
   res.headers.set("X-DNS-Prefetch-Control", "off");
   res.headers.set("X-Permitted-Cross-Domain-Policies", "none");
-  res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
-  res.headers.set("Cross-Origin-Embedder-Policy", "credentialless");
+  // Allow popups for Razorpay checkout modal communication
+  res.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  // credentialless blocks Razorpay's api.razorpay.com iframe which doesn't send CORP headers
+  res.headers.set("Cross-Origin-Embedder-Policy", "unsafe-none");
   res.headers.set("Cross-Origin-Resource-Policy", "same-origin");
   res.headers.set(
     "Permissions-Policy",

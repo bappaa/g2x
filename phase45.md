@@ -326,3 +326,44 @@ checkout.js:1 Loading script https://cdn.razorpay.com/static/cx/razorpay-risk-de
 
 After fix, Razorpay checkout loads without CSP violations, modal opens, payment verification works.
 
+
+## 11. Hotfix 3 — api.razorpay.com refused to connect (wallet page blank)
+
+**Screenshot:** `/dashboard/wallet` → tapping "Pay via Razorpay" shows blank page with icon and text `api.razorpay.com refused to connect.`
+
+**Root causes (3 layered):**
+
+1. **CSP `img-src` invalid `/api/media/`** — already fixed in Hotfix 2 but still present in some cached middleware. Removed.
+
+2. **Razorpay risk bundle blocked** — `checkout.js` loads `https://cdn.razorpay.com/static/cx/razorpay-risk-detection/bundle.js`. Our CSP only allowed `checkout.razorpay.com` + `api.razorpay.com`, so browser blocked `cdn.razorpay.com` → checkout failed to initialize and left blank iframe.
+
+3. **COEP `credentialless` + COOP `same-origin` + `form-action 'self'` blocked Razorpay modal:**
+   - `Cross-Origin-Embedder-Policy: credentialless` requires cross-origin iframes to send `Cross-Origin-Resource-Policy` header. Razorpay's `api.razorpay.com` does NOT send CORP, so Chrome blocks iframe and shows "refused to connect".
+   - `Cross-Origin-Opener-Policy: same-origin` blocks `window.open` communication used by Razorpay.
+   - `form-action 'self'` blocks Razorpay's internal form POST to `api.razorpay.com`.
+
+**Fix in `src/middleware.ts`:**
+- Expanded Razorpay allowlist to `https://*.razorpay.com` + `cdn.razorpay.com` for script, connect, frame, img, style, worker, child
+- `form-action` now includes Razorpay domains
+- Changed `Cross-Origin-Embedder-Policy` from `credentialless` → `unsafe-none`
+- Changed `Cross-Origin-Opener-Policy` from `same-origin` → `same-origin-allow-popups`
+- `Permissions-Policy payment` allows `https://*.razorpay.com`
+- Removed invalid `/api/media/` from `img-src`
+
+**Env handling for test keys (Image-2):**
+- User provided test keys:
+  ```
+  RAZORPAY_KEY_ID=rzp_test_TdaoKighXU7Sd2
+  RAZORPAY_KEY_SECRET=XyQrDwPF1IfnwEEKyCc9hCyF
+  RAZORPAY_WEBHOOK_SECRET=abc1234567890
+  RAZORPAY_CURRENCY=INR
+  ```
+- Added to `.env.local` for local dev and documented in `.env.example`
+- `getRazorpayConfig()` already falls back to env if DB config empty, so test keys work without admin UI. Admin UI (`/admin/gateways` → Razorpay) can also store live keys in `payment_gateways.config` JSON which takes priority over env.
+- Improved error handling in `create-order` route: if Razorpay auth fails, returns clear message "Razorpay order failed: ..." instead of blank.
+
+**Verification after fix:**
+- Wallet → Add Funds → Razorpay → Pay → modal opens (UPI, Card, NetBanking), test payment `payment.captured` → `/api/payments/razorpay/verify` → wallet credited, no blank page.
+- Checkout same flow → order created only after verified signature, escrow held.
+
+Build still 87.5kB.
