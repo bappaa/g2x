@@ -553,7 +553,7 @@ export default function ProductView({
                             <div className="flex items-center gap-2.5">
                               {offerPhoto(o) ? (
                                 /* eslint-disable-next-line @next/next/no-img-element */
-                                <img
+                                <img loading="lazy" decoding="async"
                                   src={offerPhoto(o) as string}
                                   alt=""
                                   className="h-7 w-7 shrink-0 rounded-md object-cover"
@@ -637,7 +637,7 @@ export default function ProductView({
                       <div className="flex items-center gap-2.5">
                         {offerPhoto(o) ? (
                           /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={offerPhoto(o) as string}
                             alt=""
                             className="h-8 w-8 shrink-0 rounded-md object-cover"

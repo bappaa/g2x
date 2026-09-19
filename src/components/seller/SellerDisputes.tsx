@@ -142,7 +142,7 @@ function DisputeChat({ d, thread }: { d: D; thread: M[] }) {
               ) : isImage ? (
                 <button type="button" onClick={() => setLightbox(m)} className="block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={m.attachment_data ?? ""} alt={m.attachment_name ?? "evidence"} className="max-h-[220px] rounded-lg object-cover" />
+                  <img loading="lazy" decoding="async" src={m.attachment_data ?? ""} alt={m.attachment_name ?? "evidence"} className="max-h-[220px] rounded-lg object-cover" />
                   <span className="mt-1 block text-[10px] opacity-70">
                     {m.attachment_name} · {fileSize(m.attachment_size)}
                   </span>
@@ -236,7 +236,7 @@ function DisputeChat({ d, thread }: { d: D; thread: M[] }) {
             className="fixed inset-0 z-[120] grid place-items-center bg-black/85 p-4"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={lightbox.attachment_data ?? ""} alt={lightbox.attachment_name ?? "evidence"} className="max-h-[90vh] max-w-[92vw] rounded-xl object-contain" />
+            <img loading="lazy" decoding="async" src={lightbox.attachment_data ?? ""} alt={lightbox.attachment_name ?? "evidence"} className="max-h-[90vh] max-w-[92vw] rounded-xl object-contain" />
             <button type="button" className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white">
               <X size={18} />
             </button>
@@ -349,5 +349,4 @@ export default function SellerDisputes({
     </div>
   );
 }
-
 

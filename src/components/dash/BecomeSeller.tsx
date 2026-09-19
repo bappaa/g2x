@@ -399,7 +399,7 @@ function FileDrop({
           >
             {preview ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview} alt="" className="h-[110px] w-full object-cover" />
+              <img loading="lazy" decoding="async" src={preview} alt="" className="h-[110px] w-full object-cover" />
             ) : (
               <div className="grid h-[110px] place-items-center">
                 <FileText size={22} className="text-brand-400" />

@@ -91,7 +91,7 @@ export default function StoreSettings({
           <span className="grid h-14 w-14 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-amber-400 to-brand-600 text-[20px] font-black text-white">
             {logoPreview && !removeLogo ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoPreview} alt="" className="h-full w-full object-cover" />
+              <img loading="lazy" decoding="async" src={logoPreview} alt="" className="h-full w-full object-cover" />
             ) : (
               profile.store_name.slice(0, 1).toUpperCase()
             )}
@@ -165,7 +165,7 @@ export default function StoreSettings({
                 {logoPreview && !removeLogo ? (
                   <div className="relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={logoPreview} alt="logo" className="h-24 w-24 rounded-xl object-cover" />
+                    <img loading="lazy" decoding="async" src={logoPreview} alt="logo" className="h-24 w-24 rounded-xl object-cover" />
                     <button type="button" onClick={() => { setLogoPreview(null); setRemoveLogo(true); if (logoRef.current) logoRef.current.value=""; }} className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white hover:bg-rose-500">
                       <X size={12} />
                     </button>
@@ -194,7 +194,7 @@ export default function StoreSettings({
                 {bannerPreview && !removeBanner ? (
                   <div className="relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={bannerPreview} alt="banner" className="h-24 w-full rounded-lg object-cover" />
+                    <img loading="lazy" decoding="async" src={bannerPreview} alt="banner" className="h-24 w-full rounded-lg object-cover" />
                     <button type="button" onClick={() => { setBannerPreview(null); setRemoveBanner(true); if (bannerRef.current) bannerRef.current.value=""; }} className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white hover:bg-rose-500">
                       <X size={12} />
                     </button>

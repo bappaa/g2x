@@ -77,7 +77,7 @@ export default function ProfileForm({
           <button type="button" onClick={() => picker.current?.click()} title="Change profile photo" className="group relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-fuchsia-500 to-brand-700 text-[18px] font-black text-white sm:text-[22px]">
             {preview && !removed ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={preview} alt="" className="h-full w-full object-cover" />
+              <img loading="lazy" decoding="async" src={preview} alt="" className="h-full w-full object-cover" />
             ) : (
               name.slice(0, 1).toUpperCase()
             )}

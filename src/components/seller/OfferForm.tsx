@@ -452,7 +452,7 @@ export default function OfferForm({
             {images.map((im, i) => (
               <span key={i} className="relative h-20 w-20 overflow-hidden rounded-lg soft">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={im.data} alt={im.name} className="h-full w-full object-cover" />
+                <img loading="lazy" decoding="async" src={im.data} alt={im.name} className="h-full w-full object-cover" />
                 <button
                   type="button"
                   onClick={() => setImages((p) => p.filter((_, j) => j !== i))}

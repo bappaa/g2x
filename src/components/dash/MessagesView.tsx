@@ -356,7 +356,7 @@ export default function MessagesView({
                           title="Open full size"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
+                          <img loading="lazy" decoding="async"
                             src={m.attachment_data}
                             alt={m.attachment_name ?? "attachment"}
                             className="max-h-[260px] w-full object-cover"
@@ -522,7 +522,7 @@ export default function MessagesView({
             <X size={18} />
           </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <img loading="lazy" decoding="async"
             src={preview.attachment_data}
             alt={preview.attachment_name ?? "attachment"}
             className="max-h-[85vh] max-w-full rounded-xl object-contain"

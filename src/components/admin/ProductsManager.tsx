@@ -446,12 +446,9 @@ function ProductForm({
           Products you add here appear on <b>/g/{'{game}'}</b> and <b>/c/{'{category}'}</b> instantly after save — linked via game_categories. No premade options override your custom products; your product image (max 5 MB) shows on game page.
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Base price (USD)">
             <input name="basePrice" type="number" step="0.01" required defaultValue={p?.base_price} className={inputCls} />
-          </Field>
-          <Field label="Compare-at price">
-            <input name="oldPrice" type="number" step="0.01" defaultValue={p?.old_price ?? ""} className={inputCls} />
           </Field>
           <Field label="Discount %">
             <input name="discount" type="number" defaultValue={p?.discount_pct ?? ""} className={inputCls} />
@@ -461,7 +458,7 @@ function ProductForm({
         {fieldsForGame.length > 0 ? (
           <div className="space-y-3 rounded-xl border border-brand-500/20 bg-brand-500/5 p-3">
             <div className="text-[11.5px] font-bold text-brand-300">Game-specific servers (from Games → Edit → Add field)</div>
-            <div className="text-[10.5px] muted">These are the custom fields you configured for {selectedGame || "this game"}. They will appear on product page for buyer selection.</div>
+            <div className="text-[10.5px] muted">Only your configured fields for <b>{selectedGame}</b> are shown here. No generic list.</div>
             {fieldsForGame.map((gf) => {
               let opts: string[] = [];
               try {
@@ -471,23 +468,27 @@ function ProductForm({
               } catch {
                 opts = (gf.options || "").split(",").map((s)=>s.trim()).filter(Boolean);
               }
+              // For editing, we need to extract previously saved values that match this field's options
+              const prevRegion = p?.region ?? "";
+              const matchingPrev = prevRegion.split(",").map((s)=>s.trim()).filter((v)=>opts.includes(v)).join(", ");
               return (
-                <Field key={gf.id} label={`${gf.label} (${gf.field_key})`} hint={gf.parent_field ? `Shows when ${gf.parent_field}=${gf.parent_value}` : "Configured for this game"}>
-                  <MultiPicker name={`gameField_${gf.field_key}`} opts={opts.map((o,i)=>({ id: `${gf.id}_${i}`, value: o, label: o }))} value={p?.region?.includes(gf.field_key) ? p?.region : ""} fallback={opts[0] || ""} />
+                <Field key={gf.id} label={`${gf.label} (${gf.field_key})`} hint={gf.parent_field ? `Shows when ${gf.parent_field}=${gf.parent_value}` : `Configured for ${selectedGame}`}>
+                  <MultiPicker name={`gameField_${gf.field_key}`} opts={opts.map((o,i)=>({ id: `${gf.id}_${i}`, value: o, label: o }))} value={matchingPrev} fallback={opts[0] || ""} />
                 </Field>
               );
             })}
-            <Field label="Additional regions (fallback)" hint="Generic regions if you also want them">
-              <RegionPicker opts={options.region} value={p?.region} />
-            </Field>
           </div>
         ) : (
-          <Field
-            label="Regions / game servers"
-            hint={selectedGame ? `No custom fields for ${selectedGame} — using generic list. Add custom servers in Games → Edit → Add field for this game to show here.` : "Tick every server this product works on. Buyers pick one on the product page. Manage the list in Catalog → Dropdown Options or add game-specific fields in Games → Edit."}
-          >
-            <RegionPicker opts={options.region} value={p?.region} />
-          </Field>
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+            <div className="text-[11.5px] font-bold text-amber-300">No game-specific servers configured</div>
+            <div className="mt-1 text-[11px] leading-relaxed muted">
+              {selectedGame ? (
+                <>No custom fields for <b>{selectedGame}</b>. Add servers via <b>Games → Edit → Add field</b> for this game. Only what you add there will appear here.</>
+              ) : (
+                <>Select a game first. Then add servers via <b>Games → Edit → Add field</b>. Only your configured fields will show here — no generic Global/India list.</>
+              )}
+            </div>
+          </div>
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -654,6 +655,4 @@ function MultiPicker({
   );
 }
 
-function RegionPicker({ opts, value }: { opts?: Opt[]; value?: string | null }) {
-  return <MultiPicker name="region" opts={opts} value={value} fallback="Global" />;
-}
+// RegionPicker removed per user request — only custom gameFields shown now

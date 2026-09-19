@@ -236,7 +236,7 @@ function PhotoInput({
         <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-lg bg-brand-600/15 text-brand-400">
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview} alt="" className="h-full w-full object-cover" />
+            <img loading="lazy" decoding="async" src={preview} alt="" className="h-full w-full object-cover" />
           ) : (
             icon
           )}

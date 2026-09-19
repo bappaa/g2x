@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -157,13 +157,13 @@ export function GamePicker({
     }
   };
 
-  const isVisible = (f: GameField): boolean => {
+  const isVisible = useCallback((f: GameField): boolean => {
     if (!f.parent_field) return true;
     const pv = serverVals[f.parent_field] || "";
     if (!pv) return false;
     if (f.parent_value && pv !== f.parent_value) return false;
     return true;
-  };
+  }, [serverVals]);
 
   const setServerVal = (key: string, val: string) => {
     setServerVals((prev) => {
@@ -190,7 +190,7 @@ export function GamePicker({
       if (f.required && !serverVals[f.field_key]) return false;
     }
     return true;
-  }, [gameFields, serverVals]);
+  }, [gameFields, serverVals, isVisible]);
 
   const handleNext = () => {
     if (!picked) return;

@@ -1462,29 +1462,30 @@ export async function resolveDisputeInChatAction(threadId: string): Promise<R> {
 
 export async function startThreadAction(sellerId: string, orderId?: string): Promise<R> {
   const u = await requireUser();
-  // First try exact order match to keep per-order context when possible
+  // Per-order messaging: each order gets its own thread, reused if same order opened again
   if (orderId) {
     const exact = await one<{ id: string }>(
       `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? AND order_id=?`,
       [u.id, sellerId, orderId]
     );
     if (exact) return { ok: true, id: exact.id };
+    // For same order code vs id, also check code match via order_id OR code stored in order_id field
+    // Create new thread for this specific order
+    const id = nid("thr_");
+    await run(`INSERT INTO threads (id,buyer_id,seller_id,order_id) VALUES (?,?,?,?)`, [
+      id, u.id, sellerId, orderId,
+    ]);
+    return { ok: true, id };
   }
-  // Reuse same chat for same buyer+seller pair (same product flow) — prevents new chat per order for same product
+  // No orderId: fallback to generic seller chat (e.g., from product page before purchase)
   const existing = await one<{ id: string }>(
-    `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? ORDER BY updated_at DESC LIMIT 1`,
+    `SELECT id FROM threads WHERE buyer_id=? AND seller_id=? AND (order_id IS NULL OR order_id='') ORDER BY updated_at DESC LIMIT 1`,
     [u.id, sellerId]
   );
-  if (existing) {
-    // If this thread has no order_id yet and we have one, attach it for order context
-    if (orderId) {
-      try { await run(`UPDATE threads SET order_id=COALESCE(order_id, ?) WHERE id=?`, [orderId, existing.id]); } catch {}
-    }
-    return { ok: true, id: existing.id };
-  }
+  if (existing) return { ok: true, id: existing.id };
   const id = nid("thr_");
   await run(`INSERT INTO threads (id,buyer_id,seller_id,order_id) VALUES (?,?,?,?)`, [
-    id, u.id, sellerId, orderId ?? null,
+    id, u.id, sellerId, null,
   ]);
   return { ok: true, id };
 }
