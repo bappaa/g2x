@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import "server-only";
 import { all, one, run, nid } from "./db";
 
@@ -114,6 +115,38 @@ export async function saveMedia(
       return { ok: false, error: "Image file too small or corrupted (less than 80 bytes)." };
     }
 
+    let finalBuf = buf;
+    let finalMime = mime;
+
+    // Server-side compression for bandwidth saving — if image >1 MB, try to compress to WebP/JPEG 1024px
+    if (buf.byteLength > 1024 * 1024 && mime !== "image/svg+xml" && mime !== "image/gif") {
+      try {
+        const sharpMod = await import("sharp").catch(() => null) as any;
+        const sharp = sharpMod?.default || sharpMod;
+        if (sharp) {
+          let pipeline = sharp(buf);
+          const meta = await pipeline.metadata().catch(() => null);
+          if (meta && meta.width && meta.width > 1024) {
+            pipeline = pipeline.resize({ width: 1024, withoutEnlargement: true });
+          }
+          // Convert to WebP for better compression (unless original is PNG with transparency needed? WebP supports alpha)
+          if (mime === "image/png" || mime === "image/jpeg") {
+            pipeline = pipeline.webp({ quality: 82 });
+            finalMime = "image/webp";
+          } else if (mime === "image/webp" || mime === "image/avif") {
+            pipeline = pipeline.webp({ quality: 82 });
+            finalMime = "image/webp";
+          }
+          const out = await pipeline.toBuffer();
+          if (out.byteLength < buf.byteLength) {
+            finalBuf = out;
+          }
+        }
+      } catch {
+        // sharp not available — keep original
+      }
+    }
+
     const id = nid("med_");
 
     await run(
@@ -123,9 +156,9 @@ export async function saveMedia(
         id,
         opts.kind ?? "image",
         fileName,
-        mime,
-        buf.toString("base64"),
-        buf.byteLength,
+        finalMime,
+        finalBuf.toString("base64"),
+        finalBuf.byteLength,
         opts.refKey ?? null,
         opts.userId ?? null,
       ]

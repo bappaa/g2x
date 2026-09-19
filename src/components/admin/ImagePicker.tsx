@@ -183,7 +183,7 @@ export default function ImagePicker({
         >
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview} alt="" className="h-full w-full object-cover" />
+            <img loading="lazy" decoding="async" src={preview} alt="" className="h-full w-full object-cover" />
           ) : (
             <div className="grid h-full w-full place-items-center muted">
               <ImagePlus size={17} />

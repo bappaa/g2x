@@ -35,7 +35,7 @@ function GameTile({ g, href }: { g: IndexGame; href: string }) {
         {isImage ? (
           logo.startsWith("data:image/svg+xml") ? (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={logo} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+            <img loading="lazy" decoding="async" src={logo} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
           ) : (
           <Image
             src={img(logo)}
@@ -180,7 +180,7 @@ export default function GameIndex({
                     const lg = resolveLogo(g.logo, g.slug, g.name);
                     if (lg.startsWith("data:image/svg+xml"))
                       /* eslint-disable-next-line @next/next/no-img-element */
-                      return <img src={lg} alt="" className="h-full w-full object-cover" />;
+                      return <img loading="lazy" decoding="async" src={lg} alt="" className="h-full w-full object-cover" />;
                     if (lg.startsWith("/") || lg.startsWith("http"))
                       return <Image src={img(lg)} alt={g.name} fill sizes="36px" className="object-cover" />;
                     return (

@@ -92,7 +92,7 @@ export default function GamesManager({
                   >
                     {g.logo ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={g.logo} alt={g.name} className="h-full w-full object-cover" />
+                      <img loading="lazy" decoding="async" src={g.logo} alt={g.name} className="h-full w-full object-cover" />
                     ) : (
                       g.name.slice(0, 1)
                     )}

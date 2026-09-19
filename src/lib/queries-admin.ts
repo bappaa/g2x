@@ -256,7 +256,7 @@ export const adminDeliveryLogs = (limit = 100) =>
 
 export const adminWithdrawals = (status = "all") =>
   all(
-    `SELECT w.*, u.name, u.email, sp.store_name, sp.available_bal
+    `SELECT w.*, w.detail AS destination, u.name, u.email, sp.store_name, sp.available_bal
        FROM withdrawals w
        JOIN users u ON u.id=w.seller_id
        LEFT JOIN seller_profiles sp ON sp.user_id=w.seller_id

@@ -130,7 +130,7 @@ export function AnyLogo({
   if (logo.startsWith("/")) {
     // eslint-disable-next-line @next/next/no-img-element
     return (
-      <img
+      <img loading="lazy" decoding="async"
         src={logo}
         alt=""
         width={size}

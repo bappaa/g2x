@@ -1,6 +1,7 @@
 "use client";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 export function AdminPage({
   title, sub, action, children,
@@ -38,7 +39,7 @@ export function Stat({
         {icon} {label}
       </div>
       <div className={`mt-1.5 text-[20px] font-black ${tone}`}>{value}</div>
-      {sub && <div className="mt-0.5 text-[10.5px] muted">{sub}</div>}
+      {sub && <div className="mt-0.5 text-[10.5px] muted\">{sub}</div>}
     </motion.div>
   );
   return href ? <Link href={href}>{body}</Link> : body;
@@ -82,19 +83,26 @@ export function FilterTabs({
 }: {
   base: string; tabs: string[]; active: string; param?: string;
 }) {
+  const sp = useSearchParams();
   return (
     <div className="flex flex-wrap gap-1.5">
-      {tabs.map((t) => (
-        <Link
-          key={t}
-          href={t === "all" ? base : `${base}?${param}=${t}`}
-          className={`rounded-lg px-3 py-1.5 text-[12px] font-medium capitalize transition-all ${
-            active === t ? "bg-brand-600 text-white" : "soft muted hover:text-brand-400"
-          }`}
-        >
-          {t.replace(/_/g, " ")}
-        </Link>
-      ))}
+      {tabs.map((t) => {
+        const params = new URLSearchParams(sp.toString());
+        params.set(param, t);
+        // Keep q if present when switching status, but reset page
+        const href = `${base}?${params.toString()}`;
+        return (
+          <Link
+            key={t}
+            href={href}
+            className={`rounded-lg px-3 py-1.5 text-[12px] font-medium capitalize transition-all ${
+              active === t ? "bg-brand-600 text-white" : "soft muted hover:text-brand-400"
+            }`}
+          >
+            {t.replace(/_/g, " ")}
+          </Link>
+        );
+      })}
     </div>
   );
 }

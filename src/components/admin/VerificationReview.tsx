@@ -129,7 +129,7 @@ function Modal({ v, onClose }: { v: V; onClose: () => void }) {
                     </div>
                   ) : (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={`/api/kyc/${d.key}`} alt={d.label} className="h-[110px] w-full object-cover" />
+                    <img loading="lazy" decoding="async" src={`/api/kyc/${d.key}`} alt={d.label} className="h-[110px] w-full object-cover" />
                   )}
                   <div className="flex items-center gap-1 px-2 py-1.5 text-[10px]">
                     <span className="flex-1 text-left">{d.label}</span>
@@ -196,7 +196,7 @@ function Modal({ v, onClose }: { v: V; onClose: () => void }) {
               <iframe src={zoom} className="h-[85vh] w-[85vw] rounded-xl bg-white" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={zoom} alt="" className="max-h-[88vh] max-w-[92vw] rounded-xl object-contain" />
+              <img loading="lazy" decoding="async" src={zoom} alt="" className="max-h-[88vh] max-w-[92vw] rounded-xl object-contain" />
             )}
           </motion.div>
         )}

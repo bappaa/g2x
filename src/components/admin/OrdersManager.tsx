@@ -28,7 +28,9 @@ export default function OrdersManager({ rows, q }: { rows: O[]; q: string }) {
           className="relative min-w-[220px] flex-1"
           onSubmit={(e) => {
             e.preventDefault();
-            router.push(`/admin/orders?q=${encodeURIComponent(term)}`);
+            const params = new URLSearchParams(window.location.search);
+            params.set("q", term);
+            router.push(`/admin/orders?${params.toString()}`);
           }}
         >
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 muted" />
@@ -60,9 +62,11 @@ export default function OrdersManager({ rows, q }: { rows: O[]; q: string }) {
                   <IconAction title="Change status" onClick={() => setModal({ o, mode: "status" })}>
                     <Settings2 size={12} />
                   </IconAction>
-                  <IconAction title="Refund" danger onClick={() => setModal({ o, mode: "refund" })}>
-                    <RotateCcw size={12} />
-                  </IconAction>
+                  {o.status !== "refunded" && o.status !== "cancelled" && (
+                    <IconAction title="Refund" danger onClick={() => setModal({ o, mode: "refund" })}>
+                      <RotateCcw size={12} />
+                    </IconAction>
+                  )}
                 </div>
               </Td>
             </Tr>

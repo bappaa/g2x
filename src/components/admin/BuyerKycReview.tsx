@@ -174,7 +174,7 @@ function Doc({ label: l, path }: { label: string; path: string }) {
     >
       <div className="relative h-[170px] w-full bg-black/30">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/api/kyc/${path}`} alt={l} className="h-full w-full object-contain" />
+        <img loading="lazy" decoding="async" src={`/api/kyc/${path}`} alt={l} className="h-full w-full object-contain" />
       </div>
       <div className="flex items-center gap-1.5 px-3 py-2 text-[11.5px] font-semibold group-hover:text-brand-400">
         {l} <ExternalLink size={11} className="ml-auto" />

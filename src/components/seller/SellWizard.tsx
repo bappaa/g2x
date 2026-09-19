@@ -344,14 +344,14 @@ function GameLogo({ logo, name, slug, size = 22 }: {
 }) {
   /**
    * Generated tiles are inlined as data URIs, so a 115-game picker costs zero
-   * network requests. Plain <img> on purpose: next/image adds no value to an
+   * network requests. Plain <img loading="lazy" decoding="async"> on purpose: next/image adds no value to an
    * inline SVG and would only add markup.
    */
   const src = resolveLogo(logo, slug || name, name);
   if (src.startsWith("data:image/svg+xml")) {
     /* eslint-disable-next-line @next/next/no-img-element */
     return (
-      <img src={src} alt="" width={size} height={size} className="shrink-0 rounded-md" />
+      <img loading="lazy" decoding="async" src={src} alt="" width={size} height={size} className="shrink-0 rounded-md" />
     );
   }
   const isImage = src.startsWith("/") || src.startsWith("http") || src.startsWith("data:");

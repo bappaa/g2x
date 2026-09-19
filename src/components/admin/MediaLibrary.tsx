@@ -157,7 +157,7 @@ export default function MediaLibrary({ rows, games, kind }: { rows: M[]; games: 
             >
               <div className="relative aspect-square soft">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/api/media/${m.id}`} alt={m.name} className="h-full w-full object-cover" />
+                <img loading="lazy" decoding="async" src={`/api/media/${m.id}?w=200`} alt={m.name} className="h-full w-full object-cover" />
                 <span className="absolute left-1.5 top-1.5">
                   <Tag tone="slate">{m.kind.replace("_", " ")}</Tag>
                 </span>
@@ -222,7 +222,7 @@ function AssignModal({ m, games, onClose }: { m: M; games: G[]; onClose: () => v
       >
         <div className="mb-3 flex items-center gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`/api/media/${m.id}`} alt="" className="h-9 w-9 rounded-lg object-cover" />
+          <img loading="lazy" decoding="async" src={`/api/media/${m.id}?w=80`} alt="" className="h-9 w-9 rounded-lg object-cover" />
           <h2 className="text-[15px] font-black">Set as game icon</h2>
           <button type="button" onClick={onClose} className="ml-auto rounded-lg p-1.5 soft hover:text-rose-400"><X size={15} /></button>
         </div>
@@ -249,7 +249,7 @@ function AssignModal({ m, games, onClose }: { m: M; games: G[]; onClose: () => v
               className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-brand-600/10"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={g.logo} alt="" className="h-7 w-7 rounded object-cover soft" />
+              <img loading="lazy" decoding="async" src={g.logo} alt="" className="h-7 w-7 rounded object-cover soft" />
               <span className="flex-1 truncate text-[12px] font-medium">{g.name}</span>
               {pending && <Loader2 size={12} className="animate-spin muted" />}
             </button>

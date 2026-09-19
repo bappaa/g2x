@@ -35,7 +35,12 @@ export default function UsersManager({ rows, q }: { rows: U[]; q: string }) {
       <Toolbar>
         <form
           className="relative min-w-[220px] flex-1"
-          onSubmit={(e) => { e.preventDefault(); router.push(`/admin/users?q=${encodeURIComponent(term)}`); }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const params = new URLSearchParams(window.location.search);
+            params.set("q", term);
+            router.push(`/admin/users?${params.toString()}`);
+          }}
         >
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 muted" />
           <input className={`${inputCls} pl-8`} placeholder="Name or email…" value={term} onChange={(e) => setTerm(e.target.value)} />

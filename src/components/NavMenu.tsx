@@ -24,7 +24,7 @@ function GameIcon({ logo, name, slug, size = 22 }: {
   const src = resolveLogo(logo, slug || name, name);
   if (src.startsWith("data:image/svg+xml")) {
     /* eslint-disable-next-line @next/next/no-img-element */
-    return <img src={src} alt="" width={size} height={size} className="shrink-0 rounded-md" />;
+    return <img loading="lazy" decoding="async" src={src} alt="" width={size} height={size} className="shrink-0 rounded-md" />;
   }
   const isImage = src.startsWith("/") || src.startsWith("http") || src.startsWith("data:");
   if (!isImage) return <AnyLogo logo={src} size={size} />;

@@ -184,7 +184,7 @@ function GameList({
               <AnyLogo logo={g.logo} size={20} />
             ) : (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={gameArt(g.slug, g.name)} alt="" width={20} height={20} className="shrink-0 rounded" />
+              <img loading="lazy" decoding="async" src={gameArt(g.slug, g.name)} alt="" width={20} height={20} className="shrink-0 rounded" />
             )}
             <span className="truncate">{g.name}</span>
           </Link>

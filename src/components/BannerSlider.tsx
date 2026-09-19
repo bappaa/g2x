@@ -39,7 +39,7 @@ export default function BannerSlider({ banners }: { banners: Banner[] }) {
           >
             {b.image && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={b.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              <img loading="lazy" decoding="async" src={b.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
             )}
             <div className="absolute inset-0 bg-gradient-to-r from-black/75 via-black/45 to-transparent" />
             <div className="relative z-10 max-w-[620px] p-6 sm:p-9">

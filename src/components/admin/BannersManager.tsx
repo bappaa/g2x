@@ -49,7 +49,7 @@ export default function BannersManager({ rows }: { rows: B[] }) {
               >
                 {b.image ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={b.image} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
+                  <img loading="lazy" decoding="async" src={b.image} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
                 ) : (
                   <div className="absolute inset-0 grid place-items-center soft muted">
                     <ImageIcon size={20} />

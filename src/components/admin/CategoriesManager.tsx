@@ -50,7 +50,7 @@ export default function CategoriesManager({ rows }: { rows: C[] }) {
           <Tr key={c.slug}>
             <Td>
               <div className="flex items-center gap-2">
-                {c.icon && <img src={c.icon} alt="" className="h-6 w-6 rounded object-cover" />}
+                {c.icon && <img loading="lazy" decoding="async" src={c.icon} alt="" className="h-6 w-6 rounded object-cover" />}
                 <div>
                   <div className="font-semibold">{c.name}</div>
                   {c.blurb && <div className="line-clamp-1 text-[10.5px] muted">{c.blurb}</div>}
