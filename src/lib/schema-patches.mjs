@@ -209,7 +209,44 @@ export const PATCHES = [
      verified_at TEXT
    )`,
   `CREATE INDEX IF NOT EXISTS idx_rzp_user ON razorpay_intents(user_id)`,
+
+  // --- Phase 47: coupon columns on orders ---
+  `ALTER TABLE orders ADD COLUMN coupon_code TEXT`,
+  `ALTER TABLE orders ADD COLUMN discount REAL NOT NULL DEFAULT 0`,
   `CREATE INDEX IF NOT EXISTS idx_rzp_order ON razorpay_intents(razorpay_order_id)`,
+
+  // --- Phase 47: coupons & announcements ensure exists ---
+  `CREATE TABLE IF NOT EXISTS coupons (
+     id TEXT PRIMARY KEY,
+     code TEXT NOT NULL UNIQUE,
+     discount_type TEXT NOT NULL DEFAULT 'percent',
+     discount_value REAL NOT NULL,
+     applies_to TEXT NOT NULL DEFAULT 'all',
+     min_order REAL NOT NULL DEFAULT 0,
+     start_date TEXT,
+     end_date TEXT,
+     usage_limit INTEGER NOT NULL DEFAULT 0,
+     usage_per_user INTEGER NOT NULL DEFAULT 1,
+     used_count INTEGER NOT NULL DEFAULT 0,
+     status TEXT NOT NULL DEFAULT 'active',
+     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
+  `CREATE TABLE IF NOT EXISTS coupon_uses (
+     id TEXT PRIMARY KEY,
+     coupon_id TEXT NOT NULL REFERENCES coupons(id) ON DELETE CASCADE,
+     user_id TEXT NOT NULL,
+     order_id TEXT,
+     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
+  `CREATE TABLE IF NOT EXISTS announcements (
+     id TEXT PRIMARY KEY,
+     title TEXT NOT NULL,
+     body TEXT,
+     tone TEXT NOT NULL DEFAULT 'info',
+     active INTEGER NOT NULL DEFAULT 1,
+     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+   )`,
+
 
   // --- Phase 46 hotfix: seller orders crash oi.created_at missing ---
   `ALTER TABLE order_items ADD COLUMN created_at TEXT`,

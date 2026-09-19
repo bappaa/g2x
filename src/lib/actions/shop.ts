@@ -193,11 +193,98 @@ function credentialsFor(raw: string | null, index: number): string | null {
   return out.length ? JSON.stringify(out) : null;
 }
 
+
+/* ============================ coupons ============================ */
+
+export type CouponResult = {
+  ok: boolean;
+  error?: string;
+  discount?: number;
+  code?: string;
+  couponId?: string;
+};
+
+async function validateCouponForCheckout(
+  rawCode: string,
+  userId: string,
+  subtotal: number,
+  items: any[]
+): Promise<CouponResult> {
+  const code = rawCode.trim().toUpperCase();
+  if (!code) return { ok: false, error: "Enter a coupon code." };
+
+  const c = await one<{
+    id: string; code: string; discount_type: string; discount_value: number;
+    applies_to: string; min_order: number; start_date: string | null; end_date: string | null;
+    usage_limit: number; usage_per_user: number; used_count: number; status: string;
+  }>(`SELECT * FROM coupons WHERE UPPER(code)=?`, [code]);
+
+  if (!c) return { ok: false, error: "Invalid coupon code." };
+  if (c.status !== "active") return { ok: false, error: "This coupon is not active." };
+
+  const now = new Date().toISOString().slice(0,10);
+  if (c.start_date && now < c.start_date.slice(0,10)) return { ok: false, error: "Coupon not started yet." };
+  if (c.end_date && now > c.end_date.slice(0,10)) return { ok: false, error: "Coupon expired." };
+
+  if (c.min_order > 0 && subtotal < c.min_order) {
+    return { ok: false, error: `Minimum order $${Number(c.min_order).toFixed(2)} required.` };
+  }
+
+  // applies_to check
+  const applies = (c.applies_to || "all").toLowerCase();
+  if (applies !== "all") {
+    if (applies.startsWith("game:")) {
+      const gSlug = applies.slice(5);
+      const has = items.some((it:any) => (it.game_slug||"").toLowerCase() === gSlug);
+      if (!has) return { ok: false, error: `Coupon only for ${gSlug}.` };
+    } else if (applies.startsWith("category:")) {
+      const cat = applies.slice(9);
+      const has = items.some((it:any) => (it.category_slug||"").toLowerCase() === cat);
+      if (!has) return { ok: false, error: `Coupon only for ${cat} category.` };
+    }
+  }
+
+  if (c.usage_limit > 0 && c.used_count >= c.usage_limit) {
+    return { ok: false, error: "Coupon usage limit reached." };
+  }
+
+  const perUser = await one<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM coupon_uses WHERE coupon_id=? AND user_id=?`,
+    [c.id, userId]
+  );
+  const usedByUser = Number(perUser?.n ?? 0);
+  if (c.usage_per_user > 0 && usedByUser >= c.usage_per_user) {
+    return { ok: false, error: "You already used this coupon." };
+  }
+
+  let discount = 0;
+  if (c.discount_type === "percent") {
+    discount = +(subtotal * (c.discount_value / 100)).toFixed(2);
+  } else {
+    discount = +c.discount_value.toFixed(2);
+  }
+  discount = Math.min(discount, subtotal);
+  if (discount <= 0) return { ok: false, error: "Coupon gives no discount." };
+
+  return { ok: true, discount, code: c.code, couponId: c.id };
+}
+
+export async function validateCouponAction(code: string): Promise<CouponResult & { discount?: number }> {
+  const u = await getSessionUser();
+  if (!u) return { ok: false, error: "AUTH" };
+  const items = await getCart(u.id);
+  if (!items.length) return { ok: false, error: "Cart empty." };
+  const subtotal = +items.reduce((t,i) => t + i.price * i.qty, 0).toFixed(2);
+  return validateCouponForCheckout(code, u.id, subtotal, items as any[]);
+}
+
+
 export async function placeOrderAction(form: {
   paymentMethod: string;
   uid: string;
   note?: string;
   deliveryDetails?: Record<string, string>;
+  couponCode?: string;
 }): Promise<R> {
   const u = await requireUser();
   if (!(await isEmailVerified(u.id)))
@@ -256,7 +343,21 @@ export async function placeOrderAction(form: {
       return { ok: false, error: `"${it.title}" is your own listing — remove it to continue.` };
   }
 
-  const subtotal = +items.reduce((t, i) => t + i.price * i.qty, 0).toFixed(2);
+  let subtotal = +items.reduce((t, i) => t + i.price * i.qty, 0).toFixed(2);
+  let couponDiscount = 0;
+  let couponCode: string | null = null;
+  let couponId: string | null = null;
+
+  if (form.couponCode) {
+    const cr = await validateCouponForCheckout(form.couponCode, u.id, subtotal, items as any[]);
+    if (!cr.ok) return { ok: false, error: cr.error };
+    couponDiscount = cr.discount || 0;
+    couponCode = cr.code || form.couponCode.toUpperCase();
+    couponId = cr.couponId || null;
+    subtotal = +(subtotal - couponDiscount).toFixed(2);
+    if (subtotal < 0) subtotal = 0;
+  }
+
   const fee = +(subtotal * SERVICE_FEE).toFixed(2);
 
   // Gateway fee is resolved server-side from the admin's configuration.
@@ -294,11 +395,11 @@ export async function placeOrderAction(form: {
   const stmts: { sql: string; args: unknown[] }[] = [
     {
       sql: `INSERT INTO orders (id,code,buyer_id,subtotal,fee,total,status,payment_method,
-                                payment_status,delivery_uid,buyer_note,gateway_fee,gateway_code)
-            VALUES (?,?,?,?,?,?,'processing',?,'paid',?,?,?,?)`,
+                                payment_status,delivery_uid,buyer_note,gateway_fee,gateway_code,coupon_code,discount)
+            VALUES (?,?,?,?,?,?,'processing',?,'paid',?,?,?, ?,?,?)`,
       args: [
         orderId, code, u.id, subtotal, fee, total, gw.name,
-        deliveryUidToStore, form.note ?? null, gwFee, gw.code,
+        deliveryUidToStore, form.note ?? null, gwFee, gw.code, couponCode, couponDiscount,
       ],
     },
   ];
@@ -407,6 +508,18 @@ export async function placeOrderAction(form: {
   }
 
   stmts.push({ sql: `DELETE FROM cart_items WHERE user_id=?`, args: [u.id] });
+
+  // Coupon usage tracking
+  if (couponId && couponCode) {
+    stmts.push({
+      sql: `UPDATE coupons SET used_count = used_count + 1 WHERE id=?`,
+      args: [couponId],
+    });
+    stmts.push({
+      sql: `INSERT INTO coupon_uses (id,coupon_id,user_id,order_id) VALUES (?,?,?,?)`,
+      args: [nid("cpnuse_"), couponId, u.id, orderId],
+    });
+  }
 
   await tx(stmts as never);
 

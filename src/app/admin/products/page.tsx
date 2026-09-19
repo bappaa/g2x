@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/admin";
 import {
-  adminProducts, adminProductsCount, adminGames, adminCategories, optionGroups,
+  adminProducts, adminProductsCount, adminGames, adminCategories, optionGroups, adminAllGameOfferFields,
 } from "@/lib/queries-admin";
 import { AdminPage } from "@/components/admin/ui";
 import ProductsManager from "@/components/admin/ProductsManager";
@@ -23,12 +23,13 @@ export default async function Page({
     q: searchParams.q,
   };
 
-  const [rows, total, games, cats, options] = await Promise.all([
+  const [rows, total, games, cats, options, gameFields] = await Promise.all([
     adminProducts({ ...filters, limit: PER_PAGE, offset: (page - 1) * PER_PAGE }),
     adminProductsCount(filters),
     adminGames(),
     adminCategories(),
     optionGroups(),
+    adminAllGameOfferFields(),
   ]);
 
   return (
@@ -46,6 +47,7 @@ export default async function Page({
           q: searchParams.q ?? "",
         }}
         options={options as never}
+        gameFields={gameFields as never}
         page={page}
         perPage={PER_PAGE}
         total={Number(total?.n ?? 0)}

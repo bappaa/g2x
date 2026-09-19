@@ -38,6 +38,8 @@ export async function POST(req: NextRequest) {
 
     let amountUSD = 0;
     let meta: Record<string, string> = {};
+    let couponDiscount = 0;
+    let couponCode: string | null = null;
 
     if (purpose === "topup") {
       const raw = Number(body.amount);
@@ -77,13 +79,45 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const subtotal = +items.reduce((t, i) => t + i.price * i.qty, 0).toFixed(2);
+      let subtotal = +items.reduce((t, i) => t + i.price * i.qty, 0).toFixed(2);
+      const rawCoupon = String(body.couponCode || "").trim().toUpperCase();
+      if (rawCoupon) {
+        // Validate coupon inline
+        const { one: oneDb } = await import("@/lib/db");
+        const c = await oneDb(`SELECT * FROM coupons WHERE UPPER(code)=?`, [rawCoupon]) as any;
+        if (!c || c.status !== "active") {
+          return NextResponse.json({ ok: false, error: "Invalid coupon." }, { status: 400 });
+        }
+        const now = new Date().toISOString().slice(0,10);
+        if (c.start_date && now < String(c.start_date).slice(0,10)) return NextResponse.json({ ok: false, error: "Coupon not started." }, { status: 400 });
+        if (c.end_date && now > String(c.end_date).slice(0,10)) return NextResponse.json({ ok: false, error: "Coupon expired." }, { status: 400 });
+        if (c.min_order > 0 && subtotal < c.min_order) return NextResponse.json({ ok: false, error: `Min order $${Number(c.min_order).toFixed(2)} required.` }, { status: 400 });
+        const applies = String(c.applies_to||"all").toLowerCase();
+        if (applies !== "all") {
+          if (applies.startsWith("game:")) {
+            const gs = applies.slice(5);
+            if (!(items as any[]).some((it:any)=>(it.game_slug||"").toLowerCase()===gs)) return NextResponse.json({ ok: false, error: `Coupon only for ${gs}.` }, { status: 400 });
+          } else if (applies.startsWith("category:")) {
+            const cat = applies.slice(9);
+            if (!(items as any[]).some((it:any)=>(it.category_slug||"").toLowerCase()===cat)) return NextResponse.json({ ok: false, error: `Coupon only for ${cat}.` }, { status: 400 });
+          }
+        }
+        if (c.usage_limit>0 && c.used_count>=c.usage_limit) return NextResponse.json({ ok: false, error: "Coupon limit reached." }, { status: 400 });
+        const perUser = await oneDb(`SELECT COUNT(*) AS n FROM coupon_uses WHERE coupon_id=? AND user_id=?`, [c.id, u.id]) as any;
+        if (c.usage_per_user>0 && Number(perUser?.n??0)>=c.usage_per_user) return NextResponse.json({ ok: false, error: "You already used this coupon." }, { status: 400 });
+        if (c.discount_type === "percent") couponDiscount = +(subtotal * (c.discount_value/100)).toFixed(2);
+        else couponDiscount = +c.discount_value.toFixed(2);
+        couponDiscount = Math.min(couponDiscount, subtotal);
+        subtotal = +(subtotal - couponDiscount).toFixed(2);
+        couponCode = c.code;
+      }
+
       const fee = +(subtotal * 0.02).toFixed(2);
       const gw = await gatewayByCode(gatewayCode);
       if (!gw) return NextResponse.json({ ok: false, error: "Gateway not available" }, { status: 400 });
       const gwFee = feeFor(subtotal + fee, gw);
       amountUSD = +(subtotal + fee + gwFee).toFixed(2);
-      meta = { userId: u.id, purpose: "checkout", subtotal: String(subtotal), fee: String(fee), gwFee: String(gwFee), usd: String(amountUSD) };
+      meta = { userId: u.id, purpose: "checkout", subtotal: String(subtotal), fee: String(fee), gwFee: String(gwFee), usd: String(amountUSD), coupon: couponCode||"", discount: String(couponDiscount) };
     }
 
     const chargeCurrency = (cfg.currency || "INR").toUpperCase();
@@ -105,7 +139,7 @@ export async function POST(req: NextRequest) {
     await run(
       `INSERT INTO razorpay_intents (id,user_id,razorpay_order_id,amount,currency,purpose,status,gateway_code,meta)
        VALUES (?,?,?,?,?,?,?,?,?)`,
-      [intentId, u.id, rzpOrder.id, amountCharge, rzpOrder.currency, purpose, "created", gatewayCode, JSON.stringify({ ...meta, uid: body.uid || "", deliveryDetails: body.deliveryDetails || {}, note: body.note || "", charge: String(amountCharge), rate: String(rate) })]
+      [intentId, u.id, rzpOrder.id, amountCharge, rzpOrder.currency, purpose, "created", gatewayCode, JSON.stringify({ ...meta, uid: body.uid || "", deliveryDetails: body.deliveryDetails || {}, couponCode: couponCode||"", discount: String(couponDiscount), note: body.note || "", charge: String(amountCharge), rate: String(rate) })]
     ).catch(() => {});
 
     return NextResponse.json({

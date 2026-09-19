@@ -652,7 +652,21 @@ export async function saveProductAction(form: FormData): Promise<R> {
   const basePrice = num(form.get("basePrice"));
   const oldPrice = num(form.get("oldPrice"));
   const discount = num(form.get("discount"));
-  const region = sanitizeName(String(form.get("region") ?? "Global").trim(), 200);
+  // Collect game-specific fields (gameField_<key>) and merge into region for backward compat
+  const gameFieldValues: string[] = [];
+  for (const [k, v] of form.entries()) {
+    if (k.startsWith("gameField_")) {
+      const val = String(v).trim();
+      if (val) {
+        // val may be comma-separated from MultiPicker
+        val.split(",").map((s)=>s.trim()).filter(Boolean).forEach((s)=>gameFieldValues.push(s));
+      }
+    }
+  }
+  const regionRaw = String(form.get("region") ?? "Global").trim();
+  const regionParts = regionRaw.split(",").map((s)=>s.trim()).filter(Boolean);
+  const allRegions = Array.from(new Set([...regionParts, ...gameFieldValues])).join(", ");
+  const region = sanitizeName(allRegions.slice(0, 500) || "Global", 500);
   const platform = sanitizeName(String(form.get("platform") ?? "All").trim(), 100);
   const deliveryMethod = sanitizeName(String(form.get("deliveryMethod") ?? "").trim(), 200);
   const deliveryTime = sanitizeName(String(form.get("deliveryTime") ?? "").trim(), 100);
@@ -1272,7 +1286,12 @@ export async function saveAnnouncementAction(form: FormData): Promise<R> {
 
   await audit(a.id, "announcement.save", title);
   bustCatalog();
+  try {
+    const { revalidateTag } = await import("next/cache");
+    revalidateTag("announcements");
+  } catch {}
   revalidatePath("/admin/announcements");
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 
@@ -1281,7 +1300,12 @@ export async function deleteAnnouncementAction(id: string): Promise<R> {
   await run(`DELETE FROM announcements WHERE id=?`, [id]);
   await audit(a.id, "announcement.delete", id);
   bustCatalog();
+  try {
+    const { revalidateTag } = await import("next/cache");
+    revalidateTag("announcements");
+  } catch {}
   revalidatePath("/admin/announcements");
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 

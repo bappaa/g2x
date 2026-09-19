@@ -22,8 +22,17 @@ export function img(src?: string | null): string {
   if (typeof src !== "string") return PLACEHOLDER;
   const s = src.trim();
   if (!s) return PLACEHOLDER;
-  // Relative paths must be root-anchored for next/image.
   if (s.startsWith("/") || s.startsWith("http://") || s.startsWith("https://") || s.startsWith("data:"))
     return s;
   return `/${s}`;
+}
+
+/** Optimized image src with width param for /api/media/* to save bandwidth */
+export function imgW(src?: string | null, w: number = 320): string {
+  const base = img(src);
+  if (base.includes("/api/media/")) {
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}w=${w}`;
+  }
+  return base;
 }

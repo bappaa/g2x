@@ -173,7 +173,27 @@ export async function POST(req: NextRequest) {
         if (it.seller_id === u.id) return NextResponse.json({ ok: false, error: `"${it.title}" is your own listing` }, { status: 400 });
       }
 
-      const subtotal = +items.reduce((t, i) => t + i.price * i.qty, 0).toFixed(2);
+      let subtotal = +items.reduce((t, i) => t + i.price * i.qty, 0).toFixed(2);
+      let couponDiscount = 0;
+      let couponCode: string | null = null;
+      let couponId: string | null = null;
+      const rawCoupon = String(body.couponCode || meta.coupon || meta.couponCode || "").trim().toUpperCase();
+      if (rawCoupon) {
+        const c = await one(`SELECT * FROM coupons WHERE UPPER(code)=?`, [rawCoupon]) as any;
+        if (c && c.status === "active") {
+          const now = new Date().toISOString().slice(0,10);
+          const expired = (c.end_date && now > String(c.end_date).slice(0,10)) || (c.start_date && now < String(c.start_date).slice(0,10));
+          if (!expired && !(c.min_order>0 && subtotal < c.min_order)) {
+            if (c.discount_type === "percent") couponDiscount = +(subtotal * (c.discount_value/100)).toFixed(2);
+            else couponDiscount = +c.discount_value.toFixed(2);
+            couponDiscount = Math.min(couponDiscount, subtotal);
+            subtotal = +(subtotal - couponDiscount).toFixed(2);
+            couponCode = c.code;
+            couponId = c.id;
+          }
+        }
+      }
+
       const fee = +(subtotal * 0.02).toFixed(2);
       const gw = await gatewayByCode("razorpay");
       if (!gw) return NextResponse.json({ ok: false, error: "Razorpay gateway not enabled" }, { status: 400 });
@@ -194,9 +214,9 @@ export async function POST(req: NextRequest) {
       let autoDelivered = false;
       const stmts: { sql: string; args: unknown[] }[] = [
         {
-          sql: `INSERT INTO orders (id,code,buyer_id,subtotal,fee,total,status,payment_method,payment_status,delivery_uid,buyer_note,gateway_fee,gateway_code,razorpay_order_id,razorpay_payment_id,razorpay_signature)
-                VALUES (?,?,?,?,?,?,'processing',?,'paid',?,?,?, ?, ?, ?, ?)`,
-          args: [orderId, code, u.id, subtotal, fee, total, gw.name, deliveryUidToStore, note || null, gwFee, gw.code, razorpay_order_id, razorpay_payment_id, razorpay_signature],
+          sql: `INSERT INTO orders (id,code,buyer_id,subtotal,fee,total,status,payment_method,payment_status,delivery_uid,buyer_note,gateway_fee,gateway_code,razorpay_order_id,razorpay_payment_id,razorpay_signature,coupon_code,discount)
+                VALUES (?,?,?,?,?,?,'processing',?,'paid',?,?,?, ?, ?, ?, ?,?,?)`,
+          args: [orderId, code, u.id, subtotal, fee, total, gw.name, deliveryUidToStore, note || null, gwFee, gw.code, razorpay_order_id, razorpay_payment_id, razorpay_signature, couponCode, couponDiscount],
         },
       ];
 
@@ -248,6 +268,11 @@ export async function POST(req: NextRequest) {
       });
 
       stmts.push({ sql: `DELETE FROM cart_items WHERE user_id=?`, args: [u.id] });
+
+      if (couponId && couponCode) {
+        stmts.push({ sql: `UPDATE coupons SET used_count = used_count + 1 WHERE id=?`, args: [couponId] });
+        stmts.push({ sql: `INSERT INTO coupon_uses (id,coupon_id,user_id,order_id) VALUES (?,?,?,?)`, args: [nid("cpnuse_"), couponId, u.id, orderId] });
+      }
 
       await tx(stmts as never);
 

@@ -10,7 +10,7 @@ import { ShieldCheck, Loader2, AlertCircle, Check, Lock, Gamepad2 } from "lucide
 import { Btn, Field, inputCls } from "@/components/ui";
 import { AnyLogo } from "@/components/BrandIcon";
 
-import { placeOrderAction } from "@/lib/actions/shop";
+import { placeOrderAction, validateCouponAction } from "@/lib/actions/shop";
 import type { CartRow } from "./CartView";
 import { feeFor, limitError, type GatewayView } from "@/lib/gateway-fees";
 import { img } from "@/lib/img";
@@ -111,6 +111,11 @@ export default function CheckoutView({
 
   // Per-game delivery details state
   const [deliveryDetails, setDeliveryDetails] = useState<Record<string, string>>({});
+  const [couponCode, setCouponCode] = useState("");
+  const [couponDiscount, setCouponDiscount] = useState(0);
+  const [couponApplied, setCouponApplied] = useState<string | null>(null);
+  const [couponErr, setCouponErr] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
 
   useEffect(() => {
     const init: Record<string, string> = {};
@@ -145,7 +150,9 @@ export default function CheckoutView({
         .filter(Boolean)
     )
   );
-  const subtotal = +items.reduce((t, r) => t + r.price * r.qty, 0).toFixed(2);
+  const rawSubtotal = +items.reduce((t, r) => t + r.price * r.qty, 0).toFixed(2);
+  const subtotalAfterCoupon = +(rawSubtotal - couponDiscount).toFixed(2);
+  const subtotal = subtotalAfterCoupon < 0 ? 0 : subtotalAfterCoupon;
   const fee = +(subtotal * 0.02).toFixed(2);
   const gwFee = feeFor(subtotal + fee, gw);
   const total = +(subtotal + fee + gwFee).toFixed(2);
@@ -194,6 +201,7 @@ export default function CheckoutView({
           gateway_code: method,
           uid: Object.values(deliveryDetails)[0] || "",
           deliveryDetails,
+          couponCode: couponApplied || "",
           note,
         }),
       });
@@ -224,6 +232,7 @@ export default function CheckoutView({
                 razorpay_signature: response.razorpay_signature,
                 uid: Object.values(deliveryDetails)[0] || "",
                 deliveryDetails,
+                couponCode: couponApplied || "",
                 note,
               }),
             });
@@ -289,6 +298,7 @@ export default function CheckoutView({
           paymentMethod: method,
           uid: Object.values(deliveryDetails)[0] || "",
           deliveryDetails,
+          couponCode: couponApplied || undefined,
           note,
         } as any).catch(() => null);
         if (!r || !r.ok) {
@@ -496,9 +506,75 @@ export default function CheckoutView({
       <div className="space-y-4 lg:sticky lg:top-[130px] lg:self-start">
         <motion.div layout className="rounded-2xl panel p-4 sm:p-5">
           <h3 className="text-[14px] font-bold">{tr("co.summary")}</h3>
+
+          {/* Coupon section */}
+          <div className="mt-3 rounded-xl border border-[var(--line)] p-3">
+            <div className="text-[11.5px] font-bold">Have a coupon?</div>
+            <div className="mt-2 flex gap-2">
+              <input
+                className={`${inputCls} flex-1 uppercase`}
+                placeholder="WELCOME10"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                disabled={!!couponApplied}
+              />
+              {couponApplied ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCouponApplied(null);
+                    setCouponDiscount(0);
+                    setCouponCode("");
+                    setCouponErr("");
+                  }}
+                  className="rounded-lg bg-rose-500/10 px-3 py-2 text-[11px] font-bold text-rose-400 hover:bg-rose-500/20"
+                >
+                  Remove
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={couponLoading || !couponCode.trim()}
+                  onClick={async () => {
+                    setCouponErr("");
+                    setCouponLoading(true);
+                    try {
+                      const r = await validateCouponAction(couponCode);
+                      if (!r.ok) {
+                        setCouponErr(r.error || "Invalid coupon");
+                      } else {
+                        setCouponDiscount(r.discount || 0);
+                        setCouponApplied(r.code || couponCode.toUpperCase());
+                      }
+                    } catch (e:any) {
+                      setCouponErr(e?.message || "Failed");
+                    } finally {
+                      setCouponLoading(false);
+                    }
+                  }}
+                  className="rounded-lg bg-brand-600 px-3 py-2 text-[11px] font-bold text-white hover:bg-brand-500 disabled:opacity-50"
+                >
+                  {couponLoading ? <Loader2 size={12} className="animate-spin" /> : "Apply"}
+                </button>
+              )}
+            </div>
+            {couponErr && <div className="mt-2 text-[11px] text-rose-400">{couponErr}</div>}
+            {couponApplied && <div className="mt-2 text-[11px] text-emerald-400">Coupon {couponApplied} applied — you save {money(couponDiscount)}!</div>}
+          </div>
+
           <div className="mt-3 space-y-2 text-[12.5px]">
             <div className="flex justify-between">
               <span className="muted">{tr("cart.subtotal")}</span>
+              <span className="font-semibold">{money(rawSubtotal)}</span>
+            </div>
+            {couponDiscount > 0 && (
+              <div className="flex justify-between text-emerald-400">
+                <span>Coupon {couponApplied}</span>
+                <span className="font-semibold">- {money(couponDiscount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="muted">Subtotal after discount</span>
               <span className="font-semibold">{money(subtotal)}</span>
             </div>
             {gwFee > 0 && (

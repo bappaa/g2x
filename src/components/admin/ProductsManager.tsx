@@ -32,12 +32,13 @@ type G = { slug: string; name: string };
 type C = { slug: string; name: string };
 
 export default function ProductsManager({
-  rows, games, categories, filters, options, page = 1, perPage = 50, total = 0,
+  rows, games, categories, filters, options, gameFields, page = 1, perPage = 50, total = 0,
 }: {
   rows: P[]; games: G[]; categories: C[];
   filters: { game: string; category: string; q: string };
   page?: number; perPage?: number; total?: number;
   options: Record<string, Opt[]>;
+  gameFields?: { id: string; game_slug: string; field_key: string; label: string; field_type: string; options: string; parent_field: string | null; parent_value: string | null; sort_order: number; required: number }[];
 }) {
   const router = useRouter();
   const [term, setTerm] = useState(filters.q);
@@ -190,6 +191,7 @@ export default function ProductsManager({
             games={games}
             categories={categories}
             options={options}
+            gameFields={gameFields}
             onClose={() => setEdit(null)}
           />
         )}
@@ -374,11 +376,15 @@ function SellFlowForm({ p, onClose }: { p: P; onClose: () => void }) {
 }
 
 function ProductForm({
-  p, games, categories, options, onClose,
+  p, games, categories, options, gameFields, onClose,
 }: {
   p: P | null; games: G[]; categories: C[];
-  options: Record<string, Opt[]>; onClose: () => void;
+  options: Record<string, Opt[]>; gameFields?: { id: string; game_slug: string; field_key: string; label: string; field_type: string; options: string; parent_field: string | null; parent_value: string | null; sort_order: number; required: number }[];
+  onClose: () => void;
 }) {
+  const [selectedGame, setSelectedGame] = useState(p?.game_slug ?? "");
+  const fieldsForGame = (gameFields ?? []).filter((f) => f.game_slug === selectedGame).sort((a,b)=>a.sort_order-b.sort_order);
+
   const router = useRouter();
   const [err, setErr] = useState("");
   const [pending, start] = useTransition();
@@ -424,7 +430,7 @@ function ProductForm({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Game" hint={`${games.length} games — admin-added appear here instantly`}>
-            <select name="game" defaultValue={p?.game_slug} className={inputCls} required>
+            <select name="game" value={selectedGame} onChange={(e)=>setSelectedGame(e.target.value)} className={inputCls} required>
               <option value="">Choose a game…</option>
               {games.map((g) => <option key={g.slug} value={g.slug}>{g.name}</option>)}
             </select>
@@ -452,12 +458,37 @@ function ProductForm({
           </Field>
         </div>
 
-        <Field
-          label="Regions / game servers"
-          hint="Tick every server this product works on. Buyers pick one on the product page. Manage the list in Catalog → Dropdown Options."
-        >
-          <RegionPicker opts={options.region} value={p?.region} />
-        </Field>
+        {fieldsForGame.length > 0 ? (
+          <div className="space-y-3 rounded-xl border border-brand-500/20 bg-brand-500/5 p-3">
+            <div className="text-[11.5px] font-bold text-brand-300">Game-specific servers (from Games → Edit → Add field)</div>
+            <div className="text-[10.5px] muted">These are the custom fields you configured for {selectedGame || "this game"}. They will appear on product page for buyer selection.</div>
+            {fieldsForGame.map((gf) => {
+              let opts: string[] = [];
+              try {
+                const parsed = JSON.parse(gf.options || "[]");
+                if (Array.isArray(parsed)) opts = parsed;
+                else if (typeof parsed === "object") opts = Object.values(parsed).flat() as string[];
+              } catch {
+                opts = (gf.options || "").split(",").map((s)=>s.trim()).filter(Boolean);
+              }
+              return (
+                <Field key={gf.id} label={`${gf.label} (${gf.field_key})`} hint={gf.parent_field ? `Shows when ${gf.parent_field}=${gf.parent_value}` : "Configured for this game"}>
+                  <MultiPicker name={`gameField_${gf.field_key}`} opts={opts.map((o,i)=>({ id: `${gf.id}_${i}`, value: o, label: o }))} value={p?.region?.includes(gf.field_key) ? p?.region : ""} fallback={opts[0] || ""} />
+                </Field>
+              );
+            })}
+            <Field label="Additional regions (fallback)" hint="Generic regions if you also want them">
+              <RegionPicker opts={options.region} value={p?.region} />
+            </Field>
+          </div>
+        ) : (
+          <Field
+            label="Regions / game servers"
+            hint={selectedGame ? `No custom fields for ${selectedGame} — using generic list. Add custom servers in Games → Edit → Add field for this game to show here.` : "Tick every server this product works on. Buyers pick one on the product page. Manage the list in Catalog → Dropdown Options or add game-specific fields in Games → Edit."}
+          >
+            <RegionPicker opts={options.region} value={p?.region} />
+          </Field>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Platform" hint="Admin-managed options — add more in Dropdown Options">

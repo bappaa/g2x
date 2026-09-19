@@ -8,6 +8,19 @@ import { footerNav, homeCategories, getBlocks, navMenu } from "@/lib/homepage";
 import { getLocale, getRates } from "@/lib/locale";
 import { dictFor } from "@/lib/i18n";
 import LocaleProvider from "./LocaleProvider";
+import { unstable_cache } from "next/cache";
+
+const getAnnouncementsCached = unstable_cache(
+  async () => {
+    try {
+      return await all<{ title: string; body: string | null }>(`SELECT title, body FROM announcements WHERE active=1 ORDER BY created_at DESC LIMIT 5`);
+    } catch {
+      return [] as { title: string; body: string | null }[];
+    }
+  },
+  ["announcements-active"],
+  { tags: ["catalog", "announcements"], revalidate: 120 }
+);
 
 export default async function SiteShell({ children }: { children: React.ReactNode }) {
   const shellData = Promise.all([
@@ -17,9 +30,10 @@ export default async function SiteShell({ children }: { children: React.ReactNod
     one<{ value: string }>(`SELECT value FROM settings WHERE key='site_name'`),
     navMenu(),
     getRates(),
+    getAnnouncementsCached(),
   ]);
 
-  const [u, [footerCols, footerCats, blocks, siteRow, menu, rates]] =
+  const [u, [footerCols, footerCats, blocks, siteRow, menu, rates, promoAnns]] =
     await Promise.all([getSessionUser(), shellData]);
   const footerServices = footerCats.slice(0, 4).map((c) => ({
     slug: c.slug,
@@ -30,7 +44,7 @@ export default async function SiteShell({ children }: { children: React.ReactNod
   const footerBlurb = blocks.hero?.body ?? "";
 
   const ann = blocks.announcement_bar;
-  const marquee = (
+  const cmsMarquee = (
     ann?.active !== false
       ? [
           ...(ann?.items ?? [])
@@ -39,7 +53,9 @@ export default async function SiteShell({ children }: { children: React.ReactNod
           ...(ann?.title ? [ann.title] : []),
         ]
       : []
-  ).slice(0, 8);
+  );
+  const promoMarquee = (promoAnns as { title: string; body: string | null }[]).map((a) => a.title || a.body || "").filter(Boolean);
+  const marquee = [...cmsMarquee, ...promoMarquee].slice(0, 8);
   const siteName = siteRow?.value?.trim() || "G2X.GG";
 
   let cartCount = 0;
